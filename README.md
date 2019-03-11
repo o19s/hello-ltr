@@ -6,6 +6,12 @@ hello-ltr
 `pip install -r requirements.txt`
 - A JRE to run the ranklib jar
 
+## Dockerfile
+You can use the provided Dockerfile to quickly start up an elastic instance with the LTR plugin installed
+
+`docker build -t ltr-es .`
+`docker run -d -p 9200:9200 -p 9300:9300 ltr-es`
+
 ## Overview
 Once an elastic server is setup, the notebook provided by this project will:
 
