@@ -10,6 +10,7 @@ hello-ltr
 You can use the provided Dockerfile to quickly start up an elastic instance with the LTR plugin installed
 
 `docker build -t ltr-es .`
+
 `docker run -d -p 9200:9200 -p 9300:9300 ltr-es`
 
 ## Overview
