@@ -1,5 +1,3 @@
-import json
-
 logQuery = {
     "size": 10000,
     "query": {
@@ -66,8 +64,6 @@ def logFeatures(es, judgmentsByQid, featureSet):
             logQuery['query']['bool']['must'][0]['terms']['_id'] = docIds[start:start+numFetch]
             logQuery['query']['bool']['should'][0]['sltr']['params']['keywords'] = keywords
             logQuery['query']['bool']['should'][0]['sltr']['featureset'] = featureSet
-            print("POST")
-            print(json.dumps(logQuery, indent=2))
             res = es.search(index='tmdb', body=logQuery)
             # print("...done")
             # Add feature back to each judgment

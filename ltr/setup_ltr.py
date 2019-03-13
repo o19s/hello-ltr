@@ -1,4 +1,3 @@
-import json
 import requests
 
 def run(config, featureSet='genre_features'):
@@ -17,3 +16,59 @@ def run(config, featureSet='genre_features'):
 
     resp = requests.post('{}/_featureset/{}'.format(elastic_ep, featureSet), json=payload)
     print('Created RELEASE feature set: {}'.format(resp.status_code))
+
+if __name__ == "__main__":
+    config = {"featureset": {
+            "features": [
+            {
+                "name": "release_year",
+                "params": [],
+                "template": {
+                    "function_score": {
+                        "field_value_factor": {
+                        "field": "release_year",
+                        "missing": 2000
+                    },
+                    "query": { "match_all": {} }
+                }
+            }
+            },
+             {
+                "name": "is_sci_fi",
+                "params": [],
+                "template": {
+                    "constant_score": {
+                        "filter": {
+                            "match_phrase": {"genres": "Science Fiction"}
+                        },
+                        "boost": 10.0
+                    }
+            }
+            },
+             {
+                "name": "is_drama",
+                "params": [],
+                "template": {
+                    "constant_score": {
+                        "filter": {
+                            "match_phrase": {"genres": "Drama"}
+                        },
+                        "boost": 4.0
+                    }
+                }
+            },
+             {
+                "name": "is_genre_match",
+                "params": ["keywords"],
+                "template": {
+                    "constant_score": {
+                        "filter": {
+                            "match_phrase": {"genres": "{{keywords}}"}
+                        },
+                        "boost": 100.0
+                    }
+                }
+            }
+    ]
+    }}
+    run(config=config, featureSet='genre')
