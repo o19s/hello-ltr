@@ -4,6 +4,7 @@ data/classic-training.txt
 data/latest-model.txt
 data/latest-training.txt
 data/RankyMcRankFace-0.1.1.jar
+data/RankyMcRankFace.jar
 data/tmdb.json
 venv/*
 

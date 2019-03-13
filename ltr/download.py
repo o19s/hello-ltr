@@ -2,8 +2,8 @@ import requests
 
 def run():
     resources = [
-        'https://dl.bintray.com/o19s/RankyMcRankFace/com/o19s/RankyMcRankFace/0.1.1/RankyMcRankFace-0.1.1.jar',
-        'http://es-learn-to-rank.labs.o19s.com/tmdb.json'
+        'http://es-learn-to-rank.labs.o19s.com/tmdb.json',
+        'http://es-learn-to-rank.labs.o19s.com/RankyMcRankFace.jar'
     ]
 
     def download(uri):
@@ -19,3 +19,6 @@ def run():
         download(uri)
 
     print('Done.')
+
+if __name__ == "__main__":
+    run()
