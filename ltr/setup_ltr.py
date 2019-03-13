@@ -15,7 +15,7 @@ def run(config, featureSet='genre_features'):
     payload = config
 
     resp = requests.post('{}/_featureset/{}'.format(elastic_ep, featureSet), json=payload)
-    print('Created RELEASE feature set: {}'.format(resp.status_code))
+    print('Created {} feature set: {}'.format(featureSet, resp.status_code))
 
 if __name__ == "__main__":
     config = {"featureset": {
