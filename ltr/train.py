@@ -29,7 +29,9 @@ def trainModel(training, out, metric2t='DCG@10'):
 
     cmd = 'java -jar data/RankyMcRankFace.jar -ranker 6 -metric2t {} -tree 100 -train {} -save {}'.format(metric2t, training, out)
 
+    print("Running %s" % cmd)
     result = os.popen(cmd).read()
+    print("DONE")
     return TrainingLog(result)
 
 def saveModel(modelName, modelFile, featureSet):
@@ -52,6 +54,7 @@ def saveModel(modelName, modelFile, featureSet):
         }
 
         resp = requests.post(create_ep, json=params)
+        print(resp.text)
         print('Created model {}: {}'.format(modelName, resp.status_code))
 
 
@@ -67,5 +70,5 @@ def run(trainingInFile, modelName, featureSet, metric2t='DCG@10'):
 
 if __name__ == "__main__":
     run(trainingInFile='genre_by_date_judgments_train.txt',
-        featureSet='genre',
+        featureSet='title',
         modelName='doug')

@@ -71,4 +71,4 @@ if __name__ == "__main__":
             }
     ]
     }}
-    run(config=config, featureSet='genre')
+    run(config=config, featureSet='title')
