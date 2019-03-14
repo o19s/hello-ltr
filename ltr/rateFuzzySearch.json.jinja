@@ -1,0 +1,15 @@
+{
+	"from": 0,
+	"size": 7,
+	"query": {
+		"bool": {
+			"should": [
+                {"match": {
+                    "title": {
+                        "query": "{{ keywords }}",
+                        "fuzziness": "AUTO"}
+                }}
+            ]
+		}
+	}
+}
