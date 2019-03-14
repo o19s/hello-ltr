@@ -3,7 +3,8 @@ import requests
 def run():
     resources = [
         'http://es-learn-to-rank.labs.o19s.com/tmdb.json',
-        'http://es-learn-to-rank.labs.o19s.com/RankyMcRankFace.jar'
+        'http://es-learn-to-rank.labs.o19s.com/RankyMcRankFace.jar',
+        'http://es-learn-to-rank.labs.o19s.com/title_judgments.txt'
     ]
 
     def download(uri):
