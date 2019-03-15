@@ -1,9 +1,10 @@
 try:
     from judgments import Judgment, judgmentsFromFile, judgmentsToFile, judgmentsByQid
+    from butterfingers import butterfingers
 except ImportError:
     from .judgments import Judgment, judgmentsFromFile, judgmentsToFile, judgmentsByQid
+    from .butterfingers import butterfingers
 
-from butterfingers import butterfingers
 
 
 def typoIt(judgmentInFile, judgmentOutFile, rounds=100):
