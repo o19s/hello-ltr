@@ -1,10 +1,10 @@
-from ltr import mainClient
+from ltr import main_client
 import json
 
 def reindex(schema, movieDict={}, index='tmdb'):
-    mainClient.delete_index(index)
-    mainClient.create_index(index, schema)
-    mainClient.index_documents(index, movieDict)
+    main_client.delete_index(index)
+    main_client.create_index(index, schema)
+    main_client.index_documents(index, movieDict)
 
 def run(settings=None):
     # Recreate the index

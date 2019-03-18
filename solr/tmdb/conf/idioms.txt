@@ -1,0 +1,12 @@
+# Idioms is a synonyms file that captures idiomatic phrases as single units
+
+# LHS is all representations encountered in query or document
+looneytunes, looney tunes, looney toons => 12345
+sci fi, scifi, science fiction => 56789
+
+#looneytunes, looney tunes => looney_tunes
+#bugs bunny => bug_bunny
+#mickey mouse => mickey_mouse
+#minnie mouse => minnie_mouse
+#donald duck => donald_duck
+#yogi bear => yogi_bear

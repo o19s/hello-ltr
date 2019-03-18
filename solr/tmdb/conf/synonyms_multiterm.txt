@@ -1,0 +1,5 @@
+# Here are some multi term synonym to 
+# see what happens at query time
+
+looney tunes, cartoons
+science fiction, sci fi, sci-fi, scifi

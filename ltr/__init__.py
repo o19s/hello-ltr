@@ -1,15 +1,18 @@
 from .client.elastic_client import ElasticClient
+from .client.solr_client import SolrClient
 
 elastic_client = ElasticClient()
 # TODO: Solr client
-solrClient = None
+solr_client = SolrClient()
 
 main_client = elastic_client
 
 def useElastic():
     global main_client
     main_client = elastic_client
+    print('Switched to Elastic mode')
 
 def useSolr():
-    global mainClient
-    main_client = elastic_client
+    global main_client
+    main_client = solr_client
+    print('Switched to Solr mode')
