@@ -51,6 +51,12 @@ def logFeatures(es, judgmentsByQid, featureSet):
         featuresPerDoc = {}
         docIds = [judgment.docId for judgment in judgments]
 
+        # Check for dups of documents
+        for docId in docIds:
+            indices = [i for i, x in enumerate(docIds) if x == docId]
+            if len(indices) > 1:
+                print("Duplicate Doc in qid:%s %s" % (qid, docId))
+
         # For every batch of N docs to generate judgments for
         BATCH_SIZE = 500
         numLeft = len(docIds)
@@ -64,6 +70,8 @@ def logFeatures(es, judgmentsByQid, featureSet):
             logQuery['query']['bool']['must'][0]['terms']['_id'] = docIds[start:start+numFetch]
             logQuery['query']['bool']['should'][0]['sltr']['params']['keywords'] = keywords
             logQuery['query']['bool']['should'][0]['sltr']['featureset'] = featureSet
+            #import json
+            #print(json.dumps(logQuery, indent=2))
             res = es.search(index='tmdb', body=logQuery)
             # print("...done")
             # Add feature back to each judgment
@@ -115,7 +123,7 @@ def buildFeaturesJudgmentsFile(judgmentsWithFeatures, filename):
 
 
 if __name__ == "__main__":
-    trainingSetFromJudgments(judgmentInFile='genre_by_date_judgments.txt',
-                                         trainingOutFile='genre_by_date_judgments_train.txt',
-                                         featureSet='genre')
+    trainingSetFromJudgments(judgmentInFile='title_judgments.txt',
+                                         trainingOutFile='title_judgments_train.txt',
+                                         featureSet='title')
 

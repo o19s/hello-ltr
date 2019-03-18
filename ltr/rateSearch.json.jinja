@@ -1,0 +1,20 @@
+{
+	"from": 0,
+	"size": 5,
+	"query": {
+		"bool": {
+			"should": [
+                {"match": {
+                    "_all": "{{ keywords }}"
+                }},
+            {
+				"match_phrase": {
+					"title": {
+						"query": "{{ keywords }}",
+						"boost": 1000
+					}
+				}
+			}]
+		}
+	}
+}

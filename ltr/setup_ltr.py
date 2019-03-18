@@ -16,6 +16,8 @@ def run(config, featureSet='genre_features'):
 
     resp = requests.post('{}/_featureset/{}'.format(elastic_ep, featureSet), json=payload)
     print('Created {} feature set: {}'.format(featureSet, resp.status_code))
+    if resp.status_code > 300:
+        print(resp.text)
 
 if __name__ == "__main__":
     config = {"featureset": {
@@ -71,4 +73,4 @@ if __name__ == "__main__":
             }
     ]
     }}
-    run(config=config, featureSet='genre')
+    run(config=config, featureSet='title')
