@@ -36,7 +36,7 @@ class BaseClient(ABC):
         pass
 
     @abstractmethod
-    def submit_model(self):
+    def submit_model(self, featureset, model_name, model_payload):
         pass
 
     @abstractmethod

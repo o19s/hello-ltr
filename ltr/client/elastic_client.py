@@ -94,8 +94,7 @@ class ElasticClient(BaseClient):
         }
 
         resp = requests.post(create_ep, json=params)
-        print(resp.text)
-        print('Created model {}: {}'.format(modelName, resp.status_code))
+        print('Created model {}: {}'.format(model_name, resp.status_code))
 
 
     def model_query(self, index, model, model_params, query):

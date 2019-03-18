@@ -2,6 +2,8 @@ import os
 import requests
 import re
 
+from ltr import main_client
+
 class TrainingLog:
     def __init__(self, rawResult):
         self.rawResult = rawResult
@@ -35,28 +37,9 @@ def trainModel(training, out, metric2t='DCG@10'):
     return TrainingLog(result)
 
 def saveModel(modelName, modelFile, featureSet):
-    model_ep = "http://localhost:9200/_ltr/_model/"
-    create_ep = "http://localhost:9200/_ltr/_featureset/{}/_createmodel".format(featureSet)
-
-    resp = requests.delete('{}{}'.format(model_ep, modelName))
-    print('Delete model {}: {}'.format(modelName, resp.status_code))
     with open(modelFile) as src:
         definition = src.read()
-
-        params = {
-            'model': {
-                'name': modelName,
-                'model': {
-                    'type': 'model/ranklib',
-                    'definition': definition
-                }
-            }
-        }
-
-        resp = requests.post(create_ep, json=params)
-        print(resp.text)
-        print('Created model {}: {}'.format(modelName, resp.status_code))
-
+        main_client.submit_model(featureSet, modelName, definition)
 
 def run(trainingInFile, modelName, featureSet, metric2t='DCG@10'):
     modelFile='data/{}_model.txt'.format(modelName)
