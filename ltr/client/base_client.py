@@ -32,7 +32,7 @@ class BaseClient(ABC):
         pass
 
     @abstractmethod
-    def log_query(self):
+    def log_query(self, index, featureset, query):
         pass
 
     @abstractmethod

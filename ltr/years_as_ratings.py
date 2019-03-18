@@ -1,4 +1,4 @@
-import requests
+from ltr import main_client
 
 def get_classic_rating(year):
     if year > 2010:
@@ -29,35 +29,11 @@ def run(featureSet='release', latestTrainingSetOut='data/latest-training.txt', c
     elastic_ep = 'http://localhost:9200/tmdb/_search'
     NO_ZERO = False
 
-    params = {
-        "query": {
-            "bool": {
-                "filter": [
-                    {
-                        "sltr": {
-                            "_name": "logged_features",
-                            "featureset": featureSet,
-                            "params": {}
-                        }
-                    }
-                ]
-            }
-        },
-        "ext": {
-            "ltr_log": {
-                "log_specs": {
-                    "name": "ltr_features",
-                    "named_query": "logged_features"
-                }
-            }
-        },
-        "size": 1000
-    }
-
-    resp = requests.post(elastic_ep, json=params).json()
+    resp = main_client.log_query('tmdb', 'release', None)
 
     docs = []
     for hit in resp['hits']['hits']:
+        # TODO: Need to standardize feature format from ES/Solr clients
         feature = hit["fields"]["_ltrlog"][0]['ltr_features'][0]['value']
 
         docs.append([feature]) # Treat features as ordered lists
