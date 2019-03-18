@@ -40,6 +40,6 @@ class BaseClient(ABC):
         pass
 
     @abstractmethod
-    def model_query(self):
+    def model_query(self, index, model, model_params, query):
         pass
 

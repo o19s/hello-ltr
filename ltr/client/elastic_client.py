@@ -114,7 +114,7 @@ class ElasticClient(BaseClient):
             "size": 1000
         }
 
-        return self.es.search(index, body=params)
+        return self.es.search(index, body=params)['hits']['hits']
 
 
 

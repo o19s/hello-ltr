@@ -1,42 +1,25 @@
+from ltr import main_client
+
 import plotly.graph_objs as go
 from plotly.offline import download_plotlyjs, init_notebook_mode, plot, iplot
-import requests
 
 def run():
     init_notebook_mode(connected=True)
 
-    es_ep = 'http://localhost:9200/tmdb/_search'
-
     models = ['classic', 'latest']
     modelData = []
 
-    for model in models:
-        params = {
-            "query": {
-                "bool": {
-                    "must": {"match_all": {} },
-                    "filter": {
-                        "match": {"title": "batman"}
-                    }
+    query = {
+        "bool": {
+            "must": {"match_all": {} },
+            "filter": {
+                "match": {"title": "batman"}
                 }
-            },
-            "rescore": {
-                "window_size": 1000,
-                "query": {
-                    "rescore_query": {
-                        "sltr": {
-                            "params": {},
-                            "model": model
-                        }
-                    }
-                }
-            },
-            "size": 1000
         }
+    }
 
-
-        resp = requests.post(es_ep, json=params).json()
-        modelData.append(resp['hits']['hits'])
+    for model in models:
+        modelData.append(main_client.model_query('tmdb', model, {}, query))
 
     xAxes = []
     for i in range(len(modelData[0])):
