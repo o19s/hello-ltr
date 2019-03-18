@@ -1,15 +1,15 @@
 from .client.elastic_client import ElasticClient
 
-elasticClient = ElasticClient()
+elastic_client = ElasticClient()
 # TODO: Solr client
 solrClient = None
 
-mainClient = elasticClient
+main_client = elastic_client
 
 def useElastic():
-    global mainClient
-    mainClient = elasticClient
+    global main_client
+    main_client = elastic_client
 
 def useSolr():
     global mainClient
-    mainClient = elasticClient
+    main_client = elastic_client

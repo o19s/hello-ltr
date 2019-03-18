@@ -1,3 +1,5 @@
+import requests
+
 from .base_client import BaseClient
 from ltr.helpers.movies import indexableMovies
 
@@ -38,7 +40,7 @@ class ElasticClient(BaseClient):
         resp = requests.put(self.elastic_ep)
         print('Initialize LTR: {}'.format(resp.status_code))
 
-    def create_feature_set(self, name, config):
+    def create_featureset(self, name, config):
         resp = requests.post('{}/_featureset/{}'.format(self.elastic_ep, name), json=config)
         print('Created {} feature set: {}'.format(name, resp.status_code))
         if resp.status_code > 300:

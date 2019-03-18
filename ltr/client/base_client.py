@@ -28,7 +28,7 @@ class BaseClient(ABC):
         pass
 
     @abstractmethod
-    def create_feature_set(self, name, config):
+    def create_featureset(self, name, config):
         pass
 
     @abstractmethod
