@@ -1,4 +1,5 @@
 .ipynb_checkpoints
+data
 data/classic-model.txt
 data/classic-training.txt
 data/latest-model.txt
