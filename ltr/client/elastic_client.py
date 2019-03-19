@@ -47,7 +47,7 @@ class ElasticClient(BaseClient):
         if resp.status_code > 300:
             print(resp.text)
 
-    def log_query(self, index, featureset, query, params):
+    def log_query(self, index, featureset, query, params={}):
         params = {
             "query": {
                 "bool": {
