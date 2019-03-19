@@ -73,7 +73,7 @@ class SolrClient(BaseClient):
 
 
     # TODO: Add query as must boolean clause
-    def log_query(self, index, featureset, query):
+    def log_query(self, index, featureset, query, params):
         if query is None:
             query = '*:*'
 
@@ -130,6 +130,11 @@ class SolrClient(BaseClient):
         resp = requests.post(url, data=params).json()
         return resp['response']['docs']
 
+    def query(self, index, query):
+        url = '{}/{}/select?'.format(self.solr_base_ep, index)
+
+        resp = requests.post(url, data=query).json()
+        return resp['response']['docs']
 
 
 

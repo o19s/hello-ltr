@@ -4,6 +4,8 @@ try:
 except ImportError:
     from .judgments import Judgment, judgmentsToFile
 
+from ltr import client_mode, main_client
+
 def genreQid(genre):
     if genre == "Science Fiction":
         return 1
@@ -53,21 +55,27 @@ def genreGrade(movie):
 
 def buildJudgments(judgmentsFile='genre_by_date_judgments.txt', autoNegate=False):
     print('Generating judgments for scifi & drama movies')
-    elastic_ep = 'http://localhost:9200/tmdb/_search'
 
-    params = {
-        "query": {
-            "match_all": {}
-        },
-        "size": 10000
-    }
 
-    resp = requests.post(elastic_ep, json=params).json()
+    if client_mode == 'elastic':
+        params = {
+            "query": {
+                "match_all": {}
+            },
+            "size": 10000
+        }
+    else:
+        params = {
+            "q": "*:*",
+            "rows": 10000,
+            "wt": 'json'
+        }
+
+    resp = main_client.query('tmdb', params)
 
     # Build judgments for each film
     judgments = []
-    for doc in resp['hits']['hits']:
-        movie = doc['_source']
+    for movie in resp:
         if 'genres' in movie and len(movie['genres']) > 0:
             genre=movie['genres'][0]
             qid = genreQid(genre)
@@ -75,7 +83,7 @@ def buildJudgments(judgmentsFile='genre_by_date_judgments.txt', autoNegate=False
                 continue
             judgment = Judgment(qid=qid,
                                 grade=genreGrade(movie),
-                                docId=doc['_id'],
+                                docId=movie['id'],
                                 keywords=genre)
             judgments.append(judgment)
 
@@ -91,7 +99,7 @@ def buildJudgments(judgmentsFile='genre_by_date_judgments.txt', autoNegate=False
                 negQid=genreQid(negGenre)
                 judgment = Judgment(qid=negQid,
                                     grade=0,
-                                    docId=doc['_id'],
+                                    docId=movie['id'],
                                     keywords=negGenre)
                 judgments.append(judgment)
 

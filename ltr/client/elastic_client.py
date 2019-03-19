@@ -47,8 +47,7 @@ class ElasticClient(BaseClient):
         if resp.status_code > 300:
             print(resp.text)
 
-    # TODO: Add query as must boolean clause
-    def log_query(self, index, featureset, query):
+    def log_query(self, index, featureset, query, params):
         params = {
             "query": {
                 "bool": {
@@ -57,7 +56,7 @@ class ElasticClient(BaseClient):
                             "sltr": {
                                 "_name": "logged_features",
                                 "featureset": featureset,
-                                "params": {}
+                                "params": params
                             }
                         }
                     ]
@@ -74,6 +73,9 @@ class ElasticClient(BaseClient):
             "size": 1000
         }
 
+        if query is not None:
+            params["query"]["bool"]["must"] = query
+
         resp = self.es.search(index, body=params)
 
         matches = []
@@ -81,7 +83,11 @@ class ElasticClient(BaseClient):
             hit['_source']['ltr_features'] = []
 
             for feature in hit['fields']['_ltrlog'][0]['ltr_features']:
-                hit['_source']['ltr_features'].append(feature['value'])
+                value = 0.0
+                if 'value' in feature:
+                    value = feature['value']
+
+                hit['_source']['ltr_features'].append(value)
 
             matches.append(hit['_source'])
 
@@ -136,5 +142,14 @@ class ElasticClient(BaseClient):
 
         return matches
 
+    def query(self, index, query):
+        resp = self.es.search(index, body=query)
+
+        # Trannsform to consistent format between ES/Solr
+        matches = []
+        for hit in resp['hits']['hits']:
+            matches.append(hit['_source'])
+
+        return matches
 
 
