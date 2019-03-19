@@ -23,14 +23,19 @@ def logFeatures(judgmentsByQid, featureSet):
             if start >= len(docIds):
                 break
 
-            terms_query = [
-                {
-                    "terms": {
-                        "_id": docIds[start:start+numFetch]
+            if client_mode == 'elastic':
+                terms_query = [
+                    {
+                        "terms": {
+                            "_id": docIds[start:start+numFetch]
+                        }
                     }
-                }
-            ]
+                ]
 
+
+
+            else:
+                terms_query = "{!terms f=id}{}".format(','.join(docIds[start:start+numFetch]))
 
             params = {
                 "keywords": keywords

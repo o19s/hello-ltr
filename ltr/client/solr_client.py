@@ -72,13 +72,18 @@ class SolrClient(BaseClient):
         print('Created {} feature store under {}: {}'.format(name, index, resp.status_code))
 
 
-    # TODO: Add query as must boolean clause
-    def log_query(self, index, featureset, query, params):
+    def log_query(self, index, featureset, query, options):
         if query is None:
             query = '*:*'
 
+        efi_options = []
+        for key, val in options.items():
+            efi_options.append('efi.{}=({})'.format(key, val))
+
+        efi_str = ' '.join(efi_options)
+
         params = {
-            'fl': '[features store={}]'.format(featureset),
+            'fl': '[features store={} {}]'.format(featureset, efi_str),
             'q': query,
             'rows': 1000,
             'wt': 'json'
