@@ -32,7 +32,7 @@ def run(featureSet='release', latestTrainingSetOut='data/latest-training.txt', c
 
     docs = []
     for hit in resp:
-        # TODO: Need to standardize feature format from ES/Solr clients
+        # Expect clients to return features per doc in ltr_features as ordered list
         feature = hit['ltr_features'][0]
 
         docs.append([feature]) # Treat features as ordered lists

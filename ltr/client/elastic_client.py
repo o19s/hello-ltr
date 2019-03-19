@@ -74,7 +74,19 @@ class ElasticClient(BaseClient):
             "size": 1000
         }
 
-        return self.es.search(index, body=params)
+        resp = self.es.search(index, body=params)
+
+        matches = []
+        for hit in resp['hits']['hits']:
+            hit['_source']['ltr_features'] = []
+
+            for feature in hit['fields']['_ltrlog'][0]['ltr_features']:
+                hit['_source']['ltr_features'].append(feature['value'])
+
+            matches.append(hit['_source'])
+
+        return matches
+
 
 
     def submit_model(self, featureset, model_name, model_payload):
@@ -115,7 +127,14 @@ class ElasticClient(BaseClient):
             "size": 1000
         }
 
-        return self.es.search(index, body=params)['hits']['hits']
+        resp = self.es.search(index, body=params)
+
+        # Transforrm to consistent format between ES/Solr
+        matches = []
+        for hit in resp['hits']['hits']:
+            matches.append(hit['_source'])
+
+        return matches
 
 
 
