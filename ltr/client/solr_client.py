@@ -70,7 +70,7 @@ class SolrClient(BaseClient):
         print('Created {} feature store under {}: {}'.format(name, index, resp.status_code))
 
 
-    def log_query(self, index, featureset, query, options):
+    def log_query(self, index, featureset, query, options={}):
         if query is None:
             query = '*:*'
 
