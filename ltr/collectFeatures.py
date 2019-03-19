@@ -35,7 +35,7 @@ def logFeatures(judgmentsByQid, featureSet):
 
 
             else:
-                terms_query = "{!terms f=id}{}".format(','.join(docIds[start:start+numFetch]))
+                terms_query = "{{!terms f=id}}{}".format(','.join(docIds[start:start+numFetch]))
 
             params = {
                 "keywords": keywords

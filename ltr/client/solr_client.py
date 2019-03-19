@@ -53,17 +53,15 @@ class SolrClient(BaseClient):
 
     # TODO: Fetch metadata from feature/model store and wipe everything
     def reset_ltr(self):
-        resp = requests.delete('{}/tmdb/schema/model-store/classic'.format(self.solr_base_ep))
-        print('Deleted classic model: {}'.format(resp.status_code))
+        models = ['classic', 'genre', 'latest']
+        for model in models:
+            resp = requests.delete('{}/tmdb/schema/model-store/{}'.format(self.solr_base_ep, model))
+            print('Deleted {} model: {}'.format(model, resp.status_code))
 
-        resp = requests.delete('{}/tmdb/schema/model-store/latest'.format(self.solr_base_ep))
-        print('Deleted latest model: {}'.format(resp.status_code))
-
-        resp = requests.delete('{}/tmdb/schema/feature-store/release'.format(self.solr_base_ep))
-        print('Delete release feature store: {}'.format(resp.status_code))
-
-        resp = requests.delete('{}/tmdb/schema/feature-store/_DEFAULT_'.format(self.solr_base_ep))
-        print('Delete _DEFAULT_ feature store: {}'.format(resp.status_code))
+        stores = ['_DEFAULT', 'genre', 'release']
+        for store in stores:
+            resp = requests.delete('{}/tmdb/schema/feature-store/{}'.format(self.solr_base_ep, store))
+            print('Delete {} feature store: {}'.format(store, resp.status_code))
 
 
     def create_featureset(self, index, name, config):
@@ -78,12 +76,12 @@ class SolrClient(BaseClient):
 
         efi_options = []
         for key, val in options.items():
-            efi_options.append('efi.{}=({})'.format(key, val))
+            efi_options.append('efi.{}="{}"'.format(key, val))
 
         efi_str = ' '.join(efi_options)
 
         params = {
-            'fl': '[features store={} {}]'.format(featureset, efi_str),
+            'fl': 'id,[features store={} {}]'.format(featureset, efi_str),
             'q': query,
             'rows': 1000,
             'wt': 'json'
