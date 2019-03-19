@@ -135,7 +135,7 @@ class ElasticClient(BaseClient):
 
         resp = self.es.search(index, body=params)
 
-        # Transforrm to consistent format between ES/Solr
+        # Transform to consistent format between ES/Solr
         matches = []
         for hit in resp['hits']['hits']:
             matches.append(hit['_source'])
@@ -145,7 +145,7 @@ class ElasticClient(BaseClient):
     def query(self, index, query):
         resp = self.es.search(index, body=query)
 
-        # Trannsform to consistent format between ES/Solr
+        # Transform to consistent format between ES/Solr
         matches = []
         for hit in resp['hits']['hits']:
             hit['_source']['_score'] = hit['_score']

@@ -118,6 +118,9 @@ class SolrClient(BaseClient):
         solr_model = ranklibMartToSolr(model_payload, model_name, featureset, feature_dict)
 
         url = '{}/tmdb/schema/model-store'.format(self.solr_base_ep)
+        resp = requests.delete('{}/{}'.format(url, model_name))
+        print('Deleted {} model [{}]'.format(model_name, resp.status_code))
+
         resp = requests.put(url, json=solr_model)
         print('PUT {} model under {}: {}'.format(model_name, featureset, resp.status_code))
 
@@ -137,6 +140,12 @@ class SolrClient(BaseClient):
         url = '{}/{}/select?'.format(self.solr_base_ep, index)
 
         resp = requests.post(url, data=query).json()
+
+        # Transform to be consistent
+        for doc in resp['response']['docs']:
+            if 'score' in doc:
+                doc['_score'] = doc['score']
+
         return resp['response']['docs']
 
 

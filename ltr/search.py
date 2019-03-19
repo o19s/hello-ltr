@@ -23,9 +23,18 @@ def esLtrQuery(keywords, modelName):
     print("%s" % json.dumps(baseEsQuery))
     return baseEsQuery
 
+def solrLtrQuery(keywords, modelName):
+    return {
+        'fl': '*,score',
+        'rows': 5,
+        'q': '{{!ltr model={} efi.keywords="{}"}}'.format(modelName, keywords)
+    }
 
 def run(keywords, modelName):
-    results = main_client.query('tmdb', esLtrQuery(keywords, modelName))
+    if client_mode == 'elastic':
+        results = main_client.query('tmdb', esLtrQuery(keywords, modelName))
+    else:
+        results = main_client.query('tmdb', solrLtrQuery(keywords, modelName))
 
     for result in results:
              print("%s " % (result['title']))
