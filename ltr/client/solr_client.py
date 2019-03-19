@@ -1,7 +1,7 @@
 import requests
 
 from .base_client import BaseClient
-from ltr.helpers.ranklib_solr import ranklibMartToSolr
+from ltr.helpers.convert import convert
 from ltr.helpers.movies import indexableMovies
 
 class SolrClient(BaseClient):
@@ -115,7 +115,7 @@ class SolrClient(BaseClient):
         for idx, value in enumerate(features):
             feature_dict[idx + 1] = value['name']
 
-        solr_model = ranklibMartToSolr(model_payload, model_name, featureset, feature_dict)
+        solr_model = convert(model_payload, model_name, featureset)
 
         url = '{}/tmdb/schema/model-store'.format(self.solr_base_ep)
         resp = requests.delete('{}/{}'.format(url, model_name))

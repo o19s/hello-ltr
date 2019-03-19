@@ -62,12 +62,14 @@ def buildJudgments(judgmentsFile='genre_by_date_judgments.txt', autoNegate=False
             "query": {
                 "match_all": {}
             },
-            "size": 10000
+            "size": 10000,
+            "sort": [{"_id": "asc"}]
         }
     else:
         params = {
             "q": "*:*",
             "rows": 10000,
+            "sort": "id ASC",
             "wt": 'json'
         }
 

@@ -12,10 +12,6 @@ baseEsQuery = {
       }
 }
 
-baseSolrQuery = {
-
-}
-
 def esLtrQuery(keywords, modelName):
     import json
     baseEsQuery['query']['sltr']['params']['keywords'] = keywords
@@ -27,7 +23,7 @@ def solrLtrQuery(keywords, modelName):
     return {
         'fl': '*,score',
         'rows': 5,
-        'q': '{{!ltr model={} efi.keywords="{}"}}'.format(modelName, keywords)
+        'q': '{{!ltr reRankDocs=30000 model={} efi.keywords="{}"}}'.format(modelName, keywords)
     }
 
 def run(keywords, modelName):
@@ -37,10 +33,10 @@ def run(keywords, modelName):
         results = main_client.query('tmdb', solrLtrQuery(keywords, modelName))
 
     for result in results:
-             print("%s " % (result['title']))
+             print("%s " % (result['title'] if 'title' in result else 'N/A'))
              print("%s " % (result['_score']))
              print("%s " % (result['release_year']))
-             print("%s " % (result['genres']))
+             print("%s " % (result['genres'] if 'genres' in result else 'N/A'))
              print("%s " % (result['overview']))
              print("---------------------------------------")
 
