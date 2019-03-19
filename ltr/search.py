@@ -1,4 +1,6 @@
-baseQuery = {
+from ltr import client_mode, main_client
+
+baseEsQuery = {
     "size": 5,
     "query": {
         "sltr": {
@@ -10,27 +12,27 @@ baseQuery = {
       }
 }
 
-def ltrQuery(keywords, modelName):
+baseSolrQuery = {
+
+}
+
+def esLtrQuery(keywords, modelName):
     import json
-    baseQuery['query']['sltr']['params']['keywords'] = keywords
-    baseQuery['query']['sltr']['model'] = modelName
-    print("%s" % json.dumps(baseQuery))
-    return baseQuery
+    baseEsQuery['query']['sltr']['params']['keywords'] = keywords
+    baseEsQuery['query']['sltr']['model'] = modelName
+    print("%s" % json.dumps(baseEsQuery))
+    return baseEsQuery
 
 
 def run(keywords, modelName):
-    from elasticsearch import Elasticsearch
+    results = main_client.query('tmdb', esLtrQuery(keywords, modelName))
 
-    esUrl='http://localhost:9200'
-
-    es = Elasticsearch(esUrl, timeout=1000)
-    results = es.search(index='tmdb', doc_type='movie', body=ltrQuery(keywords, modelName))
-    for result in results['hits']['hits']:
-             print("%s " % (result['_source']['title']))
+    for result in results:
+             print("%s " % (result['title']))
              print("%s " % (result['_score']))
-             print("%s " % (result['_source']['release_year']))
-             print("%s " % (result['_source']['genres']))
-             print("%s " % (result['_source']['overview']))
+             print("%s " % (result['release_year']))
+             print("%s " % (result['genres']))
+             print("%s " % (result['overview']))
              print("---------------------------------------")
 
 

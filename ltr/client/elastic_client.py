@@ -148,6 +148,7 @@ class ElasticClient(BaseClient):
         # Trannsform to consistent format between ES/Solr
         matches = []
         for hit in resp['hits']['hits']:
+            hit['_source']['_score'] = hit['_score']
             matches.append(hit['_source'])
 
         return matches
