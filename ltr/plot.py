@@ -1,4 +1,4 @@
-from ltr import main_client
+from ltr import main_client, client_mode
 
 import plotly.graph_objs as go
 from plotly.offline import download_plotlyjs, init_notebook_mode, plot, iplot
@@ -9,14 +9,17 @@ def run():
     models = ['classic', 'latest']
     modelData = []
 
-    query = {
-        "bool": {
-            "must": {"match_all": {} },
-            "filter": {
-                "match": {"title": "batman"}
-                }
+    if client_mode == 'elastic':
+        query = {
+            "bool": {
+                "must": {"match_all": {} },
+                "filter": {
+                    "match": {"title": "batman"}
+                    }
+            }
         }
-    }
+    else:
+        query = 'title:(batman)^0'
 
     for model in models:
         modelData.append(main_client.model_query('tmdb', model, {}, query))
@@ -27,14 +30,14 @@ def run():
 
     trace0 = go.Scatter(
         x = xAxes,
-        y = [x['_source']['release_year'] for x in modelData[0]],
+        y = [x['release_year'] for x in modelData[0]],
         mode = "lines",
         name = "classic"
     )
 
     trace1 = go.Scatter(
         x = xAxes,
-        y = [x['_source']['release_year'] for x in modelData[1]],
+        y = [x['release_year'] for x in modelData[1]],
         mode = "lines",
         name = "latest"
     )

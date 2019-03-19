@@ -3,7 +3,7 @@ import requests
 
 def run(config, featureset='genre_features'):
     main_client.reset_ltr()
-    main_client.create_featureset(featureset, config)
+    main_client.create_featureset('tmdb', featureset, config)
 
 if __name__ == "__main__":
     config = {"featureset": {

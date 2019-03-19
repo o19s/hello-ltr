@@ -26,15 +26,14 @@ def get_latest_rating(year):
 
 def run(featureSet='release', latestTrainingSetOut='data/latest-training.txt', classicTrainingSetOut='data/classic-training.txt'):
     print('Generating ratings for classic and latest model')
-    elastic_ep = 'http://localhost:9200/tmdb/_search'
     NO_ZERO = False
 
     resp = main_client.log_query('tmdb', 'release', None)
 
     docs = []
-    for hit in resp['hits']['hits']:
+    for hit in resp:
         # TODO: Need to standardize feature format from ES/Solr clients
-        feature = hit["fields"]["_ltrlog"][0]['ltr_features'][0]['value']
+        feature = hit['ltr_features'][0]
 
         docs.append([feature]) # Treat features as ordered lists
 
