@@ -38,7 +38,7 @@ def save_model(client, modelName, modelFile, featureSet):
         definition = src.read()
         client.submit_model(featureSet, modelName, definition)
 
-def run(client, trainingInFile, modelName, featureSet, metric2t='DCG@10'):
+def train(client, trainingInFile, modelName, featureSet, metric2t='DCG@10'):
     modelFile='data/{}_model.txt'.format(modelName)
     trainingLog = trainModel(training=trainingInFile,
                              out=modelFile,
@@ -46,9 +46,3 @@ def run(client, trainingInFile, modelName, featureSet, metric2t='DCG@10'):
     save_model(client, modelName, modelFile, featureSet)
     return trainingLog
     print('Done')
-
-
-if __name__ == "__main__":
-    run(trainingInFile='genre_by_date_judgments_train.txt',
-        featureSet='title',
-        modelName='doug')

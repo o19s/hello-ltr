@@ -30,27 +30,16 @@ def solrLtrQuery(keywords, modelName):
         'q': '{{!ltr reRankDocs=30000 model={} efi.keywords="{}" efi.fuzzy_keywords="{}"}}'.format(modelName, keywords, fuzzy_keywords)
     }
 
-def run(client, keywords, modelName):
+def search(client, keywords, modelName):
     if client.name() == 'elastic':
         results = client.query('tmdb', esLtrQuery(keywords, modelName))
     else:
         results = client.query('tmdb', solrLtrQuery(keywords, modelName))
 
     for result in results:
-             print("%s " % (result['title'] if 'title' in result else 'N/A'))
-             print("%s " % (result['_score']))
-             print("%s " % (result['release_year']))
-             print("%s " % (result['genres'] if 'genres' in result else 'N/A'))
-             print("%s " % (result['overview']))
-             print("---------------------------------------")
-
-
-
-if __name__ == "__main__":
-    from sys import argv
-    model = "doug"
-    if len(argv) > 2:
-        model = argv[2]
-    keywords = argv[1]
-
-    run(keywords, model)
+         print("%s " % (result['title'] if 'title' in result else 'N/A'))
+         print("%s " % (result['_score']))
+         print("%s " % (result['release_year']))
+         print("%s " % (result['genres'] if 'genres' in result else 'N/A'))
+         print("%s " % (result['overview']))
+         print("---------------------------------------")

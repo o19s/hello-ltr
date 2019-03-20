@@ -1,7 +1,7 @@
 import plotly.graph_objs as go
 from plotly.offline import download_plotlyjs, init_notebook_mode, plot, iplot
 
-def run(client):
+def plot(client):
     init_notebook_mode(connected=True)
 
     models = ['classic', 'latest']
