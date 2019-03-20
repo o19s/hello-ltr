@@ -1,10 +1,4 @@
-import requests
-try:
-    from judgments import Judgment, judgmentsToFile
-except ImportError:
-    from .judgments import Judgment, judgmentsToFile
-
-from ltr import client_mode, main_client
+from .judgments import Judgment, judgmentsToFile
 
 def genreQid(genre):
     if genre == "Science Fiction":
@@ -53,11 +47,11 @@ def genreGrade(movie):
     return 0
 
 
-def buildJudgments(judgmentsFile='genre_by_date_judgments.txt', autoNegate=False):
+def buildJudgments(client, judgmentsFile='genre_by_date_judgments.txt', autoNegate=False):
     print('Generating judgments for scifi & drama movies')
 
 
-    if client_mode == 'elastic':
+    if client.name() == 'elastic':
         params = {
             "query": {
                 "match_all": {}
@@ -73,7 +67,7 @@ def buildJudgments(judgmentsFile='genre_by_date_judgments.txt', autoNegate=False
             "wt": 'json'
         }
 
-    resp = main_client.query('tmdb', params)
+    resp = client.query('tmdb', params)
 
     # Build judgments for each film
     judgments = []
@@ -109,7 +103,3 @@ def buildJudgments(judgmentsFile='genre_by_date_judgments.txt', autoNegate=False
 
     print('Done')
     return judgments
-
-
-if __name__ == "__main__":
-    buildJudgments(autoNegate=True)

@@ -1,4 +1,3 @@
-from ltr import client_mode, main_client
 import re
 
 baseEsQuery = {
@@ -31,11 +30,11 @@ def solrLtrQuery(keywords, modelName):
         'q': '{{!ltr reRankDocs=30000 model={} efi.keywords="{}" efi.fuzzy_keywords="{}"}}'.format(modelName, keywords, fuzzy_keywords)
     }
 
-def run(keywords, modelName):
-    if client_mode == 'elastic':
-        results = main_client.query('tmdb', esLtrQuery(keywords, modelName))
+def run(client, keywords, modelName):
+    if client.name() == 'elastic':
+        results = client.query('tmdb', esLtrQuery(keywords, modelName))
     else:
-        results = main_client.query('tmdb', solrLtrQuery(keywords, modelName))
+        results = client.query('tmdb', solrLtrQuery(keywords, modelName))
 
     for result in results:
              print("%s " % (result['title'] if 'title' in result else 'N/A'))

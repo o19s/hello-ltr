@@ -107,7 +107,7 @@ class ElasticClient(BaseClient):
             params["query"]["bool"]["must"] = query
 
         resp = self.es.search(index, body=params)
-        resp_msg(msg="Searching {} - {}".format(index, query), resp=SearchResp(resp))
+        resp_msg(msg="Searching {} - {}".format(index, str(query)[:20]), resp=SearchResp(resp))
 
         matches = []
         for hit in resp['hits']['hits']:
@@ -165,7 +165,7 @@ class ElasticClient(BaseClient):
         }
 
         resp = self.es.search(index, body=params)
-        resp_msg(msg="Searching {} - {}".format(index, query), resp=SearchResp(resp))
+        resp_msg(msg="Searching {} - {}".format(index, str(query)[:20]), resp=SearchResp(resp))
 
         # Transform to consistent format between ES/Solr
         matches = []
@@ -176,7 +176,7 @@ class ElasticClient(BaseClient):
 
     def query(self, index, query):
         resp = self.es.search(index, body=query)
-        resp_msg(msg="Searching {} - {}".format(index, query[:10]), resp=SearchResp(resp))
+        resp_msg(msg="Searching {} - {}".format(index, str(query)[:20]), resp=SearchResp(resp))
 
         # Transform to consistent format between ES/Solr
         matches = []

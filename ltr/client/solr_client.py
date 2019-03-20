@@ -150,8 +150,9 @@ class SolrClient(BaseClient):
     def query(self, index, query):
         url = '{}/{}/select?'.format(self.solr_base_ep, index)
 
-        resp = requests.post(url, data=query).json()
-        resp_msg(msg='Query {}...'.format(query[:10]), resp=resp)
+        resp = requests.post(url, data=query)
+        resp_msg(msg='Query {}...'.format(str(query)[:10]), resp=resp)
+        resp = resp.json()
 
         # Transform to be consistent
         for doc in resp['response']['docs']:

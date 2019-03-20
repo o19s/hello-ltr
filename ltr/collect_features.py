@@ -1,7 +1,6 @@
-from ltr import client_mode, main_client
 import re
 
-def logFeatures(judgmentsByQid, featureSet):
+def log_features(client, judgmentsByQid, featureSet):
     idx = 0
     for qid, judgments in judgmentsByQid.items():
         keywords = judgments[0].keywords
@@ -24,7 +23,7 @@ def logFeatures(judgmentsByQid, featureSet):
             if start >= len(docIds):
                 break
 
-            if client_mode == 'elastic':
+            if client.name() == 'elastic':
                 terms_query = [
                     {
                         "terms": {
@@ -45,7 +44,7 @@ def logFeatures(judgmentsByQid, featureSet):
                 "fuzzy_keywords": ' '.join([x + '~' for x in keywords.split(' ')])
             }
 
-            res = main_client.log_query('tmdb', featureSet, terms_query, params)
+            res = client.log_query('tmdb', featureSet, terms_query, params)
 
             # Add feature back to each judgment
             for doc in res:
@@ -66,15 +65,12 @@ def logFeatures(judgmentsByQid, featureSet):
         idx += 1
 
 
-def trainingSetFromJudgments(judgmentInFile, featureSet, trainingOutFile='judgments_wfeatures.txt'):
-    try:
-        from .judgments import judgmentsToFile, judgmentsFromFile, judgmentsByQid
-    except ImportError:
-        from judgments import judgmentsToFile, judgmentsFromFile, judgmentsByQid
+def judgments_to_training_set(client, judgmentInFile, featureSet, trainingOutFile='judgments_wfeatures.txt'):
+    from .judgments import judgmentsToFile, judgmentsFromFile, judgmentsByQid
 
     judgments = judgmentsFromFile(judgmentInFile)
     judgments = judgmentsByQid(judgments)
-    logFeatures(judgments, featureSet=featureSet)
+    log_features(client, judgments, featureSet=featureSet)
 
     judgmentsAsList = []
     for qid, judgmentList in judgments.items():
@@ -83,10 +79,3 @@ def trainingSetFromJudgments(judgmentInFile, featureSet, trainingOutFile='judgme
 
     judgmentsToFile(filename=trainingOutFile, judgmentsList=judgmentsAsList)
     return judgments
-
-
-if __name__ == "__main__":
-    trainingSetFromJudgments(judgmentInFile='title_judgments.txt',
-                                         trainingOutFile='title_judgments_train.txt',
-                                         featureSet='title')
-
