@@ -1,9 +1,6 @@
-from ltr import main_client
-import requests
-
-def run(config, featureset='genre_features'):
-    main_client.reset_ltr()
-    main_client.create_featureset('tmdb', featureset, config)
+def run(client, config, featureset='genre_features'):
+    client.reset_ltr()
+    client.create_featureset('tmdb', featureset, config)
 
 if __name__ == "__main__":
     config = {"featureset": {

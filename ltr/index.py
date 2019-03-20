@@ -1,18 +1,20 @@
-from ltr import main_client
 import json
 
-def reindex(schema, movieDict={}, index='tmdb'):
-    main_client.delete_index(index)
-    main_client.create_index(index, schema)
-    main_client.index_documents(index, movieDict)
+def reindex(client, schema, movieDict={}, index='tmdb'):
+    client.delete_index(index)
+    client.create_index(index, schema)
+    client.index_documents(index, movieDict)
 
-def run(settings=None):
+def run(client, settings=None):
+    print("RUNNING INDEXING...")
     # Recreate the index
     if settings is None:
         with open('data/settings.json') as src:
             settings = json.load(src)
 
-    reindex(movieDict=json.load(open('data/tmdb.json')), schema=settings, index='tmdb')
+    print("DO IT!")
+
+    reindex(client, movieDict=json.load(open('data/tmdb.json')), schema=settings, index='tmdb')
 
     print('Done')
 

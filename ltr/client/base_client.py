@@ -12,6 +12,10 @@ from abc import ABC, abstractmethod
 class BaseClient(ABC):
 
     @abstractmethod
+    def name(self):
+        pass
+
+    @abstractmethod
     def delete_index(self, index):
         pass
 
@@ -46,4 +50,5 @@ class BaseClient(ABC):
     @abstractmethod
     def model_query(self, index, model, model_params, query):
         pass
+
 

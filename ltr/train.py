@@ -1,8 +1,5 @@
 import os
-import requests
 import re
-
-from ltr import main_client
 
 class TrainingLog:
     def __init__(self, rawResult):
@@ -36,17 +33,17 @@ def trainModel(training, out, metric2t='DCG@10'):
     print("DONE")
     return TrainingLog(result)
 
-def saveModel(modelName, modelFile, featureSet):
+def save_model(client, modelName, modelFile, featureSet):
     with open(modelFile) as src:
         definition = src.read()
-        main_client.submit_model(featureSet, modelName, definition)
+        client.submit_model(featureSet, modelName, definition)
 
-def run(trainingInFile, modelName, featureSet, metric2t='DCG@10'):
+def run(client, trainingInFile, modelName, featureSet, metric2t='DCG@10'):
     modelFile='data/{}_model.txt'.format(modelName)
     trainingLog = trainModel(training=trainingInFile,
                              out=modelFile,
                              metric2t=metric2t)
-    saveModel(modelName, modelFile, featureSet)
+    save_model(client, modelName, modelFile, featureSet)
     return trainingLog
     print('Done')
 

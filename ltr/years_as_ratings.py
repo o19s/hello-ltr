@@ -1,5 +1,3 @@
-from ltr import main_client
-
 def get_classic_rating(year):
     if year > 2010:
         return 0
@@ -24,11 +22,11 @@ def get_latest_rating(year):
     else:
         return 0
 
-def run(featureSet='release', latestTrainingSetOut='data/latest-training.txt', classicTrainingSetOut='data/classic-training.txt'):
+def run(client, featureSet='release', latestTrainingSetOut='data/latest-training.txt', classicTrainingSetOut='data/classic-training.txt'):
     print('Generating ratings for classic and latest model')
     NO_ZERO = False
 
-    resp = main_client.log_query('tmdb', 'release', None)
+    resp = client.log_query('tmdb', 'release', None)
 
     docs = []
     for hit in resp:

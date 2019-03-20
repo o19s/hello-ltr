@@ -2,22 +2,53 @@ import requests
 
 from .base_client import BaseClient
 from ltr.helpers.movies import indexableMovies
+from ltr.helpers.handle_resp import resp_msg
 
 import elasticsearch.helpers
+import json
 from elasticsearch import Elasticsearch
+
+class ElasticResp():
+    def __init__(self, resp):
+        self.status_code = 400
+        if 'acknowledged' in resp and resp['acknowledged']:
+            self.status_code = 200
+        else:
+            self.status_code = resp['status']
+            self.text = json.dumps(resp, indent=2)
+
+class BulkResp():
+    def __init__(self, resp):
+        self.status_code = 400
+        if resp[0] > 0:
+            self.status_code = 201
+
+class SearchResp():
+    def __init__(self, resp):
+        self.status_code = 400
+        if 'hits' in resp:
+            self.status_code = 200
+        else:
+            self.status_code = resp['status']
+            self.text = json.dumps(resp, indent=2)
+
 
 class ElasticClient(BaseClient):
     def __init__(self):
         self.elastic_ep = 'http://localhost:9200/_ltr'
         self.es = Elasticsearch('http://localhost:9200')
 
+    def name(self):
+        return "elastic"
+
     def delete_index(self, index):
-        print('Deleting index: {}'.format(index))
-        self.es.indices.delete(index, ignore=[400, 404])
+        resp = self.es.indices.delete(index=index, ignore=[400, 404])
+        resp_msg(msg="Deleted index {}".format(index), resp=ElasticResp(resp), throw=False)
+
 
     def create_index(self, index, settings):
-        print('Creating index: {}'.format(index))
-        self.es.indices.create(index, body=settings)
+        resp = self.es.indices.create(index, body=settings)
+        resp_msg(msg="Created index {}".format(index), resp=ElasticResp(resp))
 
     def index_documents(self, index, movie_dict={}):
         print('Indexing {} documents'.format(len(movie_dict.keys())))
@@ -32,20 +63,19 @@ class ElasticClient(BaseClient):
                 if 'title' in movie:
                     print("%s added to %s" % (movie['title'], index))
 
-        elasticsearch.helpers.bulk(self.es, bulkDocs(movie_dict), chunk_size=100)
+        resp = elasticsearch.helpers.bulk(self.es, bulkDocs(movie_dict), chunk_size=100)
+        resp_msg(msg="Streaming Bulk index DONE {}".format(index), resp=BulkResp(resp))
 
     def reset_ltr(self):
         resp = requests.delete(self.elastic_ep)
-        print('Removed LTR feature store: {}'.format(resp.status_code))
+        resp_msg(msg="Removed Default LTR feature store".format(), resp=resp)
         resp = requests.put(self.elastic_ep)
-        print('Initialize LTR: {}'.format(resp.status_code))
+        resp_msg(msg="Initialize Default LTR feature store".format(), resp=resp)
 
     # Note: index is not needed by elastic, but solr needs it
     def create_featureset(self, index, name, config):
         resp = requests.post('{}/_featureset/{}'.format(self.elastic_ep, name), json=config)
-        print('Created {} feature set: {}'.format(name, resp.status_code))
-        if resp.status_code > 300:
-            print(resp.text)
+        resp_msg(msg="Create {} feature set".format(name), resp=resp)
 
     def log_query(self, index, featureset, query, params={}):
         params = {
@@ -77,6 +107,7 @@ class ElasticClient(BaseClient):
             params["query"]["bool"]["must"] = query
 
         resp = self.es.search(index, body=params)
+        resp_msg(msg="Searching {} - {}".format(index, query), resp=SearchResp(resp))
 
         matches = []
         for hit in resp['hits']['hits']:
@@ -113,7 +144,7 @@ class ElasticClient(BaseClient):
         }
 
         resp = requests.post(create_ep, json=params)
-        print('Created model {}: {}'.format(model_name, resp.status_code))
+        resp_msg(msg="Created Model {}".format(model_name), resp=resp)
 
 
     def model_query(self, index, model, model_params, query):
@@ -134,6 +165,7 @@ class ElasticClient(BaseClient):
         }
 
         resp = self.es.search(index, body=params)
+        resp_msg(msg="Searching {} - {}".format(index, query), resp=SearchResp(resp))
 
         # Transform to consistent format between ES/Solr
         matches = []
@@ -144,6 +176,7 @@ class ElasticClient(BaseClient):
 
     def query(self, index, query):
         resp = self.es.search(index, body=query)
+        resp_msg(msg="Searching {} - {}".format(index, query[:10]), resp=SearchResp(resp))
 
         # Transform to consistent format between ES/Solr
         matches = []

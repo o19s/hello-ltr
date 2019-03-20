@@ -3,10 +3,14 @@ import requests
 from .base_client import BaseClient
 from ltr.helpers.convert import convert
 from ltr.helpers.movies import indexableMovies
+from ltr.helpers.handle_resp import resp_msg
 
 class SolrClient(BaseClient):
     def __init__(self):
         self.solr_base_ep = 'http://localhost:8983/solr'
+
+    def name(self):
+        return "solr"
 
     def delete_index(self, index):
         params = {
@@ -18,7 +22,7 @@ class SolrClient(BaseClient):
         }
 
         resp = requests.get('{}/admin/cores?'.format(self.solr_base_ep), params=params)
-        print('Deleted index: {} [Status: {}]'.format(index, resp.status_code))
+        resp_msg(msg="Deleted index {}".format(index), resp=resp)
 
     def create_index(self, index, settings):
         params = {
@@ -27,15 +31,16 @@ class SolrClient(BaseClient):
             'configSet': 'tmdb'
         }
         resp = requests.get('{}/admin/cores?'.format(self.solr_base_ep), params=params)
-        print('Created index: {} [Status: {}]'.format(index, resp.status_code))
+        resp_msg(msg="Created index {}".format(index), resp=resp)
 
     def index_documents(self, index, movie_dict={}):
         print('Indexing {} documents'.format(len(movie_dict.keys())))
 
         def flush(docs):
             print('Flushing {} movies'.format(len(docs)))
-            requests.post('{}/{}/update?commitWithin=1500'.format(
+            resp = requests.post('{}/{}/update?commitWithin=1500'.format(
                 self.solr_base_ep, index), json=docs)
+            resp_msg(msg="Done", resp=resp)
             docs.clear()
 
         BATCH_SIZE = 500
@@ -57,18 +62,18 @@ class SolrClient(BaseClient):
         models = ['classic', 'genre', 'latest', 'title', 'title_fuzzy']
         for model in models:
             resp = requests.delete('{}/tmdb/schema/model-store/{}'.format(self.solr_base_ep, model))
-            print('Deleted {} model: {}'.format(model, resp.status_code))
+            resp_msg(msg='Deleted {} model'.format(model), resp=resp)
 
         stores = ['_DEFAULT', 'genre', 'release', 'title', 'title_fuzzy']
         for store in stores:
             resp = requests.delete('{}/tmdb/schema/feature-store/{}'.format(self.solr_base_ep, store))
-            print('Delete {} feature store: {}'.format(store, resp.status_code))
+            resp_msg(msg='Deleted {} Featurestore'.format(store), resp=resp)
 
 
     def create_featureset(self, index, name, config):
         resp = requests.put('{}/{}/schema/feature-store'.format(
             self.solr_base_ep, index, name), json=config)
-        print('Created {} feature store under {}: {}'.format(name, index, resp.status_code))
+        resp_msg(msg='Created {} feature store under {}:'.format(name, index), resp=resp)
 
 
     def log_query(self, index, featureset, query, options={}):
@@ -87,7 +92,9 @@ class SolrClient(BaseClient):
             'rows': 1000,
             'wt': 'json'
         }
-        resp = requests.post('{}/{}/select'.format(self.solr_base_ep, index), data=params).json()
+        resp = requests.post('{}/{}/select'.format(self.solr_base_ep, index), data=params)
+        resp_msg(msg='Searching {}'.format(index), resp=resp)
+        resp = resp.json()
 
         def parseFeatures(features):
             fv = []
@@ -109,7 +116,9 @@ class SolrClient(BaseClient):
 
     def submit_model(self, featureset, model_name, model_payload):
         # Fetch feature metadata
-        metadata = requests.get('{}/tmdb/schema/feature-store/{}'.format(self.solr_base_ep, featureset)).json()
+        resp = requests.get('{}/tmdb/schema/feature-store/{}'.format(self.solr_base_ep, featureset))
+        resp_msg(msg='Submit Model {} Ftr Set {}'.format(model_name, featureset), resp=resp)
+        metadata = resp.json()
         features = metadata['features']
 
         feature_dict = {}
@@ -120,10 +129,10 @@ class SolrClient(BaseClient):
 
         url = '{}/tmdb/schema/model-store'.format(self.solr_base_ep)
         resp = requests.delete('{}/{}'.format(url, model_name))
-        print('Deleted {} model [{}]'.format(model_name, resp.status_code))
+        resp_msg(msg='Deleted Model {}'.format(model_name), resp=resp)
 
         resp = requests.put(url, json=solr_model)
-        print('PUT {} model under {}: {}'.format(model_name, featureset, resp.status_code))
+        resp_msg(msg='Created Model {}'.format(model_name), resp=resp)
 
 
     def model_query(self, index, model, model_params, query):
@@ -134,13 +143,15 @@ class SolrClient(BaseClient):
             'rows': 100
         }
 
-        resp = requests.post(url, data=params).json()
-        return resp['response']['docs']
+        resp = requests.post(url, data=params)
+        resp_msg(msg='Search keywords - {}'.format(query), resp=resp)
+        return resp.json()['response']['docs']
 
     def query(self, index, query):
         url = '{}/{}/select?'.format(self.solr_base_ep, index)
 
         resp = requests.post(url, data=query).json()
+        resp_msg(msg='Query {}...'.format(query[:10]), resp=resp)
 
         # Transform to be consistent
         for doc in resp['response']['docs']:

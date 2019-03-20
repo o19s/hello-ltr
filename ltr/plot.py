@@ -1,15 +1,13 @@
-from ltr import main_client, client_mode
-
 import plotly.graph_objs as go
 from plotly.offline import download_plotlyjs, init_notebook_mode, plot, iplot
 
-def run():
+def run(client):
     init_notebook_mode(connected=True)
 
     models = ['classic', 'latest']
     modelData = []
 
-    if client_mode == 'elastic':
+    if client.name() == 'elastic':
         query = {
             "bool": {
                 "must": {"match_all": {} },
@@ -22,7 +20,7 @@ def run():
         query = 'title:(batman)^0'
 
     for model in models:
-        modelData.append(main_client.model_query('tmdb', model, {}, query))
+        modelData.append(client.model_query('tmdb', model, {}, query))
 
     xAxes = []
     for i in range(len(modelData[0])):
