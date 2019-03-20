@@ -5,7 +5,7 @@
 		"bool": {
 			"should": [
                 {"match": {
-                    "_all": "{{ keywords }}"
+                    "text_all": "{{ keywords }}"
                 }},
             {
 				"match_phrase": {

@@ -38,6 +38,8 @@ def getPotentialResults(esUrl, keywords, fuzzy):
 def gradeResults(results, keywords, qid):
     titleField = 'title'
     overviewField = 'overview'
+    releaseDate = 'release_year'
+    voteCount = 'vote_count'
     ratings = []
     print("Rating %s results" % len(results))
     for result in results:
@@ -50,7 +52,12 @@ def gradeResults(results, keywords, qid):
             print("")
             print("## %s %s " % (result['fields'][titleField], result['_id']))
             print("")
+            print(" Release Year  %s " % result['fields'][releaseDate])
+            print("")
+            print(" Votes  %s " % result['fields'][voteCount])
+            print("")
             print("   %s " % result['fields'][overviewField])
+            print("")
             #print("     %s " % (" ".join([cast['name'] for cast in result['fields']['cast']])))
             while grade not in ["0", "1", "2", "3", "4"]:
                 grade = input("Rate this shiznit (0-4) ")
