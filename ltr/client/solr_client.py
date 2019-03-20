@@ -52,13 +52,14 @@ class SolrClient(BaseClient):
         flush(docs)
 
     # TODO: Fetch metadata from feature/model store and wipe everything
+    # TODO: Probably better to just delete specific models/stores on creation, this is stacking up
     def reset_ltr(self):
-        models = ['classic', 'genre', 'latest']
+        models = ['classic', 'genre', 'latest', 'title', 'title_fuzzy']
         for model in models:
             resp = requests.delete('{}/tmdb/schema/model-store/{}'.format(self.solr_base_ep, model))
             print('Deleted {} model: {}'.format(model, resp.status_code))
 
-        stores = ['_DEFAULT', 'genre', 'release']
+        stores = ['_DEFAULT', 'genre', 'release', 'title', 'title_fuzzy']
         for store in stores:
             resp = requests.delete('{}/tmdb/schema/feature-store/{}'.format(self.solr_base_ep, store))
             print('Delete {} feature store: {}'.format(store, resp.status_code))

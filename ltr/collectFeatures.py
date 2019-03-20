@@ -1,4 +1,5 @@
 from ltr import client_mode, main_client
+import re
 
 def logFeatures(judgmentsByQid, featureSet):
     idx = 0
@@ -32,13 +33,16 @@ def logFeatures(judgmentsByQid, featureSet):
                     }
                 ]
 
-
-
             else:
                 terms_query = "{{!terms f=id}}{}".format(','.join(docIds[start:start+numFetch]))
 
+            # Sanitize (Solr has a strict syntax that can easily be tripped up)
+            # This removes anything but alphanumeric and spaces
+            keywords = re.sub('([^\s\w]|_)+', '', keywords)
+
             params = {
-                "keywords": keywords
+                "keywords": keywords,
+                "fuzzy_keywords": ' '.join([x + '~' for x in keywords.split(' ')])
             }
 
             res = main_client.log_query('tmdb', featureSet, terms_query, params)

@@ -1,4 +1,5 @@
 from ltr import client_mode, main_client
+import re
 
 baseEsQuery = {
     "size": 5,
@@ -19,11 +20,15 @@ def esLtrQuery(keywords, modelName):
     print("%s" % json.dumps(baseEsQuery))
     return baseEsQuery
 
+# TODO: Parse params and add efi dynamically instead of adding manually to query below
 def solrLtrQuery(keywords, modelName):
+    keywords = re.sub('([^\s\w]|_)+', '', keywords)
+    fuzzy_keywords = ' '.join([x + '~' for x in keywords.split(' ')])
+
     return {
         'fl': '*,score',
         'rows': 5,
-        'q': '{{!ltr reRankDocs=30000 model={} efi.keywords="{}"}}'.format(modelName, keywords)
+        'q': '{{!ltr reRankDocs=30000 model={} efi.keywords="{}" efi.fuzzy_keywords="{}"}}'.format(modelName, keywords, fuzzy_keywords)
     }
 
 def run(keywords, modelName):
