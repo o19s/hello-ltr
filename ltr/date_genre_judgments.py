@@ -47,7 +47,7 @@ def genreGrade(movie):
     return 0
 
 
-def buildJudgments(client, judgmentsFile='genre_by_date_judgments.txt', autoNegate=False):
+def synthesize(client, judgmentsOutFile='genre_by_date_judgments.txt', autoNegate=False):
     print('Generating judgments for scifi & drama movies')
 
 
@@ -99,7 +99,7 @@ def buildJudgments(client, judgmentsFile='genre_by_date_judgments.txt', autoNega
                                     keywords=negGenre)
                 judgments.append(judgment)
 
-    judgmentsToFile(judgmentsFile, judgmentsList=judgments)
+    judgmentsToFile(judgmentsOutFile, judgmentsList=judgments)
 
     print('Done')
     return judgments
