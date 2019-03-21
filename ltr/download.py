@@ -1,6 +1,6 @@
 import requests
 
-def run():
+def download():
     resources = [
         'http://es-learn-to-rank.labs.o19s.com/tmdb.json',
         'http://es-learn-to-rank.labs.o19s.com/RankyMcRankFace.jar',
@@ -20,6 +20,3 @@ def run():
         download(uri)
 
     print('Done.')
-
-if __name__ == "__main__":
-    run()
