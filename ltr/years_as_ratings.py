@@ -22,7 +22,7 @@ def get_latest_rating(year):
     else:
         return 0
 
-def run(client, featureSet='release', latestTrainingSetOut='data/latest-training.txt', classicTrainingSetOut='data/classic-training.txt'):
+def synthesize(client, featureSet='release', latestTrainingSetOut='data/latest-training.txt', classicTrainingSetOut='data/classic-training.txt'):
     print('Generating ratings for classic and latest model')
     NO_ZERO = False
 
