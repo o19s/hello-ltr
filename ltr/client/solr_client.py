@@ -125,7 +125,9 @@ class SolrClient(BaseClient):
         for idx, value in enumerate(features):
             feature_dict[idx + 1] = value['name']
 
-        solr_model = convert(model_payload, model_name, featureset)
+        feature_mapping, _ = self.feature_set('tmdb', featureset)
+
+        solr_model = convert(model_payload, model_name, featureset, feature_mapping)
 
         url = '{}/tmdb/schema/model-store'.format(self.solr_base_ep)
         resp = requests.delete('{}/{}'.format(url, model_name))
@@ -160,6 +162,23 @@ class SolrClient(BaseClient):
                 doc['_score'] = doc['score']
 
         return resp['response']['docs']
+
+
+    def feature_set(self, index, name):
+        resp = requests.get('{}/{}/schema/feature-store/{}'.format(self.solr_base_ep,
+                                                                   index,
+                                                                   name))
+        resp_msg(msg='Feature Set {}...'.format(name), resp=resp)
+
+        response = resp.json()
+
+        rawFeatureSet = response['features']
+
+        mapping = []
+        for feature in response['features']:
+            mapping.append({'name': feature['name']})
+
+        return mapping, rawFeatureSet
 
 
 

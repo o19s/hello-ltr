@@ -1,28 +1,17 @@
 # converts LambdaMART XML models to JSON for Solr..
 
-import sys
-import requests
-import json
 import xml.etree.ElementTree as ET
 
 
-def convert(ensemble_xml_string, modelName, featureSet):
-    features = []
+def convert(ensemble_xml_string, modelName, featureSet, featureMapping):
     modelClass = 'org.apache.solr.ltr.model.MultipleAdditiveTreesModel'
-
-    try:
-        features = getFeatures(featureSet)
-    except:
-        print('>> error getting features..')
-        return 1
 
     model = {
         'store': featureSet,
         'name': modelName,
         'class': modelClass,
-        'features': features
+        'features': featureMapping
     }
-
 
     # Clean up header
     ensemble_xml_string = '\n'.join(ensemble_xml_string.split('\n')[7:])
@@ -32,7 +21,7 @@ def convert(ensemble_xml_string, modelName, featureSet):
     for node in lambdaModel:
         t = {
             'weight': str(node.attrib['weight']),
-            'root': parseSplits(node[0], features)
+            'root': parseSplits(node[0], featureMapping)
         }
         trees.append(t)
 
@@ -53,17 +42,3 @@ def parseSplits(split, features):
         elif (el.tag == 'output'):
             obj['value'] = str(el.text.strip())
     return obj
-
-
-def getFeatures(featureset):
-    # TODO: Move this into solr client
-    solrEndpoint = 'http://localhost:8983'
-    r = requests.get('{}/solr/tmdb/schema/feature-store/{}'.format(solrEndpoint, featureset))
-
-    response = r.json()
-
-    fs = []
-    for feature in response['features']:
-        fs.append({'name': feature['name']})
-
-    return fs

@@ -186,4 +186,20 @@ class ElasticClient(BaseClient):
 
         return matches
 
+    def feature_set(self, index, name):
+        resp = requests.get('{}/_featureset/{}'.format(self.elastic_ep,
+                                                      name))
 
+        jsonResp = resp.json()
+        if not jsonResp['found']:
+            raise RuntimeError("Unable to find {}".format(name))
+
+        resp_msg(msg="Fetched FeatureSet {}".format(name), resp=resp)
+
+        rawFeatureSet = jsonResp['_source']['featureset']['features']
+
+        mapping = []
+        for feature in rawFeatureSet:
+            mapping.append({'name': feature['name']})
+
+        return mapping, rawFeatureSet

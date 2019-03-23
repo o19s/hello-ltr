@@ -51,4 +51,10 @@ class BaseClient(ABC):
     def model_query(self, index, model, model_params, query):
         pass
 
+    @abstractmethod
+    def feature_set(self, index, name):
+        """ Return a mapping of name/feature ordinal
+            and the raw (search engine specific) feature list"""
+        pass
+
 
