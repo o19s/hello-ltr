@@ -1,4 +1,4 @@
-from .judgments import Judgment, judgmentsToFile
+from .judgments import Judgment, judgments_to_file
 
 def genreQid(genre):
     if genre == "Science Fiction":
@@ -99,7 +99,7 @@ def synthesize(client, judgmentsOutFile='genre_by_date_judgments.txt', autoNegat
                                     keywords=negGenre)
                 judgments.append(judgment)
 
-    judgmentsToFile(judgmentsOutFile, judgmentsList=judgments)
+    judgments_to_file(judgmentsOutFile, judgmentsList=judgments)
 
     print('Done')
     return judgments

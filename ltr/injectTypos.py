@@ -1,16 +1,16 @@
 try:
-    from judgments import Judgment, judgmentsFromFile, judgmentsToFile, judgmentsByQid
+    from judgments import Judgment, judgments_from_file, judgments_to_file, judgments_by_qid
     from butterfingers import butterfingers
 except ImportError:
-    from .judgments import Judgment, judgmentsFromFile, judgmentsToFile, judgmentsByQid
+    from .judgments import Judgment, judgments_from_file, judgments_to_file, judgments_by_qid
     from .butterfingers import butterfingers
 
 
 
 def typoIt(judgmentInFile, judgmentOutFile, rounds=100):
-    currJudgments = [judg for judg in judgmentsFromFile(judgmentInFile)]
+    currJudgments = [judg for judg in judgments_from_file(judgmentInFile)]
     lastQid = currJudgments[-1].qid
-    judgDict = judgmentsByQid(currJudgments)
+    judgDict = judgments_by_qid(currJudgments)
 
     existingTypos = set()
 
@@ -32,7 +32,7 @@ def typoIt(judgmentInFile, judgmentOutFile, rounds=100):
                     currJudgments.append(typoJudg)
                 existingTypos.add(keywordsWTypo)
 
-    judgmentsToFile(filename=judgmentOutFile, judgmentsList=currJudgments)
+    judgments_to_file(filename=judgmentOutFile, judgmentsList=currJudgments)
 
 
 if __name__ == "__main__":

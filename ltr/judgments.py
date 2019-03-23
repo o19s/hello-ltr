@@ -74,7 +74,7 @@ def _judgmentsFromBody(lines):
             #print("Not Recognized as Judgment %s" % line)
 
 
-def judgmentsFromFile(filename):
+def judgments_from_file(filename):
     with open(filename) as f:
         qidToKeywords = _queriesFromHeader(f)
     with open(filename) as f:
@@ -86,8 +86,8 @@ def judgmentsFromFile(filename):
             lastQid = qid
 
 
-def judgmentsToFile(filename, judgmentsList):
-    judgToQid = judgmentsByQid(judgmentsList) #Pretty hideosly slow stuff
+def judgments_to_file(filename, judgmentsList):
+    judgToQid = judgments_by_qid(judgmentsList) #Pretty hideosly slow stuff
     fileHeader = _queriesToHeader({qid: (judgs[0].keywords, judgs[0].weight) for qid, judgs in judgToQid.items()})
     judgByQid = sorted(judgmentsList, key=lambda j: j.qid)
     with open(filename, 'w+') as f:
@@ -98,7 +98,7 @@ def judgmentsToFile(filename, judgmentsList):
 
 
 
-def judgmentsByQid(judgments):
+def judgments_by_qid(judgments):
     rVal = {}
     for judgment in judgments:
         try:
@@ -137,10 +137,3 @@ def duplicateJudgmentsByWeight(judgmentsByQid):
 
 
     return rVal
-
-if __name__ == "__main__":
-    from sys import argv
-    for judgment in judgmentsFromFile(argv[1]):
-        print(judgment)
-
-

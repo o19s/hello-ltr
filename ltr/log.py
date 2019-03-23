@@ -1,8 +1,8 @@
 import re
 
-def log_features(client, judgmentsByQid, featureSet):
+def log_features(client, judgments_by_qid, featureSet):
     idx = 0
-    for qid, judgments in judgmentsByQid.items():
+    for qid, judgments in judgments_by_qid.items():
         keywords = judgments[0].keywords
         featuresPerDoc = {}
         docIds = [judgment.docId for judgment in judgments]
@@ -53,7 +53,7 @@ def log_features(client, judgmentsByQid, featureSet):
                 featuresPerDoc[docId] = features
             numLeft -= BATCH_SIZE
 
-        print("REBUILDING TRAINING DATA for %s (%s/%s)" % (judgments[0].keywords, idx, len(judgmentsByQid)))
+        print("REBUILDING TRAINING DATA for %s (%s/%s)" % (judgments[0].keywords, idx, len(judgments_by_qid)))
         # Append features from ES back to ranklib judgment list
         for judgment in judgments:
             try:
@@ -66,10 +66,10 @@ def log_features(client, judgmentsByQid, featureSet):
 
 
 def judgments_to_training_set(client, judgmentInFile, featureSet, trainingOutFile='judgments_wfeatures.txt'):
-    from .judgments import judgmentsToFile, judgmentsFromFile, judgmentsByQid
+    from .judgments import judgments_to_file, judgments_from_file, judgments_by_qid
 
-    judgments = judgmentsFromFile(judgmentInFile)
-    judgments = judgmentsByQid(judgments)
+    judgments = judgments_from_file(judgmentInFile)
+    judgments = judgments_by_qid(judgments)
     log_features(client, judgments, featureSet=featureSet)
 
     judgmentsAsList = []
@@ -77,5 +77,5 @@ def judgments_to_training_set(client, judgmentInFile, featureSet, trainingOutFil
         for judgment in judgmentList:
             judgmentsAsList.append(judgment)
 
-    judgmentsToFile(filename=trainingOutFile, judgmentsList=judgmentsAsList)
+    judgments_to_file(filename=trainingOutFile, judgmentsList=judgmentsAsList)
     return judgments

@@ -1,5 +1,5 @@
 from ltr.helpers.esUrlParse import parseUrl
-from ltr.judgments import Judgment, judgmentsFromFile, judgmentsToFile, judgmentsByQid
+from ltr.judgments import Judgment, judgments_from_file, judgments_to_file, judgments_by_qid
 from elasticsearch import Elasticsearch, TransportError
 import json
 
@@ -72,9 +72,9 @@ def loadJudgments(judgFile):
     existingKws = set()
     lastQid = 0
     try:
-        currJudgments = [judg for judg in judgmentsFromFile(judgFile)]
+        currJudgments = [judg for judg in judgments_from_file(judgFile)]
         existingKws = set([judg.keywords for judg in currJudgments])
-        judgDict = judgmentsByQid(currJudgments)
+        judgDict = judgments_by_qid(currJudgments)
         judgProfile = []
         for qid, judglist in judgDict.items():
             judgProfile.append((judglist[0], len(judglist)))
@@ -175,4 +175,4 @@ if __name__ == "__main__":
 
         foldInNewRatings(fullJudgments, origQueryJudgments, newQueryJudgments)
 
-    judgmentsToFile(judgFile, fullJudgments)
+    judgments_to_file(judgFile, fullJudgments)
