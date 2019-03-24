@@ -1,12 +1,12 @@
 import re
 
 class Judgment:
-    def __init__(self, grade, qid, keywords, docId, weight=1):
+    def __init__(self, grade, qid, keywords, docId, features=[], weight=1):
         self.grade = grade
         self.qid = qid
         self.keywords = keywords
         self.docId = str(int(docId)) # To force ValueError
-        self.features = [] # 0th feature is ranklib feature 1
+        self.features = features # 0th feature is ranklib feature 1
         self.weight = weight
 
     def sameQueryAndDoc(self, other):
@@ -59,17 +59,50 @@ def _queriesFromHeader(lines):
     return rVal
 
 def _judgmentsFromBody(lines):
-    """ Parses out judgment/grade, query id, and docId in line such as:
+    """ Parses out judgment/grade, query id, docId, and possibly features in line such as:
          4  qid:523   # a01  Grade for Rambo for query Foo
+
+         Or
+
+         4  qid:523  1:42.6 2:0.5  # a01  Grade for Rambo for query Foo
         <judgment> qid:<queryid> # docId <rest of comment ignored...)"""
     # Regex can be debugged here:
     # http://www.regexpal.com/?fam=96565
     regex = re.compile('^(\d+)\s+qid:(\d+)\s+#\s+(\w+).*')
+    trainRegex = re.compile('^(\d+)\s+qid:(\d+)\s+1:\d+.+#\s+(\w+).*')
+    ftrRegex = re.compile('(\d+):([.\d]+)\s')
     for line in lines:
         m = re.match(regex, line)
         if m:
-            yield int(m.group(1)), int(m.group(2)), m.group(3)
+            yield int(m.group(1)), int(m.group(2)), m.group(3), []
         else:
+            m = re.match(trainRegex, line)
+            if m:
+                grade = int(m.group(1))
+                qid = int(m.group(2))
+                docId = m.group(3)
+                ftrMatches = re.finditer(ftrRegex, line)
+
+                features = {}
+                ftrSize = 0
+
+                for m in ftrMatches:
+                    ftrIdx = int(m.group(1)) - 1
+                    if ftrIdx + 1 > ftrSize:
+                        ftrSize = ftrIdx + 1
+                    ftrScore = float(m.group(2))
+                    features[ftrIdx] = ftrScore
+
+                featuresList = [None] * ftrSize
+                for ftrIdx, value in features.items():
+                    featuresList[ftrIdx] = value
+
+                for featureVal in featuresList:
+                    if featureVal is None:
+                        raise ValueError("Missing Features Detected When Parsing Training Set")
+
+                yield grade, qid, docId, featuresList
+
             pass
             #print("Not Recognized as Judgment %s" % line)
 
@@ -79,10 +112,14 @@ def judgments_from_file(filename):
         qidToKeywords = _queriesFromHeader(f)
     with open(filename) as f:
         lastQid = -1
-        for grade, qid, docId in _judgmentsFromBody(f):
+        for grade, qid, docId, features in _judgmentsFromBody(f):
             if lastQid != qid and qid % 100 == 0:
                 print("Parsing QID %s" % qid)
-            yield Judgment(grade=grade, qid=qid, keywords=qidToKeywords[qid][0], weight=qidToKeywords[qid][1], docId=docId)
+            yield Judgment(grade=grade, qid=qid,
+                           keywords=qidToKeywords[qid][0],
+                           weight=qidToKeywords[qid][1],
+                           docId=docId,
+                           features=features)
             lastQid = qid
 
 

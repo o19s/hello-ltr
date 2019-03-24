@@ -24,9 +24,9 @@ class TrainingLog:
 
 
 
-def trainModel(training, out, metric2t='DCG@10'):
+def trainModel(training, out, leafs=10, trees=10, metric2t='DCG@10'):
 
-    cmd = 'java -jar data/RankyMcRankFace.jar -ranker 6 -metric2t {} -tree 100 -train {} -save {}'.format(metric2t, training, out)
+    cmd = 'java -jar data/RankyMcRankFace.jar -ranker 6 -metric2t {} -tree {} -leaf {} -train {} -save {}'.format(metric2t, leafs, trees, training, out)
 
     print("Running %s" % cmd)
     result = os.popen(cmd).read()
@@ -38,11 +38,13 @@ def save_model(client, modelName, modelFile, featureSet):
         definition = src.read()
         client.submit_model(featureSet, modelName, definition)
 
-def train(client, trainingInFile, modelName, featureSet, metric2t='DCG@10'):
+def train(client, trainingInFile, modelName, featureSet, metric2t='DCG@10', leafs=10, trees=10):
     modelFile='data/{}_model.txt'.format(modelName)
     trainingLog = trainModel(training=trainingInFile,
                              out=modelFile,
-                             metric2t=metric2t)
+                             metric2t=metric2t,
+                             leafs=leafs,
+                             trees=trees)
     save_model(client, modelName, modelFile, featureSet)
     return trainingLog
     print('Done')
