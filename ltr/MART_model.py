@@ -1,6 +1,29 @@
 import xml.etree.ElementTree as ET
 from ltr.judgments import judgments_by_qid
 
+def fold_whoopsies(whoopsies1, whoopsies2):
+    """ Merge whoopsies2 into whoopsies1 """
+    whoopsies1.extend(whoopsies2)
+    whoopsies1.sort(key=lambda x: (x.qid, 1000-x.size()))
+    return whoopsies1
+
+def dedup_whoopsies(sWhoopsies):
+    mergedWhoopsies = iter(sWhoopsies)
+
+    whoopsies = []
+    whoopsie = None
+    lastQid = -1
+    try:
+        while True:
+            while whoopsie is None or lastQid == whoopsie.qid:
+                whoopsie = next(mergedWhoopsies)
+            whoopsies.append(whoopsie)
+            lastQid = whoopsie.qid
+    except StopIteration:
+        pass
+    return whoopsies
+
+
 class MARTModel:
     def __init__(self, ranklib_xml, features):
         """ Create a MART model from a ranklib_ensemble
@@ -27,12 +50,64 @@ class MARTModel:
             rVal += "\n\n"
         return rVal
 
+    def whoopsies(self):
+        """ After eval, what are the most glaring
+            query-doc inconsistencies in the provided judgments
+            over the whole ensemble """
+        whoopsQueries = {}
+        for tree in self.trees:
+            treeWhoopsies = tree[1].whoopsies()
+
+            for whoops in dedup_whoopsies(treeWhoopsies):
+                if whoops.qid not in whoopsQueries:
+                    whoopsQueries[whoops.qid] = [0,0,[]]
+                whoopsQueries[whoops.qid][0] += 1
+                whoopsQueries[whoops.qid][1] += whoops.size()
+                whoopsQueries[whoops.qid][2].append("%s-%s" % (whoops.minGrade, whoops.maxGrade))
+
+        whoopsReport = []
+        for qid, queryReport in whoopsQueries.items():
+            whoopsReport.append((qid, queryReport[0], queryReport[1], queryReport[2]))
+
+        whoopsReport.sort(key=lambda x: (x[1], x[0]))
+
+        for report in whoopsReport:
+            print(report)
+
+        return []
+
+
+
     def eval(self, judgments):
         for tree in self.trees:
             # weight = tree[0]
             tree = tree[1]
             tree.eval(judgments)
 
+
+class Whoopsie:
+
+    def __init__(self, qid, judgList,
+                 minGrade, maxGrade,
+                 minGradeDocId, maxGradeDocId,
+                 output):
+        self.qid = qid; self.judgList = judgList
+        self.minGrade = minGrade; self.maxGrade = maxGrade
+        self.minGradeDocId = minGradeDocId; self.maxGradeDocId = maxGradeDocId
+        self.output = output
+
+    def size(self):
+        return self.maxGrade - self.minGrade
+
+    def best(self, otherWhoopsie):
+        """ On the highlights reel, which one would make
+            top 10 sportscenter? """
+        if self.qid == otherWhoopsie.qid:
+            if self.size() > otherWhoopsie.size():
+                return self
+            else:
+                return otherWhoopsie
+        return None
 
 class EvalReport:
 
@@ -42,14 +117,12 @@ class EvalReport:
 
         self.split = split
         self.count = len(split.evals)
-        self.qDiffJudgCount = 0
-        self.qDiffJudgReport = []
+        self.whoopsies = []
 
-        self.sameQueryDifferentJudgments()
+        self.computeWhoopsies()
 
-    def sameQueryDifferentJudgments(self):
+    def computeWhoopsies(self):
         judgmentsByQid = judgments_by_qid(self.split.evals)
-        cnt = 0
         report = []
         for qid, judgList in judgmentsByQid.items():
             if len(judgList) > 1:
@@ -64,16 +137,23 @@ class EvalReport:
                         maxGrade = judg.grade
                         maxGradeDocId = judg.docId
                 if minGrade != maxGrade:
-                    report.append((qid, minGrade, maxGrade, minGradeDocId, maxGradeDocId))
-                    cnt += 1
-        self.qDiffJudgCount = cnt
-        report.sort(key=lambda x: x[2] - x[1], reverse=True)
-        self.qDiffJudgReport = report
+                    report.append(Whoopsie(qid=qid, judgList=judgList,
+                                           minGrade=minGrade, maxGrade=maxGrade,
+                                           minGradeDocId=minGradeDocId, maxGradeDocId=maxGradeDocId,
+                                           output=self.split.output))
+        report.sort(key=lambda x: x.maxGrade - x.minGrade, reverse=True)
+        self.whoopsies = report
 
     def __str__(self):
-        reportStr = ";".join(["qid:%s:%s(%s)-%s(%s)" % (report[0], report[1], report[3], report[2], report[4])
-                            for report in self.qDiffJudgReport])
-        return "%s/%s/%s" % (self.count, self.qDiffJudgCount, reportStr)
+        reportStr = ";".join(["qid:%s:%s(%s)-%s(%s)" % (report.qid, report.minGrade,
+                                                        report.minGradeDocId,
+                                                        report.maxGrade,
+                                                        report.maxGradeDocId)
+                            for report in self.whoopsies])
+        return "%s/%s/%s" % (self.count, len(self.whoopsies), reportStr)
+
+    def __repr__(self):
+        return str(self)
 
 
 
@@ -158,6 +238,21 @@ class Split:
             self._evalAppend(judgment)
         self._computeEvalStats()
 
+    def whoopsies(self):
+        """ Merge all the whoopsies from the child nodes into
+            me """
+        if self.output:
+            if self.evalReport is None:
+                return []
+            return self.evalReport.whoopsies
+        else:
+            assert self.right is not None
+            assert self.left is not None
+            rWhoopsies = self.right.whoopsies()
+            lWhoopsies = self.left.whoopsies()
+            return fold_whoopsies(lWhoopsies, rWhoopsies)
+
+
     def treeString(self, weight=1.0, nestLevel=0):
 
         def idt(nestLevel):
@@ -177,7 +272,7 @@ class Split:
                 rVal += idt(nestLevel)
                 rVal +=  "else:\n"
                 rVal +=  self.left.treeString(weight=weight,
-                                                              nestLevel=nestLevel+1)
+                                              nestLevel=nestLevel+1)
         if self.output:
             rVal += idt(nestLevel)
             rVal +=  "<= %.4f" % (self.output * weight)
