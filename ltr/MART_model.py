@@ -99,15 +99,6 @@ class Whoopsie:
     def size(self):
         return self.maxGrade - self.minGrade
 
-    def best(self, otherWhoopsie):
-        """ On the highlights reel, which one would make
-            top 10 sportscenter? """
-        if self.qid == otherWhoopsie.qid:
-            if self.size() > otherWhoopsie.size():
-                return self
-            else:
-                return otherWhoopsie
-        return None
 
 class EvalReport:
 
