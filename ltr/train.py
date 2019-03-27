@@ -42,7 +42,8 @@ def train(client, trainingInFile, modelName, featureSet,
 
 
 def feature_search(client, trainingInFile, featureSet,
-                   features=None, metric2t='DCG@10',
+                   features=None, featureCost=1.0,
+                   metric2t='DCG@10',
                    kcv=5, leafs=10, trees=10):
     from itertools import combinations
     modelFile='data/{}_model.txt'.format('temp')
@@ -53,15 +54,16 @@ def feature_search(client, trainingInFile, featureSet,
         metricPerFeature[i] = [0,0] # count, sum
     for i in range(1, len(features)+1):
         for combination in combinations(features, i):
+            cost = featureCost**len(combination)
             ranklibResult = trainModel(training=trainingInFile,
-                                     out=modelFile,
-                                     kcv=kcv,
-                                     metric2t=metric2t,
-                                     features=combination,
-                                     leafs=leafs,
-                                     trees=trees)
+                                       out=modelFile,
+                                       kcv=kcv,
+                                       metric2t=metric2t,
+                                       features=combination,
+                                       leafs=leafs,
+                                       trees=trees)
             kcvTestMetric = ranklibResult.kcvTestAvg
-            print("Trying features %s TEST %s=%s" % (repr([combo for combo in combination]), metric2t, kcvTestMetric))
+            print("Trying features %s TEST %s=%s after cost %s" % (repr([combo for combo in combination]), metric2t, kcvTestMetric, kcvTestMetric*cost))
             if kcvTestMetric > best:
                 best=kcvTestMetric
                 bestCombo = ranklibResult
