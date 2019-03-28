@@ -3,6 +3,13 @@ import re
 
 class RanklibResult:
 
+    """ A result of ranklib training, either for a
+        single training operation
+        (where trainingLogs is just set, and has a single item)
+        or k-folds cross validation
+        (where the foldResults/kcv are set; with a result for
+         each fold that is run """
+
     def __init__(self, trainingLogs, foldResults,
                  kcvTestAvg, kcvTrainAvg):
         self.trainingLogs = trainingLogs
