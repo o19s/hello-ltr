@@ -2,19 +2,25 @@ import xml.etree.ElementTree as ET
 from ltr.judgments import judgments_by_qid
 
 def fold_whoopsies(whoopsies1, whoopsies2):
-    """ Merge whoopsies2 into whoopsies1 """
+    """ Merge whoopsies2 into whoopsies1
+        sorted on query, then descending on magnitude
+        of the whoops (so biggest whoops for queries come first)"""
     whoopsies1.extend(whoopsies2)
-    whoopsies1.sort(key=lambda x: (x.qid, 1000-x.size()))
+    whoopsies1.sort(key=lambda x: (x.qid, 1000-x.magnitude()))
     return whoopsies1
 
-def dedup_whoopsies(sWhoopsies):
-    mergedWhoopsies = iter(sWhoopsies)
+def dedup_whoopsies(sortedWhoopsies):
+    """ Take whoopsies sorted first by qid, then
+        magnitude, then return the worst whoopsie
+        by query """
+    mergedWhoopsies = iter(sortedWhoopsies)
 
     whoopsies = []
     whoopsie = None
     lastQid = -1
     try:
         while True:
+            # Read ahead to next query
             while whoopsie is None or lastQid == whoopsie.qid:
                 whoopsie = next(mergedWhoopsies)
             whoopsies.append(whoopsie)
@@ -55,26 +61,26 @@ class MARTModel:
             query-doc inconsistencies in the provided judgments
             over the whole ensemble """
         whoopsQueries = {}
-        for tree in self.trees:
+        perTreeWhoops = [None for _ in self.trees]
+        for treeNo, tree in enumerate(self.trees):
             treeWhoopsies = tree[1].whoopsies()
 
             for whoops in dedup_whoopsies(treeWhoopsies):
                 if whoops.qid not in whoopsQueries:
-                    whoopsQueries[whoops.qid] = [0,0,[]]
-                whoopsQueries[whoops.qid][0] += 1
-                whoopsQueries[whoops.qid][1] += whoops.size()
-                whoopsQueries[whoops.qid][2].append("%s-%s" % (whoops.minGrade, whoops.maxGrade))
+                    whoopsQueries[whoops.qid] = QueryWhoopsie(qid=whoops.qid,
+                                                              totalMagnitude=0,
+                                                              minGrade=0,
+                                                              count=0,
+                                                              maxGrade=0,
+                                                              perTreeWhoops=perTreeWhoops)
 
-        whoopsReport = []
-        for qid, queryReport in whoopsQueries.items():
-            whoopsReport.append((qid, queryReport[0], queryReport[1], queryReport[2]))
+                whoopsQueries[whoops.qid].count += 1
+                whoopsQueries[whoops.qid].totalMagnitude += whoops.magnitude()
+                whoopsQueries[whoops.qid].minGrade = whoops.minGrade
+                whoopsQueries[whoops.qid].maxGrade = whoops.maxGrade
+                whoopsQueries[whoops.qid].perTreeWhoops[treeNo] = whoops
 
-        whoopsReport.sort(key=lambda x: (x[1], x[0]))
-
-        for report in whoopsReport:
-            print(report)
-
-        return []
+        return whoopsQueries
 
 
 
@@ -83,6 +89,27 @@ class MARTModel:
             # weight = tree[0]
             tree = tree[1]
             tree.eval(judgments)
+
+
+class QueryWhoopsie:
+    def __init__(self, qid, totalMagnitude,
+                 count, maxGrade, minGrade,
+                 perTreeWhoops):
+        self.qid = qid
+        self.count = count
+        self.totalMagnitude = totalMagnitude
+        self.maxGrade=maxGrade
+        self.minGrade=minGrade
+        self.perTreeWhoops = perTreeWhoops
+
+    def perTreeReport(self):
+        treeSummary = []
+        for treeNo, whoops in enumerate(self.perTreeWhoops):
+            if whoops is None:
+                treeSummary.append("<None>")
+            else:
+                treeSummary.append("%s=>%s(%s)-%s(%s)" % (treeNo, whoops.minGrade, whoops.minGradeDocId, whoops.maxGrade, whoops.maxGradeDocId))
+        return ";".join(treeSummary)
 
 
 class Whoopsie:
@@ -96,7 +123,7 @@ class Whoopsie:
         self.minGradeDocId = minGradeDocId; self.maxGradeDocId = maxGradeDocId
         self.output = output
 
-    def size(self):
+    def magnitude(self):
         return self.maxGrade - self.minGrade
 
 
@@ -230,8 +257,9 @@ class Split:
         self._computeEvalStats()
 
     def whoopsies(self):
-        """ Merge all the whoopsies from the child nodes into
-            me """
+        """ Return all the whoopsies from the child nodes in
+            a list of whoopsies ordered first by qid, then by
+            magnitude descending. IE (1,4),(1,3),(2,2),(2,0)..."""
         if self.output:
             if self.evalReport is None:
                 return []

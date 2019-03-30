@@ -10,6 +10,6 @@ judgments = [judgment for judgment in judgments]
 model = eval_model(modelName='title',
                    features=features,
                    judgments=judgments)
-model.whoopsies()
-
-print(str(model))
+whoopsQueries = model.whoopsies()
+for qid, whoopsQuery in whoopsQueries.items():
+    print("%s => %s /\ %s" % (qid, whoopsQuery.totalMagnitude, whoopsQuery.perTreeReport()))
