@@ -2,7 +2,6 @@ import requests
 
 from .base_client import BaseClient
 from ltr.helpers.convert import convert
-from ltr.helpers.movies import indexableMovies
 from ltr.helpers.handle_resp import resp_msg
 
 class SolrClient(BaseClient):
@@ -33,9 +32,7 @@ class SolrClient(BaseClient):
         resp = requests.get('{}/admin/cores?'.format(self.solr_base_ep), params=params)
         resp_msg(msg="Created index {}".format(index), resp=resp)
 
-    def index_documents(self, index, movie_dict={}):
-        print('Indexing {} documents'.format(len(movie_dict.keys())))
-
+    def index_documents(self, index, movie_source):
         def flush(docs):
             print('Flushing {} movies'.format(len(docs)))
             resp = requests.post('{}/{}/update?commitWithin=1500'.format(
@@ -45,7 +42,7 @@ class SolrClient(BaseClient):
 
         BATCH_SIZE = 500
         docs = []
-        for movie in indexableMovies(movie_dict):
+        for movie in movie_source:
             if 'release_date' in movie and movie['release_date'] is not None:
                 movie['release_date'] += 'T00:00:00Z'
 

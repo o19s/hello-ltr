@@ -24,7 +24,7 @@ class BaseClient(ABC):
         pass
 
     @abstractmethod
-    def index_documents(self, index, dictionary):
+    def index_documents(self, index, movie_source):
         pass
 
     @abstractmethod
@@ -37,6 +37,10 @@ class BaseClient(ABC):
 
     @abstractmethod
     def query(self, index, query):
+        pass
+
+    @abstractmethod
+    def get_doc(self, doc_id):
         pass
 
     @abstractmethod

@@ -1,7 +1,6 @@
 import requests
 
 from .base_client import BaseClient
-from ltr.helpers.movies import indexableMovies
 from ltr.helpers.handle_resp import resp_msg
 
 import elasticsearch.helpers
@@ -50,11 +49,10 @@ class ElasticClient(BaseClient):
         resp = self.es.indices.create(index, body=settings)
         resp_msg(msg="Created index {}".format(index), resp=ElasticResp(resp))
 
-    def index_documents(self, index, movie_dict={}):
-        print('Indexing {} documents'.format(len(movie_dict.keys())))
+    def index_documents(self, index, movie_source):
 
-        def bulkDocs(movie_dict):
-            for movie in indexableMovies(movie_dict):
+        def bulkDocs(movie_source):
+            for movie in movie_source:
                 addCmd = {"_index": index,
                           "_type": "movie",
                           "_id": movie['id'],
@@ -63,7 +61,7 @@ class ElasticClient(BaseClient):
                 if 'title' in movie:
                     print("%s added to %s" % (movie['title'], index))
 
-        resp = elasticsearch.helpers.bulk(self.es, bulkDocs(movie_dict), chunk_size=100)
+        resp = elasticsearch.helpers.bulk(self.es, bulkDocs(movie_source), chunk_size=100)
         resp_msg(msg="Streaming Bulk index DONE {}".format(index), resp=BulkResp(resp))
 
     def reset_ltr(self):
@@ -203,3 +201,9 @@ class ElasticClient(BaseClient):
             mapping.append({'name': feature['name']})
 
         return mapping, rawFeatureSet
+
+    def get_doc(self, doc_id):
+        resp = self.es.get(index='tmdb', doc_type='movie', id=doc_id)
+        #resp_msg(msg="Fetched Doc".format(docId), resp=ElasticResp(resp), throw=False)
+        return resp['_source']
+
