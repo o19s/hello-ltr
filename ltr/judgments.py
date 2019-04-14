@@ -12,6 +12,9 @@ class Judgment:
     def sameQueryAndDoc(self, other):
         return self.qid == other.qid and self.docId == other.docId
 
+    def has_features(self):
+        return self.features is not None and (len(self.features) > 0)
+
     def __str__(self):
         return "grade:%s qid:%s (%s) docid:%s" % (self.grade, self.qid, self.keywords, self.docId)
 

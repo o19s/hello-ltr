@@ -14,6 +14,8 @@ def rebuild_tmdb(client, settings=None, enrich=noop):
         with open('data/settings.json') as src:
             settings = json.load(src)
 
+    print("Reindexing...")
+
     reindex(client, schema=settings, enrich=enrich, index='tmdb')
 
     print('Done')

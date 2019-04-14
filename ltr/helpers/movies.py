@@ -37,7 +37,6 @@ def indexable_movies(enrich=noop):
                       }
             yield enrich(tmdbMovie, base_doc)
         except KeyError as k: # Ignore any movies missing these attributes
-            print("Skipping %s" % movieId)
             continue
 
 

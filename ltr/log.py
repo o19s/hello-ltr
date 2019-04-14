@@ -61,7 +61,7 @@ def log_features(client, judgments_by_qid, featureSet):
                 judgment.features = features
             except KeyError:
                 pass
-                print("Missing movie %s" % judgment.docId)
+                # print("Missing movie %s" % judgment.docId)
         idx += 1
 
 
@@ -73,9 +73,14 @@ def judgments_to_training_set(client, judgmentInFile, featureSet, trainingOutFil
     log_features(client, judgments, featureSet=featureSet)
 
     judgmentsAsList = []
+    discarded = []
     for qid, judgmentList in judgments.items():
         for judgment in judgmentList:
-            judgmentsAsList.append(judgment)
+            if judgment.has_features():
+                judgmentsAsList.append(judgment)
+            else:
+                discarded.append(judgment)
+        print("Discarded %s Keep %s" % (len(discarded), len(judgmentsAsList)))
 
     judgments_to_file(filename=trainingOutFile, judgmentsList=judgmentsAsList)
     return judgments

@@ -58,8 +58,6 @@ class ElasticClient(BaseClient):
                           "_id": movie['id'],
                           "_source": movie}
                 yield addCmd
-                if 'title' in movie:
-                    print("%s added to %s" % (movie['title'], index))
 
         resp = elasticsearch.helpers.bulk(self.es, bulkDocs(movie_source), chunk_size=100)
         resp_msg(msg="Streaming Bulk index DONE {}".format(index), resp=BulkResp(resp))
