@@ -4,7 +4,9 @@ def download():
     resources = [
         'http://es-learn-to-rank.labs.o19s.com/tmdb.json',
         'http://es-learn-to-rank.labs.o19s.com/RankyMcRankFace.jar',
-        'http://es-learn-to-rank.labs.o19s.com/title_judgments.txt'
+        'http://es-learn-to-rank.labs.o19s.com/title_judgments.txt',
+        'http://es-learn-to-rank.labs.o19s.com/genome_judgments.txt',
+        'http://es-learn-to-rank.labs.o19s.com/sample_judgments_train.txt'
     ]
 
     def download(uri):

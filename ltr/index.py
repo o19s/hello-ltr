@@ -5,6 +5,8 @@ def reindex(client, schema, index='tmdb', enrich=noop):
     client.delete_index(index)
     client.create_index(index, schema)
 
+    print("Reindexing...")
+
     client.index_documents(index,
                            movie_source=indexable_movies(enrich=enrich))
 
@@ -14,7 +16,6 @@ def rebuild_tmdb(client, settings=None, enrich=noop):
         with open('data/settings.json') as src:
             settings = json.load(src)
 
-    print("Reindexing...")
 
     reindex(client, schema=settings, enrich=enrich, index='tmdb')
 

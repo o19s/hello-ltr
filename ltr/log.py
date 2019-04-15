@@ -80,7 +80,7 @@ def judgments_to_training_set(client, judgmentInFile, featureSet, trainingOutFil
                 judgmentsAsList.append(judgment)
             else:
                 discarded.append(judgment)
-        print("Discarded %s Keep %s" % (len(discarded), len(judgmentsAsList)))
+    print("Discarded %s Keep %s" % (len(discarded), len(judgmentsAsList)))
 
     judgments_to_file(filename=trainingOutFile, judgmentsList=judgmentsAsList)
     return judgments
