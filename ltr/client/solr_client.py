@@ -177,5 +177,15 @@ class SolrClient(BaseClient):
 
         return mapping, rawFeatureSet
 
+    def get_doc(self, doc_id):
+        params = {
+            'q': 'id:{}'.format(doc_id),
+            'wt': 'json'
+        }
+
+        resp = requests.post('{}/{}/select'.format(self.solr_base_ep, 'tmdb'), data=params).json()
+        return resp['response']['docs'][0]
+
+
 
 
