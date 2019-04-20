@@ -1,6 +1,6 @@
-from session import build
+from ltr.clickmodels.session import build
 from collections import Counter, defaultdict
-from defaultlist import defaultlist
+from ltr.helpers.defaultlist import defaultlist
 
 
 class Model():
@@ -10,6 +10,7 @@ class Model():
 
         # Attractiveness per query-doc
         self.attracts = defaultdict(lambda : 0.5)
+
 
 
 def update_attractiveness(sessions, model):
@@ -114,7 +115,6 @@ def position_based_model(sessions, rounds=20):
     for i in range(0,rounds):
         update_attractiveness(sessions, model)
         update_examines(sessions, model)
-        print(model.attracts[('A', 1)])
     return model
 
 

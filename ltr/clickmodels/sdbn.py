@@ -1,5 +1,5 @@
 from collections import Counter, defaultdict
-from session import build
+from ltr.clickmodels.session import build
 
 class Model():
     def __init__(self):
