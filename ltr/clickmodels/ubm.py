@@ -1,16 +1,15 @@
 from ltr.clickmodels.session import build
 from collections import Counter, defaultdict
-from ltr.helpers.defaultlist import defaultlist
-
 
 class Model():
     def __init__(self):
         # Examine prob per-rank
-        self.ranks = defaultlist(lambda: 0.4)
+        # Rank 0 is first displayed on page
+        # Rank -1 i
+        self.ranks = defaultdict(lambda: 0.4)
 
         # Attractiveness per query-doc
         self.attracts = defaultdict(lambda : 0.5)
-
 
 
 def update_attractiveness(sessions, model):
@@ -26,15 +25,17 @@ def update_attractiveness(sessions, model):
     attractions = Counter() #Track query-doc attractiveness in this round
     num_sessions = Counter() #Track num sessions where query-doc appears
     for session in sessions:
+        last_click = -1
         for rank, doc in enumerate(session.docs):
             query_doc_key = (session.query, doc.doc_id)
             att = 0
             if doc.click:
-                # By PBM rules, if its clicked,
-                # the user thought it was attractive
+
+                last_click = rank
+
                 att = 1
             else:
-                exam = model.ranks[rank]
+                exam = model.ranks[(last_click,rank)]
                 assert exam <= 1.0
                 doc_a = model.attracts[query_doc_key]
                 # Not examined, but attractive /
@@ -71,17 +72,24 @@ def update_examines(sessions, model):
         Chulkin, Markov, de Rijke
 
     """
-    new_rank_probs = defaultlist(lambda: 0)
+    new_rank_probs = defaultdict(lambda: 0)
+    counts = defaultdict(lambda: 0)
 
     for session in sessions:
+        last_click = -1
         for rank, doc in enumerate(session.docs):
             if doc.click:
-                new_rank_probs[rank] += 1
+                new_rank_probs[(last_click, rank)] += 1
+                counts[(last_click, rank)] += 1
+                if last_click == -1 and rank == 3:
+                    print(counts[(last_click,rank)])
+
+                last_click = rank
             else:
                 # attractiveness at this query/doc pair
                 a_qd = model.attracts[(session.query, doc.doc_id)]
-                numerator = (1 - a_qd) * model.ranks[rank]
-                denominator = 1 - (a_qd * model.ranks[rank])
+                numerator = (1 - a_qd) * model.ranks[(last_click, rank)]
+                denominator = 1 - (a_qd * model.ranks[(last_click, rank)])
                 # When not clicked - was it examined? We have to guess!
                 #  - If it has seemed very attractive, we assume it
                 #    was not examined. Because who could pass up such
@@ -92,24 +100,21 @@ def update_examines(sessions, model):
                 #    (approaches ranks[rank] / ranks[rank])
                 #
                 #  - If its not examined much, wont contribute much
-                new_rank_probs[rank] += numerator / denominator
-    for i in range(len(new_rank_probs)):
-        model.ranks[i] = new_rank_probs[i] / len(sessions)
+                new_rank_probs[(last_click, rank)] += numerator / denominator
+                counts[(last_click, rank)] += 1
+                if last_click == -1 and rank == 3:
+                    print(counts[(last_click,rank)])
+
+    for (last_click, click), count in counts.items():
+        model.ranks[(last_click, click)] = new_rank_probs[(last_click, click)] / count
 
 
-def position_based_model(sessions, rounds=20):
+def user_browse_model(sessions, rounds=20):
     """
         Algorithm based on Expectation Maximization derived in
         chapter 4 (table 4.1) of "Click Models for Web Search" by
         Chulkin, Markov, de Rijke
 
-        Given the observed sessions
-        Initialized:
-          - prob a ranks is examined (`ranks`)
-          - randomly initialized query/doc attractiveness
-
-        Compute:
-          - Probability a doc is attractive for a query
     """
     model=Model()
     for i in range(0,rounds):
@@ -131,4 +136,4 @@ if __name__ == "__main__":
       ('A', ((1, False), (4, True), (2, False), (3, False))),
       ('B', ((7, True), (4, False), (5, True), (1, True))),
     ])
-    position_based_model(sessions, rounds=100)
+    user_browse_model(sessions, rounds=100)

@@ -1,4 +1,4 @@
-from session import build
+from ltr.clickmodels.session import build
 from collections import Counter, defaultdict
 
 class Model():
@@ -6,7 +6,7 @@ class Model():
         # Attractiveness per query-doc
         self.attracts = defaultdict(lambda : 0.5)
 
-def cascading_model(sessions):
+def cascade_model(sessions):
     """ Cascading model can be solved directly:
          - sessions with skips count against a doc
          - sessions with clicks count for
@@ -31,7 +31,6 @@ def cascading_model(sessions):
     for (query_id, doc_id), count in session_counts.items():
         query_doc_key = (query_id, doc_id)
         model.attracts[query_doc_key] = click_counts[query_doc_key] / session_counts[query_doc_key]
-    print(model.attracts[('A', 1)])
     return model
 
 
@@ -49,7 +48,7 @@ if __name__ == "__main__":
       ('A', ((1, False), (4, True), (2, False), (3, False))),
       ('B', ((7, True), (4, False), (5, True), (1, True))),
     ])
-    cascading_model(sessions)
+    cascade_model(sessions)
 
 
 
