@@ -14,7 +14,7 @@ def quiet_run(cmd):
 def evaluate(mode):
     # Build the docker image
     if mode == 'elastic':
-        cmd = 'docker build --no-cache -t ltr-rre rre/solr/.'
+        cmd = 'docker build --no-cache -t ltr-rre rre/elastic/.'
     else:
         cmd = 'docker build --no-cache -t ltr-rre rre/solr/.'
 
