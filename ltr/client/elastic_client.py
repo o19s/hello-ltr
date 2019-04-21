@@ -64,7 +64,7 @@ class ElasticClient(BaseClient):
 
     def reset_ltr(self):
         resp = requests.delete(self.elastic_ep)
-        resp_msg(msg="Removed Default LTR feature store".format(), resp=resp)
+        resp_msg(msg="Removed Default LTR feature store".format(), resp=resp, throw=False)
         resp = requests.put(self.elastic_ep)
         resp_msg(msg="Initialize Default LTR feature store".format(), resp=resp)
 
