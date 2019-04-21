@@ -1,0 +1,4 @@
+{
+  "q": "title:($query)",
+  "rq": "{!ltr model=classic}"
+}
