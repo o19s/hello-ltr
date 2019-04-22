@@ -2,7 +2,7 @@ import os
 from ltr.helpers.ranklib_result import parse_training_log
 
 
-def trainModel(training, out, features=None, kcv=None, leafs=10, trees=10, metric2t='DCG@10'):
+def trainModel(training, out, features=None, kcv=None, leafs=10, trees=50, metric2t='DCG@10'):
 
     cmd = 'java -jar data/RankyMcRankFace.jar -ranker 6 -metric2t {} -tree {} -leaf {} -train {} -save {} '.format(metric2t, leafs, trees, training, out)
 
@@ -27,7 +27,7 @@ def save_model(client, modelName, modelFile, featureSet):
 
 def train(client, trainingInFile, modelName, featureSet,
           features=None,
-          metric2t='DCG@10', leafs=10, trees=10):
+          metric2t='DCG@10', leafs=10, trees=50):
     """ Train and store a model into the search engine
         with the provided parameters"""
     modelFile='data/{}_model.txt'.format(modelName)
