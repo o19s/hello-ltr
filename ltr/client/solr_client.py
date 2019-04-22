@@ -21,7 +21,7 @@ class SolrClient(BaseClient):
         }
 
         resp = requests.get('{}/admin/cores?'.format(self.solr_base_ep), params=params)
-        resp_msg(msg="Deleted index {}".format(index), resp=resp)
+        resp_msg(msg="Deleted index {}".format(index), resp=resp, throw=False)
 
     def create_index(self, index, settings):
         params = {
