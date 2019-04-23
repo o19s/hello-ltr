@@ -130,6 +130,8 @@
     <field name="vote_count" type="int" indexed="true" stored="true" multiValued="false"/>
     <field name="cast_nomv" type="text_general" indexed="true" stored="true" multiValued="false"/>
 
+    <!-- Used by netfix lab -->
+    <field name="collection_name" type="text_general" indexed="true" stored="true" multiValued="false"/>
 
     <!-- an "all" field from our fields -->
     <copyField source="overview" dest="text_all"/>

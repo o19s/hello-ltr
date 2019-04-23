@@ -108,7 +108,7 @@ class QueryWhoopsie:
             if whoops is None:
                 treeSummary.append("<None>")
             else:
-                treeSummary.append("%s=>%s(%s)-%s(%s)" % (treeNo, whoops.minGrade, whoops.minGradeDocId, whoops.maxGrade, whoops.maxGradeDocId))
+                treeSummary.append("tree:%s=>%s(%s)-%s(%s)" % (treeNo, whoops.minGrade, whoops.minGradeDocId, whoops.maxGrade, whoops.maxGradeDocId))
         return ";".join(treeSummary)
 
 
