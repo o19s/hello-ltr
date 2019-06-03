@@ -53,17 +53,16 @@ class SolrClient(BaseClient):
 
         flush(docs)
 
-    # TODO: Fetch metadata from feature/model store and wipe everything
     # TODO: Probably better to just delete specific models/stores on creation, this is stacking up
-    def reset_ltr(self):
-        models = ['classic', 'genre', 'latest', 'title', 'title_fuzzy']
+    def reset_ltr(self, index='tmdb'):
+        models = self.get_models(index)
         for model in models:
-            resp = requests.delete('{}/tmdb/schema/model-store/{}'.format(self.solr_base_ep, model))
+            resp = requests.delete('{}/{}/schema/model-store/{}'.format(self.solr_base_ep, index, model))
             resp_msg(msg='Deleted {} model'.format(model), resp=resp)
 
-        stores = ['_DEFAULT', 'genre', 'release', 'title', 'title_fuzzy']
+        stores = self.get_feature_stores(index)
         for store in stores:
-            resp = requests.delete('{}/tmdb/schema/feature-store/{}'.format(self.solr_base_ep, store))
+            resp = requests.delete('{}/{}/schema/feature-store/{}'.format(self.solr_base_ep, index, store))
             resp_msg(msg='Deleted {} Featurestore'.format(store), resp=resp)
 
 
@@ -160,6 +159,17 @@ class SolrClient(BaseClient):
 
         return resp['response']['docs']
 
+    def get_feature_stores(self, index):
+        resp = requests.get('{}/{}/schema/feature-store'.format(self.solr_base_ep,
+                                                                index))
+        response = resp.json()
+        return response['featureStores']
+
+    def get_models(self, index):
+        resp = requests.get('{}/{}/schema/model-store'.format(self.solr_base_ep,
+                                                              index))
+        response = resp.json()
+        return [model['name'] for model in response['models']]
 
     def feature_set(self, index, name):
         resp = requests.get('{}/{}/schema/feature-store/{}'.format(self.solr_base_ep,
