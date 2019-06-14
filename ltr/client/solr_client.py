@@ -66,7 +66,13 @@ class SolrClient(BaseClient):
             resp_msg(msg='Deleted {} Featurestore'.format(store), resp=resp)
 
 
+    def validate_featureset(self, name, config):
+        for feature in config:
+            if 'store' not in feature or feature['store'] != name:
+                raise ValueError("Feature {} needs to be created with \"store\": \"{}\" ".format(feature['name'], name))
+
     def create_featureset(self, index, name, config):
+        self.validate_featureset(name, config)
         resp = requests.put('{}/{}/schema/feature-store'.format(
             self.solr_base_ep, index, name), json=config)
         resp_msg(msg='Created {} feature store under {}:'.format(name, index), resp=resp)
@@ -170,6 +176,7 @@ class SolrClient(BaseClient):
                                                               index))
         response = resp.json()
         return [model['name'] for model in response['models']]
+
 
     def feature_set(self, index, name):
         resp = requests.get('{}/{}/schema/feature-store/{}'.format(self.solr_base_ep,
