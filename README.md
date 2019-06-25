@@ -1,29 +1,36 @@
 hello-ltr
 
-## Requirements
-- An elasticsearch server running the ES LTR plugin. (See provided Dockerfile to jumpstart this process)
-- A Python3 virtualenv with the requirements from requirements.txt installed
-`pip install -r requirements.txt`
-- A JRE to run the ranklib jar
+The overall goal of this project is to demonstrate all of the steps required to work with LTR in Elasticsearch or Solr. Follow the setup instructions and check out the LTR notebooks in Solr or Elasticsearch
 
-## Dockerfile
-You can use the provided Dockerfile to quickly start up an elastic instance with the LTR plugin installed
+# Setup your search engine
 
-`docker build -t ltr-es .`
+## Setup Solr w/ LTR
 
-`docker run -d -p 9200:9200 -p 9300:9300 ltr-es`
+- Go into the "Solr" directory: `cd solr`
+- Run `docker build -t ltr-solr` to create a image running Solr with LTR
+- Start the instance by running: `docker run --name ltr-solr -p 8983:8983 -d ltr-solr`
+- Subsequently run with `docker start ltr-solr` and `docker stop ltr-solr`
 
-## Overview
-Once an elastic server is setup, the notebook provided by this project will:
+## Setup Elasticsearch w/ LTR
 
-- Index sample TMDB data
-- Initialize the LTR plugin store
-- Create "release" FeatureSet
-- Log features for a `match_all` query
-- Train two models, one that prefers old movies and another the prefers newer movies
-- Submit the models to elastic for use in scoring/rescoring
+- Run `docker build -t ltr-es` to create a image running ES with LTR
+- Start the instance by running: `docker run -d -p 9200:9200 -p 9300:9300 ltr-es`
+- Subsequently run with `docker start ltr-es` and `docker stop ltr-es`
 
-The overall goal of this project is to demonstrate all of the steps required to work with LTR in elastic.  Once familiar with the process, experimentation with more advanced feature sets, queries and judgment lists is recommended.
+# Setup & Run Jupyter Notebook Examples
+
+## Setup Python requirements
+
+- Ensure Python 3 is installed on your system
+- Create a virtual environment: `python3 -m venv venv`
+- Start the virtual environment: `source venv/bin/activate`
+- Install the requirements `pip install -r requirements.txt`
+
+## Start Jupyter notebook and confirm operation
+
+- Run `jupyter notebook`
+- Open either the "hello-ltr (Solr)" or "hello-ltr (ES)" as approriatte and ensure you get a graph at the last cell
+
 
 ## Getting Started
 - Run `jupyter notebook` and load the hello-ltr notebook
