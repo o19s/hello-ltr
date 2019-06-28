@@ -26,6 +26,8 @@ The overall goal of this project is to demonstrate all of the steps required to 
 - Start the virtual environment: `source venv/bin/activate`
 - Install the requirements `pip install -r requirements.txt`
 
+__Note:__ The above commands should be run from the root folder of the project.
+
 ## Start Jupyter notebook and confirm operation
 
 - Run `jupyter notebook`
