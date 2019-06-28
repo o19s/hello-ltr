@@ -7,13 +7,13 @@ The overall goal of this project is to demonstrate all of the steps required to 
 ## Setup Solr w/ LTR
 
 - Go into the "Solr" directory: `cd solr`
-- Run `docker build -t ltr-solr` to create a image running Solr with LTR
+- Run `docker build . -t ltr-solr` to create a image running Solr with LTR
 - Start the instance by running: `docker run --name ltr-solr -p 8983:8983 -d ltr-solr`
 - Subsequently run with `docker start ltr-solr` and `docker stop ltr-solr`
 
 ## Setup Elasticsearch w/ LTR
 
-- Run `docker build -t ltr-es` to create a image running ES with LTR
+- Run `docker build . -t ltr-es` to create a image running ES with LTR
 - Start the instance by running: `docker run -d -p 9200:9200 -p 9300:9300 ltr-es`
 - Subsequently run with `docker start ltr-es` and `docker stop ltr-es`
 
