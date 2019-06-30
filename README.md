@@ -40,4 +40,4 @@ __Note:__ The above commands should be run from the root folder of the project.
 
 # Docker Compose
 
-If you hit any snags with the JDK or python dependencies, the [docker](https://github.com/o19s/hello-ltr/docker) folder has a docker-compose configuration that prepares an environment to run all of the notebooks.
+If you hit any snags with the JDK or python dependencies, the [docker](docker/) folder has a docker-compose configuration that prepares an environment to run all of the notebooks.
