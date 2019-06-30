@@ -1,3 +1,4 @@
+import os
 import requests
 
 from .base_client import BaseClient
@@ -6,7 +7,12 @@ from ltr.helpers.handle_resp import resp_msg
 
 class SolrClient(BaseClient):
     def __init__(self):
-        self.solr_base_ep = 'http://localhost:8983/solr'
+        self.docker = os.environ.get('LTR_DOCKER') != None
+
+        if self.docker is not None:
+            self.solr_base_ep = 'http://solr:8983/solr'
+        else:
+            self.solr_base_ep = 'http://localhost:8983/solr'
 
     def name(self):
         return "solr"

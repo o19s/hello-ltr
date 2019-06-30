@@ -1,3 +1,4 @@
+import os
 import requests
 
 from .base_client import BaseClient
@@ -34,8 +35,15 @@ class SearchResp():
 
 class ElasticClient(BaseClient):
     def __init__(self):
-        self.elastic_ep = 'http://localhost:9200/_ltr'
-        self.es = Elasticsearch('http://localhost:9200')
+        self.docker = os.environ.get('LTR_DOCKER') != None
+
+        if self.docker is not None:
+            self.host = 'elastic'
+        else:
+            self.host = 'localhost'
+
+        self.elastic_ep = 'http://{}:9200/_ltr'.format(self.host)
+        self.es = Elasticsearch('http://{}:9200'.format(self.host))
 
     def name(self):
         return "elastic"
@@ -123,8 +131,8 @@ class ElasticClient(BaseClient):
 
 
     def submit_model(self, featureset, model_name, model_payload):
-        model_ep = "http://localhost:9200/_ltr/_model/"
-        create_ep = "http://localhost:9200/_ltr/_featureset/{}/_createmodel".format(featureset)
+        model_ep = "{}/_model/".format(self.elastic_ep)
+        create_ep = "{}/_featureset/{}/_createmodel".format(self.elastic_ep, featureset)
 
         resp = requests.delete('{}{}'.format(model_ep, model_name))
         print('Delete model {}: {}'.format(model_name, resp.status_code))
