@@ -37,7 +37,7 @@ class ElasticClient(BaseClient):
     def __init__(self):
         self.docker = os.environ.get('LTR_DOCKER') != None
 
-        if self.docker is not None:
+        if self.docker:
             self.host = 'elastic'
         else:
             self.host = 'localhost'

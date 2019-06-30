@@ -9,7 +9,7 @@ class SolrClient(BaseClient):
     def __init__(self):
         self.docker = os.environ.get('LTR_DOCKER') != None
 
-        if self.docker is not None:
+        if self.docker:
             self.solr_base_ep = 'http://solr:8983/solr'
         else:
             self.solr_base_ep = 'http://localhost:8983/solr'
