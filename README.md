@@ -38,3 +38,6 @@ __Note:__ The above commands should be run from the root folder of the project.
 - Run `jupyter notebook` and load the hello-ltr notebook
 - Run thru each cell to get more familiar with the LTR pipeline
 
+# Docker Compose
+
+If you hit any snags with the JDK or python dependencies, the [docker](https://github.com/o19s/hello-ltr/docker) folder has a docker-compose configuration that prepares an environment to run all of the notebooks.
