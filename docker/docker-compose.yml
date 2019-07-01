@@ -1,0 +1,29 @@
+version: '3' 
+services:
+  notebooks:
+    build: .
+    container_name: hello-ltr-notebook
+    ports:
+      - 8888:8888 
+    environment:
+      - LTR_DOCKER=yes 
+    links:
+      - elastic
+      - solr
+  
+  elastic:
+    build:
+      context: ../.
+      dockerfile: Dockerfile
+    container_name: hello-ltr-elastic
+    ports:
+      - 9200:9200
+
+  solr:
+    build:
+      context: ../solr/.
+      dockerfile: Dockerfile
+    container_name: hello-ltr-solr
+    ports:
+      - 8983:8983 
+
