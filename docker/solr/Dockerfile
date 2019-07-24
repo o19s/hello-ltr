@@ -2,8 +2,9 @@ FROM solr:7.7.1
 
 USER root
 
-COPY tmdb server/solr/configsets/tmdb
-RUN chown -R solr:solr server/solr/configsets/tmdb
+ADD tmdb server/solr/configsets/tmdb
+
+RUN chown solr:solr server/solr/configsets/tmdb
 
 USER solr
 
