@@ -29,18 +29,21 @@ class SolrClient(BaseClient):
         resp = requests.get('{}/admin/cores?'.format(self.solr_base_ep), params=params)
         resp_msg(msg="Deleted index {}".format(index), resp=resp, throw=False)
 
-    def create_index(self, index, settings):
+    def create_index(self, index):
+        # Presumes there is a link between the docker container and the 'index'
+        # directory under docker/solr/ (ie docker/solr/tmdb/ is linked into
+        # Docker container configsets)
         params = {
             'action': 'CREATE',
             'name': index,
-            'configSet': 'tmdb'
+            'configSet': index,
         }
         resp = requests.get('{}/admin/cores?'.format(self.solr_base_ep), params=params)
         resp_msg(msg="Created index {}".format(index), resp=resp)
 
-    def index_documents(self, index, movie_source):
+    def index_documents(self, index, doc_src):
         def flush(docs):
-            print('Flushing {} movies'.format(len(docs)))
+            print('Flushing {} docs'.format(len(docs)))
             resp = requests.post('{}/{}/update?commitWithin=1500'.format(
                 self.solr_base_ep, index), json=docs)
             resp_msg(msg="Done", resp=resp)
@@ -48,11 +51,11 @@ class SolrClient(BaseClient):
 
         BATCH_SIZE = 500
         docs = []
-        for movie in movie_source:
-            if 'release_date' in movie and movie['release_date'] is not None:
-                movie['release_date'] += 'T00:00:00Z'
+        for doc in doc_src:
+            if 'release_date' in doc and doc['release_date'] is not None:
+                doc['release_date'] += 'T00:00:00Z'
 
-            docs.append(movie)
+            docs.append(doc)
 
             if len(docs) % BATCH_SIZE == 0:
                 flush(docs)

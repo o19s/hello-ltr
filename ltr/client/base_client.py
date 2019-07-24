@@ -20,11 +20,11 @@ class BaseClient(ABC):
         pass
 
     @abstractmethod
-    def create_index(self, index, settings):
+    def create_index(self, index):
         pass
 
     @abstractmethod
-    def index_documents(self, index, movie_source):
+    def index_documents(self, index, doc_src):
         pass
 
     @abstractmethod

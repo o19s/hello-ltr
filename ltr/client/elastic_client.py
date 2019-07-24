@@ -53,21 +53,26 @@ class ElasticClient(BaseClient):
         resp_msg(msg="Deleted index {}".format(index), resp=ElasticResp(resp), throw=False)
 
 
-    def create_index(self, index, settings):
-        resp = self.es.indices.create(index, body=settings)
-        resp_msg(msg="Created index {}".format(index), resp=ElasticResp(resp))
+    def create_index(self, index):
+        """ Take the local config files for Elasticsearch for index, reload them into ES"""
+        with open("docker/elasticsearch/%s_settings.json" % index) as src:
+            settings = json.load(src)
+            resp = self.es.indices.create(index, body=settings)
+            resp_msg(msg="Created index {}".format(index), resp=ElasticResp(resp))
 
-    def index_documents(self, index, movie_source):
+    def index_documents(self, index, doc_src):
 
-        def bulkDocs(movie_source):
-            for movie in movie_source:
+        def bulkDocs(doc_src):
+            for doc in doc_src:
+                if 'id' not in doc:
+                    raise ValueError("Expecting docs to have field 'id' that uniquely identifies document")
                 addCmd = {"_index": index,
                           "_type": "movie",
-                          "_id": movie['id'],
-                          "_source": movie}
+                          "_id": doc['id'],
+                          "_source": doc}
                 yield addCmd
 
-        resp = elasticsearch.helpers.bulk(self.es, bulkDocs(movie_source), chunk_size=100)
+        resp = elasticsearch.helpers.bulk(self.es, bulkDocs(doc_src), chunk_size=100)
         resp_msg(msg="Streaming Bulk index DONE {}".format(index), resp=BulkResp(resp))
 
     def reset_ltr(self):
@@ -208,8 +213,8 @@ class ElasticClient(BaseClient):
 
         return mapping, rawFeatureSet
 
-    def get_doc(self, doc_id):
-        resp = self.es.get(index='tmdb', doc_type='movie', id=doc_id)
+    def get_doc(self, doc_id, index='tmdb', doc_type='movie'):
+        resp = self.es.get(index=index, doc_type=doc_type, id=doc_id)
         #resp_msg(msg="Fetched Doc".format(docId), resp=ElasticResp(resp), throw=False)
         return resp['_source']
 
