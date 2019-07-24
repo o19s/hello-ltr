@@ -1,0 +1,15 @@
+version: '2'
+services:
+  solr:
+    image: ltr-solr
+    expose:
+      - "8983"
+    ports:
+      - "8983:8983"
+    environment:
+      SERVER_HOST: "0.0.0.0"
+    volumes:
+      - tlre-solr-data:/usr/share/elasticsearch/data
+volumes:
+  tlre-solr-data:
+    driver: local
