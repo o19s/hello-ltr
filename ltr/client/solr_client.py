@@ -62,8 +62,7 @@ class SolrClient(BaseClient):
 
         flush(docs)
 
-    # TODO: Probably better to just delete specific models/stores on creation, this is stacking up
-    def reset_ltr(self, index='tmdb'):
+    def reset_ltr(self, index):
         models = self.get_models(index)
         for model in models:
             resp = requests.delete('{}/{}/schema/model-store/{}'.format(self.solr_base_ep, index, model))
@@ -125,9 +124,9 @@ class SolrClient(BaseClient):
         return resp['response']['docs']
 
 
-    def submit_model(self, featureset, model_name, model_payload):
+    def submit_model(self, featureset, index, model_name, model_payload):
         # Fetch feature metadata
-        resp = requests.get('{}/tmdb/schema/feature-store/{}'.format(self.solr_base_ep, featureset))
+        resp = requests.get('{}/{}/schema/feature-store/{}'.format(self.solr_base_ep, index, featureset))
         resp_msg(msg='Submit Model {} Ftr Set {}'.format(model_name, featureset), resp=resp)
         metadata = resp.json()
         features = metadata['features']
@@ -136,11 +135,11 @@ class SolrClient(BaseClient):
         for idx, value in enumerate(features):
             feature_dict[idx + 1] = value['name']
 
-        feature_mapping, _ = self.feature_set('tmdb', featureset)
+        feature_mapping, _ = self.feature_set(index, featureset)
 
         solr_model = convert(model_payload, model_name, featureset, feature_mapping)
 
-        url = '{}/tmdb/schema/model-store'.format(self.solr_base_ep)
+        url = '{}/{}/schema/model-store'.format(self.solr_base_ep, index)
         resp = requests.delete('{}/{}'.format(url, model_name))
         resp_msg(msg='Deleted Model {}'.format(model_name), resp=resp)
 
@@ -203,13 +202,13 @@ class SolrClient(BaseClient):
 
         return mapping, rawFeatureSet
 
-    def get_doc(self, doc_id):
+    def get_doc(self, index, doc_id):
         params = {
             'q': 'id:{}'.format(doc_id),
             'wt': 'json'
         }
 
-        resp = requests.post('{}/{}/select'.format(self.solr_base_ep, 'tmdb'), data=params).json()
+        resp = requests.post('{}/{}/select'.format(self.solr_base_ep, index), data=params).json()
         return resp['response']['docs'][0]
 
 

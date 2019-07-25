@@ -19,14 +19,14 @@ def trainModel(training, out, features=None, kcv=None, leafs=10, trees=50, metri
     print("DONE")
     return parse_training_log(result)
 
-def save_model(client, modelName, modelFile, featureSet):
+def save_model(client, modelName, modelFile, index, featureSet):
     with open(modelFile) as src:
         definition = src.read()
-        client.submit_model(featureSet, modelName, definition)
+        client.submit_model(featureSet, index, modelName, definition)
 
 
 def train(client, trainingInFile, modelName, featureSet,
-          features=None,
+          index, features=None,
           metric2t='DCG@10', leafs=10, trees=50):
     """ Train and store a model into the search engine
         with the provided parameters"""
@@ -38,7 +38,7 @@ def train(client, trainingInFile, modelName, featureSet,
                                leafs=leafs,
                                kcv=None,
                                trees=trees)
-    save_model(client, modelName, modelFile, featureSet)
+    save_model(client, modelName, modelFile, index, featureSet)
     assert len(ranklibResult.trainingLogs) == 1
     return ranklibResult.trainingLogs[0]
     print('Done')

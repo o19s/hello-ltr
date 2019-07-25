@@ -28,7 +28,7 @@ class BaseClient(ABC):
         pass
 
     @abstractmethod
-    def reset_ltr(self):
+    def reset_ltr(self, index):
         pass
 
     @abstractmethod
@@ -48,7 +48,7 @@ class BaseClient(ABC):
         pass
 
     @abstractmethod
-    def submit_model(self, featureset, model_name, model_payload):
+    def submit_model(self, featureset, index, model_name, model_payload):
         pass
 
     @abstractmethod

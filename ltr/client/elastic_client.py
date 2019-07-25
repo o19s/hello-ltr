@@ -34,6 +34,13 @@ class SearchResp():
 
 
 class ElasticClient(BaseClient):
+    """ Note on the Elastic client,
+        Elastic LTR is not bound to an index like Solr LTR
+        so many calls take an index but do not use it
+
+        In the future, we may wish to isolate an Index's feature
+        store to a feature store of the same name of the index
+    """
     def __init__(self):
         self.docker = os.environ.get('LTR_DOCKER') != None
 
@@ -75,13 +82,12 @@ class ElasticClient(BaseClient):
         resp = elasticsearch.helpers.bulk(self.es, bulkDocs(doc_src), chunk_size=100)
         resp_msg(msg="Streaming Bulk index DONE {}".format(index), resp=BulkResp(resp))
 
-    def reset_ltr(self):
+    def reset_ltr(self, index):
         resp = requests.delete(self.elastic_ep)
         resp_msg(msg="Removed Default LTR feature store".format(), resp=resp, throw=False)
         resp = requests.put(self.elastic_ep)
         resp_msg(msg="Initialize Default LTR feature store".format(), resp=resp)
 
-    # Note: index is not needed by elastic, but solr needs it
     def create_featureset(self, index, name, config):
         resp = requests.post('{}/_featureset/{}'.format(self.elastic_ep, name), json=config)
         resp_msg(msg="Create {} feature set".format(name), resp=resp)
@@ -135,7 +141,7 @@ class ElasticClient(BaseClient):
 
 
 
-    def submit_model(self, featureset, model_name, model_payload):
+    def submit_model(self, featureset, index, model_name, model_payload):
         model_ep = "{}/_model/".format(self.elastic_ep)
         create_ep = "{}/_featureset/{}/_createmodel".format(self.elastic_ep, featureset)
 
@@ -213,7 +219,7 @@ class ElasticClient(BaseClient):
 
         return mapping, rawFeatureSet
 
-    def get_doc(self, doc_id, index='tmdb', doc_type='movie'):
+    def get_doc(self, doc_id, index, doc_type='movie'):
         resp = self.es.get(index=index, doc_type=doc_type, id=doc_id)
         #resp_msg(msg="Fetched Doc".format(docId), resp=ElasticResp(resp), throw=False)
         return resp['_source']
