@@ -67,14 +67,14 @@ class ElasticClient(BaseClient):
             resp = self.es.indices.create(index, body=settings)
             resp_msg(msg="Created index {}".format(index), resp=ElasticResp(resp))
 
-    def index_documents(self, index, doc_src):
+    def index_documents(self, index, doc_type, doc_src):
 
         def bulkDocs(doc_src):
             for doc in doc_src:
                 if 'id' not in doc:
                     raise ValueError("Expecting docs to have field 'id' that uniquely identifies document")
                 addCmd = {"_index": index,
-                          "_type": "movie",
+                          "_type": doc_type,
                           "_id": doc['id'],
                           "_source": doc}
                 yield addCmd

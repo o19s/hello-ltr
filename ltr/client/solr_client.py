@@ -41,7 +41,7 @@ class SolrClient(BaseClient):
         resp = requests.get('{}/admin/cores?'.format(self.solr_base_ep), params=params)
         resp_msg(msg="Created index {}".format(index), resp=resp)
 
-    def index_documents(self, index, doc_src):
+    def index_documents(self, index, doc_type, doc_src):
         def flush(docs):
             print('Flushing {} docs'.format(len(docs)))
             resp = requests.post('{}/{}/update?commitWithin=1500'.format(
