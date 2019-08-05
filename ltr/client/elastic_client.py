@@ -92,7 +92,7 @@ class ElasticClient(BaseClient):
         resp = requests.post('{}/_featureset/{}'.format(self.elastic_ep, name), json=config)
         resp_msg(msg="Create {} feature set".format(name), resp=resp)
 
-    def log_query(self, index, featureset, query, params={}):
+    def log_query(self, index, featureset, ids, params={}):
         params = {
             "query": {
                 "bool": {
@@ -118,11 +118,18 @@ class ElasticClient(BaseClient):
             "size": 1000
         }
 
-        if query is not None:
-            params["query"]["bool"]["must"] = query
+        terms_query = [
+            {
+                "terms": {
+                    "_id": ids
+                }
+            }
+        ]
+
+        params["query"]["bool"]["must"] = terms_query
 
         resp = self.es.search(index, body=params)
-        resp_msg(msg="Searching {} - {}".format(index, str(query)[:20]), resp=SearchResp(resp))
+        resp_msg(msg="Searching {} - {}".format(index, str(terms_query)[:20]), resp=SearchResp(resp))
 
         matches = []
         for hit in resp['hits']['hits']:

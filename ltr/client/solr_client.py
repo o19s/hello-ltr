@@ -86,15 +86,14 @@ class SolrClient(BaseClient):
         resp_msg(msg='Created {} feature store under {}:'.format(name, index), resp=resp)
 
 
-    def log_query(self, index, featureset, query, options={}):
-        if query is None:
-            query = '*:*'
-
+    def log_query(self, index, featureset, ids, options={}):
         efi_options = []
         for key, val in options.items():
             efi_options.append('efi.{}="{}"'.format(key, val))
 
         efi_str = ' '.join(efi_options)
+
+        query = "{{!terms f=id}}{}".format(','.join(ids))
 
         params = {
             'fl': 'id,[features store={} {}]'.format(featureset, efi_str),

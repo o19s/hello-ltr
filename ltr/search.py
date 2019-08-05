@@ -30,16 +30,27 @@ def solrLtrQuery(keywords, modelName):
         'q': '{{!ltr reRankDocs=30000 model={} efi.keywords="{}" efi.fuzzy_keywords="{}"}}'.format(modelName, keywords, fuzzy_keywords)
     }
 
-def search(client, keywords, modelName):
+
+tmdbFields = {
+    'title': 'title',
+    'display_fields': ['release_year', 'genres', 'overview']
+}
+
+
+
+def search(client, keywords, modelName, index='tmdb', fields=tmdbFields):
     if client.name() == 'elastic':
-        results = client.query('tmdb', esLtrQuery(keywords, modelName))
+        results = client.query(index, esLtrQuery(keywords, modelName))
     else:
-        results = client.query('tmdb', solrLtrQuery(keywords, modelName))
+        results = client.query(index, solrLtrQuery(keywords, modelName))
+
+    ti = fields['title']
 
     for result in results:
-         print("%s " % (result['title'] if 'title' in result else 'N/A'))
+         print("%s " % (result[ti] if ti in result else 'N/A'))
          print("%s " % (result['_score']))
-         print("%s " % (result['release_year']))
-         print("%s " % (result['genres'] if 'genres' in result else 'N/A'))
-         print("%s " % (result['overview']))
+
+         for df in fields['display_fields']:
+            print("%s " % (result[df] if df in result else 'N/A'))
+
          print("---------------------------------------")
