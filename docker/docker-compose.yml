@@ -21,7 +21,7 @@ services:
 
   solr:
     build:
-      context: ../solr/.
+      context: solr/.
       dockerfile: Dockerfile
     container_name: hello-ltr-solr
     ports:
