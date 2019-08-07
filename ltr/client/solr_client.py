@@ -93,7 +93,10 @@ class SolrClient(BaseClient):
 
         efi_str = ' '.join(efi_options)
 
-        query = "{{!terms f=id}}{}".format(','.join(ids))
+        if ids == None:
+            query = "*:*"
+        else:
+            query = "{{!terms f=id}}{}".format(','.join(ids))
 
         params = {
             'fl': 'id,[features store={} {}]'.format(featureset, efi_str),

@@ -126,7 +126,8 @@ class ElasticClient(BaseClient):
             }
         ]
 
-        params["query"]["bool"]["must"] = terms_query
+        if ids is not None:
+            params["query"]["bool"]["must"] = terms_query
 
         resp = self.es.search(index, body=params)
         resp_msg(msg="Searching {} - {}".format(index, str(terms_query)[:20]), resp=SearchResp(resp))
