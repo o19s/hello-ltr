@@ -14,6 +14,7 @@ def conv_aug_attracts(attracts, sessions, costs):
             attract = attracts[(session.query, doc.doc_id)]
             if doc.click:
                 if doc.conversion:
+                    # Confirms the attractiveness was real with actual relevance
                     counts[(session.query, doc.doc_id)] += 1
                     satisfacts[(session.query, doc.doc_id)] += attract
                 else:
