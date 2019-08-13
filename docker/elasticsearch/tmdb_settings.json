@@ -5,6 +5,16 @@
         "title": {
           "type": "text",
           "analyzer": "my_english",
+          "fields": {
+            "wdf": {
+              "type": "text",
+              "analyzer": "my_wdf"
+            },
+            "keyword": {
+              "type": "text",
+              "analyzer": "my_keyword"
+            }
+          },
           "copy_to": [
             "text_std",
             "text_all",
@@ -325,6 +335,21 @@
             "lowercase",
             "english_possessive_stem",
             "my_length_limit"
+          ]
+        },
+        "my_wdf": {
+          "type": "custom",
+          "tokenizer": "standard",
+          "filter": [
+              "word_delimiter",
+              "lowercase"
+          ]
+        },
+        "my_keyword": {
+          "type": "custom",
+          "tokenizer": "keyword",
+          "filter": [
+              "lowercase"
           ]
         },
         "my_english": {
