@@ -19,11 +19,16 @@ class RanklibResult:
 
 class TrainingLog:
 
-    def __init__(self, rounds, impacts):
+    def __init__(self, rounds, impacts, trainMetricName, trainMetricVal):
         self.impacts = impacts
         self.rounds = rounds
+        self.trainMetricName = trainMetricName
+        self.trainMetricVal = trainMetricVal
+
 
     def metric(self):
+        if self.trainMetricName is not None:
+            return self.trainMetricVal
         if len(self.rounds) > 0:
             return self.rounds[-1]
         else:
@@ -39,6 +44,7 @@ impactRe = re.compile(' Feature (\d+) reduced error (.*)')
 roundsRe = re.compile('(\d+)\s+\| (\d+)')
 foldsRe = re.compile('^Fold (\d+)\s+\|(.*)\|(.*)')
 avgRe = re.compile('^Avg.\s+\|(.*)\|(.*)')
+trainMetricRe = re.compile('(.*@.*) on training data: (.*)')
 
 def parse_training_log(rawResult):
     """ Takes raw result from Ranklib training and
@@ -51,12 +57,16 @@ def parse_training_log(rawResult):
     folds = []
     impacts = {}
     rounds = []
+    trainMetricName = None
+    trainMetricVal = 0.0
     kcvTestAvg = kcvTrainAvg = None
     for line in lines:
         if 'Training starts...' in line:
             if train:
                 log = TrainingLog(rounds=rounds,
-                                  impacts=impacts)
+                                  impacts=impacts,
+                                  trainMetricName=trainMetricName,
+                                  trainMetricVal=trainMetricVal)
                 logs.append(log)
             impacts = {}
             rounds = []
@@ -73,6 +83,10 @@ def parse_training_log(rawResult):
                 values = line.split('|')
                 metricTrain = float(values[1])
                 rounds.append(metricTrain)
+            m = re.match(trainMetricRe, line)
+            if m:
+                trainMetricVal = float(m.group(2))
+                trainMetricName = m.group(1)
 
         m = re.match(foldsRe, line)
         if m:
@@ -89,7 +103,9 @@ def parse_training_log(rawResult):
 
     if train:
         log = TrainingLog(rounds=rounds,
-                          impacts=impacts)
+                          impacts=impacts,
+                          trainMetricName=trainMetricName,
+                          trainMetricVal=trainMetricVal)
         logs.append(log)
 
     return RanklibResult(trainingLogs=logs,
