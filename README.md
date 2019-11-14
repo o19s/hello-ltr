@@ -61,7 +61,7 @@ __Note:__ The above commands should be run from the root folder of the project.
 ## Start Jupyter notebook and confirm operation
 
 - Run `jupyter notebook`
-- Open either the "hello-ltr (Solr)" or "hello-ltr (ES)" as approriatte and ensure you get a graph at the last cell
+- Open either the "hello-ltr (Solr)" or "hello-ltr (ES)" as appropriate and ensure you get a graph at the last cell
 
 
 ## Getting Started
