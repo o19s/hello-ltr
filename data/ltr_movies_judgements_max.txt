@@ -1,0 +1,82 @@
+# qid:1: will smith*1
+# qid:2: star trek assassination conspiracy*1
+# qid:3: science fiction*1
+# qid:4: rocky*1
+# qid:5: hilarious classic*1
+# qid:6: cult classics*1
+# qid:7: maximus*1
+# qid:8: spaceballs*1
+# qid:9: rom com*1
+# qid:10: racing snail*1
+
+3	qid:1	# 8961	will smith
+3	qid:1	# 41154	will smith
+1	qid:1	# 9541	will smith
+1	qid:1	# 2294	will smith
+3	qid:1	# 8488	will smith
+1	qid:1	# 10323	will smith
+4	qid:1	# 8489	will smith
+1	qid:1	# 109443	will smith
+4	qid:1	# 6479	will smith
+3	qid:1	# 256591	will smith
+2	qid:2	# 193	star trek assassination conspiracy
+2	qid:2	# 157	star trek assassination conspiracy
+2	qid:2	# 152	star trek assassination conspiracy
+2	qid:2	# 172	star trek assassination conspiracy
+4	qid:2	# 174	star trek assassination conspiracy
+3	qid:2	# 200	star trek assassination conspiracy
+1	qid:2	# 13363	star trek assassination conspiracy
+2	qid:2	# 199	star trek assassination conspiracy
+2	qid:2	# 154	star trek assassination conspiracy
+1	qid:2	# 11323	star trek assassination conspiracy
+4	qid:3	# 686	science fiction
+4	qid:3	# 828	science fiction
+2	qid:3	# 437	science fiction
+4	qid:3	# 782	science fiction
+3	qid:3	# 1551	science fiction
+3	qid:3	# 601	science fiction
+3	qid:3	# 75	science fiction
+3	qid:3	# 152601	science fiction
+2	qid:3	# 145197	science fiction
+3	qid:3	# 174772	science fiction
+3	qid:4	# 1374	rocky
+3	qid:4	# 1246	rocky
+3	qid:4	# 1367	rocky
+3	qid:4	# 1375	rocky
+4	qid:4	# 1366	rocky
+2	qid:4	# 7443	rocky
+3	qid:4	# 1371	rocky
+1	qid:4	# 9607	rocky
+1	qid:4	# 8963	rocky
+1	qid:4	# 10048	rocky
+1	qid:5	# 177888	hilarious classic
+1	qid:5	# 18480	hilarious classic
+1	qid:5	# 200462	hilarious classic
+1	qid:5	# 16690	hilarious classic
+1	qid:5	# 624	hilarious classic
+1	qid:5	# 947	hilarious classic
+2	qid:5	# 2062	hilarious classic
+1	qid:5	# 79218	hilarious classic
+1	qid:5	# 175574	hilarious classic
+3	qid:5	# 10830	hilarious classic
+1	qid:6	# 1729	cult classics
+3	qid:6	# 967	cult classics
+3	qid:6	# 901	cult classics
+1	qid:6	# 9874	cult classics
+2	qid:6	# 1907	cult classics
+2	qid:6	# 10136	cult classics
+3	qid:6	# 431	cult classics
+1	qid:6	# 47327	cult classics
+4	qid:6	# 624	cult classics
+4	qid:6	# 947	cult classics
+4	qid:7	# 98	maximus
+2	qid:7	# 82881	maximus
+4	qid:8	# 957	spaceballs
+1	qid:9	# 1642	rom com
+4	qid:10	# 77950	racing snail
+2	qid:10	# 7459	racing snail
+1	qid:10	# 14164	racing snail
+2	qid:10	# 9615	racing snail
+1	qid:10	# 75674	racing snail
+1	qid:10	# 56292	racing snail
+1	qid:10	# 82690	racing snail
