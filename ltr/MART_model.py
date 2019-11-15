@@ -38,7 +38,7 @@ class MARTModel:
             where the 0th item is ranklib feature 1
              [{'name': 'release_date'}, ...] """
         # Clean up header
-        validXml = '\n'.join(ranklib_xml.split('\n')[8:])
+        validXml = '\n'.join(ranklib_xml.split('\n')[7:])
         lambdaModel = ET.fromstring(validXml)
 
         # List of tuples (weight, root split)
