@@ -38,7 +38,19 @@ class MARTModel:
             where the 0th item is ranklib feature 1
              [{'name': 'release_date'}, ...] """
         # Clean up header
+        valid = False
         linesSplit = ranklib_xml.split('\n')
+        if linesSplit[0] == "## LambdaMART":
+            print("Whoopsies on LAMBDAMart")
+            valid = True
+        if linesSplit[0] == "## Random Forests":
+            if linesSplit[1] == "## No. of bags = 1":
+                print("RF with 1 bag")
+                valid = True
+
+        if (not valid):
+            raise ValueError("Whoopsies only support LambdaMART of Random Forest of bags=1")
+
         headerAt = 0
         for line in linesSplit:
             if len(line) > 0 and line[0] == '#':
