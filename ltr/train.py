@@ -93,7 +93,7 @@ def feature_search(client, trainingInFile, featureSet,
     best = 0
     bestCombo = None
     metricPerFeature = {}
-    for i in range(1, len(features)+1):
+    for i in range(1, max(features)+1):
         metricPerFeature[i] = [0,0] # count, sum
     for i in range(1, len(features)+1):
         for combination in combinations(features, i):
@@ -124,8 +124,11 @@ def feature_search(client, trainingInFile, featureSet,
                 metricPerFeature[feature][1] += ranklibResult.kcvTestAvg
 
     # Compute avg metric with each feature
-    for i in range(1, len(features)+1):
-        metricPerFeature[i] = metricPerFeature[i][1] / metricPerFeature[i][0]  # count, sum
+    for i in range(1, max(features)+1):
+        if metricPerFeature[i][0] > 0:
+            metricPerFeature[i] = metricPerFeature[i][1] / metricPerFeature[i][0]  # count, sum
+        else:
+            metricPerFeature[i] = -1
 
 
     return bestCombo, metricPerFeature
