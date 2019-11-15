@@ -24,6 +24,10 @@ def indexable_movies(enrich=noop):
                 releaseDate = tmdbMovie['release_date']
                 releaseYear = releaseDate[0:4]
 
+            full_poster_path = ''
+            if 'poster_path' in tmdbMovie and tmdbMovie['poster_path'] is not None and len(tmdbMovie['poster_path']) > 0:
+                full_poster_path = 'https://image.tmdb.org/t/p/w185' + tmdbMovie['poster_path']
+
             base_doc = {'id': movieId,
                         'title': tmdbMovie['title'],
                         'overview': tmdbMovie['overview'],
@@ -33,6 +37,7 @@ def indexable_movies(enrich=noop):
                         'genres': [genre['name'] for genre in tmdbMovie['genres']],
                         'release_date': releaseDate,
                         'release_year': releaseYear,
+                        'poster_path': full_poster_path,
                         'vote_average': float(tmdbMovie['vote_average']) if 'vote_average' in tmdbMovie else None,
                         'vote_count': int(tmdbMovie['vote_count']) if 'vote_count' in tmdbMovie else 0,
                       }

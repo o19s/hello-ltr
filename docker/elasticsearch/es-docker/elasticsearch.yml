@@ -87,7 +87,8 @@
 #
 #action.destructive_requires_name: true
 #http.cors.allow-origin: "/https?:\\/\\/(.*?\\.)?(quepid\\.com|splainer\\.io)/"
-http.cors.allow-origin: "/.*/"
+http.cors.allow-origin: "/http?:.*/"
+#http.cors.allow-origin: /http?://localhost(:[0-9]+)?/
 http.cors.enabled: true
 indices.query.bool.max_clause_count: 10240
 network.host: 0.0.0.0
