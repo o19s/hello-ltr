@@ -1,7 +1,7 @@
 version: '2'
 services:
   kibana:
-    image: ltr-kibana
+    build: kb-docker/. 
     expose:
       - "5601"
     ports:
@@ -9,7 +9,7 @@ services:
     environment:
       SERVER_HOST: "0.0.0.0"
   elasticsearch:
-    image: ltr-elasticsearch
+    build: es-docker/.
     ports:
      - "9200:9200"
     expose:
