@@ -129,6 +129,7 @@
     <field name="vote_average" docValues="false" type="float" indexed="true" stored="true" multiValued="false" />
     <field name="vote_count" type="int" indexed="true" stored="true" multiValued="false"/>
     <field name="cast_nomv" type="text_general" indexed="true" stored="true" multiValued="false"/>
+    <field name="poster_path" type="text_general" indexed="true" stored="true" multiValued="false"/>
 
     <!-- Used by netfix lab -->
     <field name="collection_name" type="text_general" indexed="true" stored="true" multiValued="false"/>
