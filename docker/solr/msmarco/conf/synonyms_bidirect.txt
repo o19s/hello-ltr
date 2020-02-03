@@ -1,0 +1,7 @@
+# Often people erroneously equate linguistic synonyms
+# with Solr synonyms. Here the bidirectional nature
+# of the synonyms creates problems where the more specific
+# term is not prioritized
+wife,bride
+wife,spouse
+toons,tunes,cartoon

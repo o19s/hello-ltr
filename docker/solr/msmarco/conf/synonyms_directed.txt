@@ -1,0 +1,4 @@
+wife => wife, bride
+spouse => spouse, husband, wife, partner
+tunes => cartoons, toons, songs
+cartoon  => toons, tunes
