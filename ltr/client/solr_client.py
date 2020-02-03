@@ -165,7 +165,7 @@ class SolrClient(BaseClient):
         url = '{}/{}/select?'.format(self.solr_base_ep, index)
 
         resp = requests.post(url, data=query)
-        resp_msg(msg='Query {}...'.format(str(query)[:10]), resp=resp)
+        resp_msg(msg='Query {}...'.format(str(query)[:20]), resp=resp)
         resp = resp.json()
 
         # Transform to be consistent
