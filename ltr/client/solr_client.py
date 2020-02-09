@@ -8,6 +8,7 @@ from ltr.helpers.handle_resp import resp_msg
 class SolrClient(BaseClient):
     def __init__(self):
         self.docker = os.environ.get('LTR_DOCKER') != None
+        self.solr = requests.Session()
 
         if self.docker:
             self.solr_base_ep = 'http://solr:8983/solr'
@@ -44,12 +45,12 @@ class SolrClient(BaseClient):
     def index_documents(self, index, doc_type, doc_src):
         def flush(docs):
             print('Flushing {} docs'.format(len(docs)))
-            resp = requests.post('{}/{}/update?commitWithin=1500'.format(
+            resp = requests.post('{}/{}/update?commitWithin=2500'.format(
                 self.solr_base_ep, index), json=docs)
             resp_msg(msg="Done", resp=resp)
             docs.clear()
 
-        BATCH_SIZE = 500
+        BATCH_SIZE = 5000
         docs = []
         for doc in doc_src:
             if 'release_date' in doc and doc['release_date'] is not None:
@@ -154,7 +155,7 @@ class SolrClient(BaseClient):
         params = {
             'q': query,
             'rq': '{{!ltr model={}}}'.format(model),
-            'rows': 100
+            'rows': 10000
         }
 
         resp = requests.post(url, data=params)
@@ -174,6 +175,82 @@ class SolrClient(BaseClient):
                 doc['_score'] = doc['score']
 
         return resp['response']['docs']
+
+    def analyze(self, index, fieldtype, text):
+        # http://localhost:8983/solr/msmarco/analysis/field
+        url = '{}/{}/analysis/field?'.format(self.solr_base_ep, index)
+
+        query={
+            "analysis.fieldtype": fieldtype,
+            "analysis.fieldvalue": text
+        }
+
+        resp = requests.post(url, data=query)
+
+        analysis_resp = resp.json()
+        tok_stream = analysis_resp['analysis']['field_types']['text_general']['index']
+        tok_stream_result = tok_stream[-1]
+        return tok_stream_result
+
+    def term_vectors_skip_to(self, index, skip=0):
+        url = '{}/{}/tvrh/'.format(self.solr_base_ep, index)
+        query={
+            'q': '*:*',
+            'cursorMark': '*',
+            'sort': 'id asc',
+            'fl': 'id',
+            'rows': str(skip)
+            }
+        tvrh_resp = requests.post(url, data=query)
+        return tvrh_resp.json()['nextCursorMark']
+
+    def term_vectors(self, index, field, start_cursor='*'):
+        """ Extract all term vectors for a field
+            TODO: take a q param, here we do *:*
+        """
+        # http://localhost:8983/solr/msmarco/tvrh?q=*:*&start=0&rows=10&fl=id,body&tvComponent=true&tv.positions=true
+        url = '{}/{}/tvrh/'.format(self.solr_base_ep, index)
+
+        def get_posns(weird_posns):
+            positions = []
+            if weird_posns[0] == 'positions':
+                for posn in weird_posns[1]:
+                    if posn == "position":
+                        continue
+                    else:
+                        positions.append(posn)
+
+
+        next_cursor = start_cursor
+        while True:
+
+            query={
+                "q": "*:*",
+                "cursorMark": next_cursor,
+                "fl": "id",
+                "tv.fl": field,
+                "tvComponent": 'true',
+                "tv.positions": 'true',
+                'sort': 'id asc',
+                'rows': '100'
+            }
+
+            tvrh_resp = tvrh_resp = requests.post(url, data=query).json()
+
+            from ltr.client.solr_parse import parse_termvect_namedlist
+            parsed = parse_termvect_namedlist(tvrh_resp['termVectors'], field=field)
+            for doc_id, terms in parsed.items():
+                try:
+                    yield doc_id, terms[field]
+                except KeyError:
+                    yield doc_id, {}
+
+            next_cursor = tvrh_resp['nextCursorMark']
+
+            if query['cursorMark'] == next_cursor:
+                break
+
+
 
     def get_feature_stores(self, index):
         resp = requests.get('{}/{}/schema/feature-store'.format(self.solr_base_ep,
