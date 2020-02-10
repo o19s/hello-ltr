@@ -343,25 +343,43 @@
       enableGraphQueries="true" positionIncrementGap="100" multiValued="true">
       <analyzer type="index">
         <tokenizer class="solr.StandardTokenizerFactory"/>
+        <filter class="solr.WordDelimiterGraphFilterFactory"/>
         <filter class="solr.LowerCaseFilterFactory"/>
+
         <filter class="solr.ASCIIFoldingFilterFactory" preserveOriginal="false" />
         <filter class="solr.EnglishPossessiveFilterFactory"/>
-        
+
+        <!-- only english chars for length 2 and below-->
+        <filter class="solr.PatternReplaceFilterFactory" pattern="^(\w)$"   replacement="___$1"/>
+        <filter class="solr.PatternReplaceFilterFactory" pattern="^(\w\w)$" replacement="__$1"/>
+
+        <filter class="solr.LengthFilterFactory" min="3" max="20" />
+
+        <!-- correct common alt and misspelled english words -->
         <filter class="solr.SynonymGraphFilterFactory" synonyms="misspell.txt"/>
 
         <filter class="solr.PorterStemFilterFactory"/>
+
+        <filter class="solr.FlattenGraphFilterFactory"/>
       </analyzer>
       <analyzer type="query">
         <tokenizer class="solr.StandardTokenizerFactory"/>
+        <filter class="solr.WordDelimiterGraphFilterFactory"/>
         <filter class="solr.LowerCaseFilterFactory"/>
+
         <filter class="solr.ASCIIFoldingFilterFactory" preserveOriginal="false" />
         <filter class="solr.EnglishPossessiveFilterFactory"/>
         
+        <!-- only english chars for length 2 and below-->
+        <filter class="solr.PatternReplaceFilterFactory" pattern="^(\w)$"   replacement="___$1"/>
+        <filter class="solr.PatternReplaceFilterFactory" pattern="^(\w\w)$" replacement="__$1"/>
+
+
+        <!-- correct common alt and misspelled english words -->
         <filter class="solr.SynonymGraphFilterFactory" synonyms="misspell.txt"/>
 
         <filter class="solr.PorterStemFilterFactory"/>
 
-        <filter class="solr.SynonymGraphFilterFactory" synonyms="collocations.txt"/>
       </analyzer>
     </fieldType>
 
