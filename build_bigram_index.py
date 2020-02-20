@@ -1,5 +1,7 @@
 import csv
 import sys
+import os
+import gzip
 
 csv.field_size_limit(sys.maxsize)
 
@@ -18,72 +20,37 @@ def marcoDocs():
                 print("Dumped (%s/%s) %s" % (i, 3213835, row[1]))
 
 
-def reorder_term_vectors(termvects):
-    slots = []
-    for term, posns in termvects.items():
-        for posn in posns['positions']:
-            try:
-                slots[posn]
-            except IndexError:
-                slots.extend([None] * (1 + (posn - len(slots))))
-            if slots[posn] is not None:
-                print("Two terms in %s: (%s,%s)" % (posn, term, slots[posn]))
-            slots[posn] = term
-    assert len(slots) == 0 or slots[-1] != None # We should only have grown the list to accomidate the terms
-    return slots
+def cached_term_vect_files(folder='.cache/'):
+    for filename in os.listdir(folder):
+        if filename.endswith('.csv.gz'):
+            yield os.path.join(folder, filename)
 
-
-
+def parse_where_in_terms_fname(fname): #terms_2339999.csv.gz
+    try:
+        where = int(fname.split('_')[1].split('.')[0])
+        return where
+    except ValueError:
+        print("File not parsable: %s" %fname)
+        return -1
 
 from ltr.helpers.colocations.bigram_index import BigramIndex
-from ltr.client import SolrClient
 
-def marcoBigrams(fname=None, start_at=0, save_every=20000):
-    bigram_index = BigramIndex()
-    # load locally cached file
-    if fname:
-        bigram_index = BigramIndex.from_pkl(fname)
+def marco_bigrams(begin, end):
 
-    client = SolrClient()
-
-    start_cursor = '*'
-    if (start_at > 0):
-        start_cursor = client.term_vectors_skip_to(index='msmarco', skip=start_at)
-    print("Restarting at cursor %s" % start_cursor)
-
-    i = start_at
-    for doc_id, body_vects in client.term_vectors(index='msmarco', field='body', start_cursor=start_cursor):
-        terms = reorder_term_vectors(body_vects)
-        bigram_index.add_doc(terms)
-        if i % 100 == 0:
-            print("Gathered %s; terms %s" % (i, len(bigram_index.term_dict.term_to_ord)))
-        if i % save_every == (save_every - 1):
-            print("Dumped %s docs" % i)
-            bigram_index.dump('.cache/marco_bigrams_' + str(i) + '.pkl')
-        i+=1
-
-    return bigram_index
+    for fname in cached_term_vect_files():
+        where = parse_where_in_terms_fname(fname)
+        if begin < where <= end:
+            print("Processing %s" % fname)
+            bigram_index = BigramIndex()
+            with gzip.open(fname, 'rt') as f:
+                rdr = csv.reader(f)
+                for idx, row in enumerate(rdr):
+                    bigram_index.add_doc(row[1:])
+                    if idx % 1000 == 0:
+                        print("%s rows processed from %s" % (idx, fname))
+            print("Bigrams for %s.pkl" % fname)
+            bigram_index.dump( fname + '_bigrams_pkl.gz')
 
 if __name__ == "__main__":
-    start_at = 0
-    fname = None
-    from sys import argv
-    if len(argv) > 1:
-        pick_up_from = int(argv[1])
-        start_at = pick_up_from + 1
-        fname = '.cache/marco_bigrams_' + str(pick_up_from) + '.pkl'
-    bigram_index = marcoBigrams(fname=fname, start_at=start_at)
-    bigram_index.dump('marco_bigrams.pkl')
-
-    for term1, term2, tf in bigram_index.common_n_bigrams(50):
-        print(term1, term2, tf)
-
-
-    #coloc = Colocations(bigram_index)
-    #scored_bigrams = coloc.score_all(min_term_count=10)
-    #with open('colocs.txt', 'w') as f:
-    #    for i in range(0,10000):
-    #        bg = scored_bigrams.pop()
-    #        f.write("%s %s %s => %s\n" % (bg[0], bg[1], bg[2], "%s_%s" % (bg[1],bg[2])))
-
-
+    import sys
+    marco_bigrams(int(sys.argv[1]), int(sys.argv[2]))

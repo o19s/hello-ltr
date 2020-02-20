@@ -1,43 +1,33 @@
 from collections import Counter
 import pickle
+import gzip
 
 def bigrams(terms):
     """ Every item in a list with it's next item """
     return zip(terms, terms[1:])
 
-class TermDict:
-
-    def __init__(self):
-        self.term_to_ord = {}
-        self.ord_to_term = []
-
-    def term_ord(self, term):
-
-        try:
-            term_ord = self.term_to_ord[term]
-            return term_ord
-        except KeyError:
-            term_ord = len(self.ord_to_term)
-            self.ord_to_term.append(term)
-            self.term_to_ord[term] = term_ord
-            return term_ord
-
-    def term(self, term_ord):
-        return self.ord_to_term[term_ord]
+#class TermDict:
+#
+#    def __init__(self):
+#        #self.term_to_ord = BinarySearchTable()
+#        self.hash_to_term = {}
+#
+#    def term_hash(self, term):
+#        str_hash = hash_str(term)
+#        self.hash_to_term[str_hash] = term
+#        return str_hash
+#
+#    def term(self, term_hash):
+#        return self.hash_to_term[term_hash]
 
 
 class BigramIndex:
 
-    def __init__(self, docfreq=True):
-        self.bigram_dict_ttf = Counter() #total tf over all docs of each bigram, keyed by term ord
+    def __init__(self):
         self.bigram_dict_df = Counter() # doc freq over all docs of each bigram, keyed by term ord
-        self.docfreq = docfreq
-        self.term_dict = TermDict()
 
     def add_doc(self, terms):
-        bigrammed = [b for b in bigrams([self.term_dict.term_ord(term) for term in terms])]
-        for bigram in bigrammed:
-            self.bigram_dict_ttf[bigram] += 1
+        bigrammed = [b for b in bigrams(terms)]
         for bigram in set(bigrammed):
             self.bigram_dict_df[bigram] += 1
 
@@ -48,15 +38,46 @@ class BigramIndex:
     def bigrams_above_freq(self, freq):
         for bigram, count in self.bigram_dict_df.most_common():
             if count > freq:
-                yield bigram[0], bigram[1], count
+                yield bigram, count
 
     def dump(self, fname):
-        with open(fname, 'wb') as f:
+        with gzip.open(fname, 'wb') as f:
             pickle.dump(self, f)
 
+    def merge(self, other_bg_idx):
+        self.bigram_dict_df.update(other_bg_idx.bigram_dict_df)
+
+    def __len__(self):
+        return len(self.bigram_dict_df)
+
     @staticmethod
-    def from_pkl(fname):
-        with open(fname, 'rb') as f:
+    def from_pkl_gz(fname):
+        with gzip.open(fname, 'rb') as f:
             return pickle.load(f)
 
+    @staticmethod
+    def from_folder(folder, prefix='', min_df=1):
+        import os
+
+        def all_pkls_in_folder(folder, prefix):
+            for filename in os.listdir(folder):
+                if filename.endswith('_bigrams_pkl.gz') and filename.startswith(prefix):
+                    yield os.path.join(folder, filename)
+
+        bigram_idx = BigramIndex()
+        for bigram_pkl_fname in all_pkls_in_folder(folder, prefix):
+            print("Adding %s" % bigram_pkl_fname)
+            this_bg_idx = BigramIndex.from_pkl_gz(bigram_pkl_fname)
+
+            print("Bigrams Loaded %s" % len(this_bg_idx))
+
+            filtered_bg_idx = BigramIndex()
+            for bigram, df in this_bg_idx.bigrams_above_freq(freq=min_df-1):
+                filtered_bg_idx.bigram_dict_df[bigram] = df
+
+            print("Bigrams Above DF=%s - %s" % (min_df, len(filtered_bg_idx)))
+
+            bigram_idx.merge(filtered_bg_idx)
+
+        return bigram_idx
 

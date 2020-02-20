@@ -166,7 +166,7 @@ class SolrClient(BaseClient):
         url = '{}/{}/select?'.format(self.solr_base_ep, index)
 
         resp = requests.post(url, data=query)
-        resp_msg(msg='Query {}...'.format(str(query)[:20]), resp=resp)
+        #resp_msg(msg='Query {}...'.format(str(query)[:20]), resp=resp)
         resp = resp.json()
 
         # Transform to be consistent
@@ -192,10 +192,10 @@ class SolrClient(BaseClient):
         tok_stream_result = tok_stream[-1]
         return tok_stream_result
 
-    def term_vectors_skip_to(self, index, skip=0):
+    def term_vectors_skip_to(self, index, q='*:*', skip=0):
         url = '{}/{}/tvrh/'.format(self.solr_base_ep, index)
         query={
-            'q': '*:*',
+            'q': q,
             'cursorMark': '*',
             'sort': 'id asc',
             'fl': 'id',
@@ -204,9 +204,8 @@ class SolrClient(BaseClient):
         tvrh_resp = requests.post(url, data=query)
         return tvrh_resp.json()['nextCursorMark']
 
-    def term_vectors(self, index, field, start_cursor='*'):
+    def term_vectors(self, index, field, q='*:*', start_cursor='*'):
         """ Extract all term vectors for a field
-            TODO: take a q param, here we do *:*
         """
         # http://localhost:8983/solr/msmarco/tvrh?q=*:*&start=0&rows=10&fl=id,body&tvComponent=true&tv.positions=true
         url = '{}/{}/tvrh/'.format(self.solr_base_ep, index)
@@ -225,7 +224,7 @@ class SolrClient(BaseClient):
         while True:
 
             query={
-                "q": "*:*",
+                "q": q,
                 "cursorMark": next_cursor,
                 "fl": "id",
                 "tv.fl": field,
