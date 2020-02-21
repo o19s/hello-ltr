@@ -284,7 +284,10 @@
         <filter class="solr.PatternReplaceFilterFactory" pattern="^(\w)$"   replacement="___$1"/>
         <filter class="solr.PatternReplaceFilterFactory" pattern="^(\w\w)$" replacement="__$1"/>
 
-        <filter class="solr.LengthFilterFactory" min="3" max="20" />
+        <filter class="solr.LengthFilterFactory" min="3" max="30" />
+
+        <filter class="solr.PatternReplaceFilterFactory" pattern="_+(\w)" replacement="$1"/>
+
 
         <!-- correct common alt and misspelled english words -->
         <filter class="solr.SynonymGraphFilterFactory" synonyms="misspell.txt"/>
@@ -308,6 +311,9 @@
         <filter class="solr.PatternReplaceFilterFactory" pattern="^(\w)$"   replacement="___$1"/>
         <filter class="solr.PatternReplaceFilterFactory" pattern="^(\w\w)$" replacement="__$1"/>
 
+        <filter class="solr.LengthFilterFactory" min="3" max="30" />
+
+        <filter class="solr.PatternReplaceFilterFactory" pattern="_+(\w)" replacement="$1"/>
 
         <!-- correct common alt and misspelled english words -->
         <filter class="solr.SynonymGraphFilterFactory" synonyms="misspell.txt"/>
