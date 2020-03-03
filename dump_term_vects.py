@@ -1,6 +1,7 @@
 import csv
 import gzip
 from ltr.client import SolrClient
+from datetime import datetime
 
 
 def reorder_term_vectors(termvects):
@@ -17,7 +18,7 @@ def reorder_term_vectors(termvects):
     assert len(slots) == 0 or slots[-1] != '_' # We should only have grown the list to accomidate the terms
     return slots
 
-def dump_term_vects(start_at=0, dump_every=20000, terms_type='document'):
+def dump_term_vects(start_at=0, dump_every=60000, terms_type='document'):
     client = SolrClient()
 
     q = 'type:%s' % terms_type
@@ -28,6 +29,7 @@ def dump_term_vects(start_at=0, dump_every=20000, terms_type='document'):
 
     idx = start_at + 1
     rows = []
+    start = datetime.now()
     for doc_id, body_vects in client.term_vectors(q=q, index='msmarco', field='body', start_cursor=start_cursor):
 
         val = [doc_id] + reorder_term_vectors(body_vects)
@@ -40,7 +42,7 @@ def dump_term_vects(start_at=0, dump_every=20000, terms_type='document'):
                 terms_per_line.writerows(rows)
                 rows = []
         if idx % 1000 == 0:
-            print("Dumped %s Docs Rows: %s" % (idx, len(rows)))
+            print("Dumped %s Docs Rows: %s -- %s" % (idx, len(rows), (datetime.now() - start) / idx))
         idx += 1
     with gzip.open('.cache/%s_%s.csv.gz' % (terms_type, idx), 'wt') as f:
         print("Dumping! %s | %s rows" % (idx, len(rows)))
@@ -50,6 +52,8 @@ def dump_term_vects(start_at=0, dump_every=20000, terms_type='document'):
 if __name__ == "__main__":
     start_at = 0
     from sys import argv
+    #print("Dump Indexed Questions")
+    #dump_term_vects(start_at=start_at, terms_type='question', dump_every=400000)
 
     if len(argv) > 1:
         pick_up_from = int(argv[1])
