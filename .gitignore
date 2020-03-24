@@ -13,3 +13,5 @@ venv/*
 .vscode
 .cache
 features.txt
+.trash
+.DS_store
