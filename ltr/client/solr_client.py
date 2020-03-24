@@ -231,10 +231,11 @@ class SolrClient(BaseClient):
                 "tvComponent": 'true',
                 "tv.positions": 'true',
                 'sort': 'id asc',
-                'rows': '100'
+                'rows': '2000',
+                'wt': 'json'
             }
 
-            tvrh_resp = tvrh_resp = requests.post(url, data=query).json()
+            tvrh_resp = requests.post(url, data=query).json()
 
             from ltr.client.solr_parse import parse_termvect_namedlist
             parsed = parse_termvect_namedlist(tvrh_resp['termVectors'], field=field)
