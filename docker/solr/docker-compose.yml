@@ -1,7 +1,7 @@
 version: '2'
 services:
   solr:
-    image: ltr-solr
+    build: .
     expose:
       - "8983"
     ports:
