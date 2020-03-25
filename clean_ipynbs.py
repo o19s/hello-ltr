@@ -7,5 +7,4 @@ if __name__ == "__main__":
             print("cleaning %s" % fname)
             ntbk = nbc.NotebookCleaner(fname)
             ntbk.clear(kind='output', tag='hide_output')
-            ntbk.clear(kind='outputs', tag='hide_output')
             ntbk.save(fname)
