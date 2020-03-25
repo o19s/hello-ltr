@@ -2,8 +2,8 @@ alembic==1.4.2
 appnope==0.1.0
 attrs==19.1.0
 backcall==0.1.0
-bleach==3.1.0
-certifi==2019.3.9
+bleach==3.1.2
+certifi==2019.6.16
 chardet==3.0.4
 cycler==0.10.0
 decorator==4.3.2
