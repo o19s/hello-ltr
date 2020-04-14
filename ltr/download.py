@@ -1,4 +1,6 @@
 import requests
+import os.path
+from os import path
 
 def download():
     resources = [
@@ -13,7 +15,11 @@ def download():
 
     def download(uri):
         filename = uri[uri.rfind('/') + 1:]
-        with open('data/{}'.format(filename), 'wb') as out:
+        filepath = 'data/{}'.format(filename)
+        if path.exists(filepath):
+            print(filepath + ' already exists')
+            return 
+        with open(filepath, 'wb') as out:
             print('GET {}'.format(uri))
             resp = requests.get(uri, stream=True)
             for chunk in resp.iter_content(chunk_size=1024):
