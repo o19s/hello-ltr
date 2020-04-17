@@ -54,6 +54,9 @@ class ElasticClient(BaseClient):
 
     def name(self):
         return "elastic"
+    
+    def check_index_exists(self, index):
+        return self.es.indices.exists(index=index)
 
     def delete_index(self, index):
         resp = self.es.indices.delete(index=index, ignore=[400, 404])
