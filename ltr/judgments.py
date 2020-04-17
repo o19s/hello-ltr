@@ -5,7 +5,7 @@ class Judgment:
         self.grade = grade
         self.qid = qid
         self.keywords = keywords
-        self.docId = str(int(docId)) # To force ValueError
+        self.docId = docId # To force ValueError
         self.features = features # 0th feature is ranklib feature 1
         self.weight = weight
 
