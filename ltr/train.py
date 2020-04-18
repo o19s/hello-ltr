@@ -3,7 +3,7 @@ from ltr.helpers.ranklib_result import parse_training_log
 
 
 def trainModel(training, out, features=None, kcv=None, ranker=6,
-               leafs=10, trees=50, frate=1.0,
+               leafs=10, trees=50, frate=1.0, shrinkage=0.1,
                srate=1.0, bag=1, metric2t='DCG@10'):
     """
     ranker
@@ -15,8 +15,8 @@ def trainModel(training, out, features=None, kcv=None, ranker=6,
         srate - what proportion of the queries should be examined for each ensemble
     """
 
-    cmd = 'java -jar data/RankyMcRankFace.jar -ranker {} -metric2t {} -tree {} -bag {} -leaf {} -train {} -save {} '.format(
-            ranker, metric2t, trees, bag, leafs, training, out)
+    cmd = 'java -jar data/RankyMcRankFace.jar -ranker {} -shrinkage {} -metric2t {} -tree {} -bag {} -leaf {} -frate {} -srate {} -train {} -save {} '.format(
+            ranker, shrinkage, metric2t, trees, bag, leafs, frate, srate, training, out)
 
     if features is not None:
         with open('features.txt', 'w') as f:
@@ -40,7 +40,7 @@ def save_model(client, modelName, modelFile, index, featureSet):
 def train(client, trainingInFile, modelName, featureSet,
           index, features=None,
           metric2t='DCG@10', leafs=10, trees=50,
-          frate=1.0, srate=1.0, bag=1, ranker=6):
+          frate=1.0, srate=1.0, bag=1, ranker=6, shrinkage=0.1):
     """ Train and store a model into the search engine
         with the provided parameters"""
     modelFile='data/{}_model.txt'.format(modelName)
@@ -54,7 +54,8 @@ def train(client, trainingInFile, modelName, featureSet,
                                bag=bag,
                                srate=srate,
                                frate=frate,
-                               trees=trees)
+                               trees=trees,
+                               shrinkage=shrinkage)
     save_model(client, modelName, modelFile, index, featureSet)
     assert len(ranklibResult.trainingLogs) == 1
     return ranklibResult.trainingLogs[0]
@@ -64,7 +65,8 @@ def train(client, trainingInFile, modelName, featureSet,
 def kcv(client, trainingInFile, modelName, featureSet,
         index, features=None, kcv=5,
         metric2t='DCG@10', leafs=10, trees=50,
-        frate=1.0, srate=1.0, bag=1, ranker=6):
+        frate=1.0, srate=1.0, bag=1, ranker=6,
+        shrinkage=0.1):
     """ Train and store a model into the search engine
         with the provided parameters"""
     modelFile='data/{}_model.txt'.format(modelName)
@@ -78,7 +80,8 @@ def kcv(client, trainingInFile, modelName, featureSet,
                                bag=bag,
                                srate=srate,
                                frate=frate,
-                               trees=trees)
+                               trees=trees,
+                               shrinkage=shrinkage)
     return ranklibResult
 
 
@@ -87,13 +90,14 @@ def feature_search(client, trainingInFile, featureSet,
                    featureCost=0.0,
                    metric2t='DCG@10',
                    kcv=5, leafs=10, trees=10,
-                   frate=1.0, srate=1.0, bag=1, ranker=6):
+                   frate=1.0, srate=1.0, bag=1, ranker=6,
+                   shrinkage=0.1):
     from itertools import combinations
     modelFile='data/{}_model.txt'.format('temp')
     best = 0
     bestCombo = None
     metricPerFeature = {}
-    for i in range(1, len(features)+1):
+    for i in range(1, max(features)+1):
         metricPerFeature[i] = [0,0] # count, sum
     for i in range(1, len(features)+1):
         for combination in combinations(features, i):
@@ -108,7 +112,8 @@ def feature_search(client, trainingInFile, featureSet,
                                        ranker=ranker,
                                        bag=bag,
                                        srate=srate,
-                                       frate=frate)
+                                       frate=frate,
+                                       shrinkage=shrinkage)
             kcvTestMetric = ranklibResult.kcvTestAvg
             if featureCost != 0.0:
                 print("Trying features %s TEST %s=%s after cost %s" % (repr([combo for combo in combination]), metric2t, kcvTestMetric, kcvTestMetric*cost))
@@ -124,8 +129,11 @@ def feature_search(client, trainingInFile, featureSet,
                 metricPerFeature[feature][1] += ranklibResult.kcvTestAvg
 
     # Compute avg metric with each feature
-    for i in range(1, len(features)+1):
-        metricPerFeature[i] = metricPerFeature[i][1] / metricPerFeature[i][0]  # count, sum
+    for i in range(1, max(features)+1):
+        if metricPerFeature[i][0] > 0:
+            metricPerFeature[i] = metricPerFeature[i][1] / metricPerFeature[i][0]  # count, sum
+        else:
+            metricPerFeature[i] = -1
 
 
     return bestCombo, metricPerFeature
