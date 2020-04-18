@@ -41,7 +41,7 @@ class ElasticClient(BaseClient):
         In the future, we may wish to isolate an Index's feature
         store to a feature store of the same name of the index
     """
-    def __init__(self, configs_dir='../../../docker/elasticsearch'):
+    def __init__(self, configs_dir='.'):
         self.docker = os.environ.get('LTR_DOCKER') != None
         self.configs_dir = configs_dir #location of elastic configs
 
