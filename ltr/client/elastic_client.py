@@ -41,8 +41,9 @@ class ElasticClient(BaseClient):
         In the future, we may wish to isolate an Index's feature
         store to a feature store of the same name of the index
     """
-    def __init__(self):
+    def __init__(self, configs_dir='../../../docker/elasticsearch'):
         self.docker = os.environ.get('LTR_DOCKER') != None
+        self.configs_dir = configs_dir #location of elastic configs
 
         if self.docker:
             self.host = 'elastic'
@@ -62,7 +63,8 @@ class ElasticClient(BaseClient):
 
     def create_index(self, index):
         """ Take the local config files for Elasticsearch for index, reload them into ES"""
-        with open("docker/elasticsearch/%s_settings.json" % index) as src:
+        cfg_json_path = os.path.join(self.configs_dir, "%s_settings.json" % index)
+        with open(cfg_json_path) as src:
             settings = json.load(src)
             resp = self.es.indices.create(index, body=settings)
             resp_msg(msg="Created index {}".format(index), resp=ElasticResp(resp))

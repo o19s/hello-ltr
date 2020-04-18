@@ -1,7 +1,13 @@
 import requests
 
 def download_uri(uri):
+    import os
+
+    if not os.path.exists('data'):
+        os.makedirs('data')
+
     filename = uri[uri.rfind('/') + 1:]
+
     with open('data/{}'.format(filename), 'wb') as out:
         print('GET {}'.format(uri))
         resp = requests.get(uri, stream=True)
