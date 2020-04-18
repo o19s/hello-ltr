@@ -8,7 +8,7 @@ LTR examples here for Solr or Elasticsearch which require the right search engin
 
 ## Setup Solr w/ LTR
 
-With Docker installed, a script will launch Solr & the config under the solr/ dir in the console:
+With Docker installed, a script will launch Solr along with each collection's config in the console:
 
 ```
 cd docker/solr
@@ -38,13 +38,10 @@ __Note:__ The above commands should be run from the root folder of the project.
 ## Start Jupyter notebook and confirm operation
 
 - Run `jupyter notebook`
+- Browse to notebooks/{search\_engine}/{collection} 
 - Open either the "hello-ltr (Solr)" or "hello-ltr (ES)" as appropriate and ensure you get a graph at the last cell
 
 
 ## Getting Started
 - Run `jupyter notebook` and load the hello-ltr notebook
 - Run thru each cell to get more familiar with the LTR pipeline
-
-# Docker Compose
-
-If you hit any snags with the JDK or python dependencies, the [docker](docker/) folder has a docker-compose configuration that prepares an environment to run all of the notebooks within a container.
