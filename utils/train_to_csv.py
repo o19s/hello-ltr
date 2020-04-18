@@ -1,3 +1,4 @@
+import utils
 from ltr.judgments import judgments_from_file
 from ltr.client import ElasticClient
 import csv

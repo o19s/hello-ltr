@@ -1,3 +1,4 @@
+import utils
 from ltr.helpers.esUrlParse import parseUrl
 from ltr.judgments import Judgment, judgments_from_file, judgments_to_file, judgments_by_qid
 from elasticsearch import Elasticsearch, TransportError
