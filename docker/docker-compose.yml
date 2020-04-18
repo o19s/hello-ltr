@@ -13,11 +13,25 @@ services:
   
   elastic:
     build:
-      context: ../.
+      context: elasticsearch/es-docker
       dockerfile: Dockerfile
     container_name: hello-ltr-elastic
     ports:
       - 9200:9200
+
+  kibana:
+    build:
+        context: elasticsearch/kb-docker
+        dockerfile: Dockerfile
+    container_name: hello-ltr-kibana
+    expose:
+      - "5601"
+    ports:
+     - "5601:5601"
+    environment:
+      ELASTICSEARCH_HOSTS: "http://hello-ltr-elastic:9200"
+      ELASTICSEARCH_URL: "http://hello-ltr-elastic:9200"
+      SERVER_HOST: "0.0.0.0"
 
   solr:
     build:

@@ -19,9 +19,9 @@ def trainModel(training, out, features=None, kcv=None, ranker=6,
             ranker, shrinkage, metric2t, trees, bag, leafs, frate, srate, training, out)
 
     if features is not None:
-        with open('features.txt', 'w') as f:
+        with open('data/features.txt', 'w') as f:
             f.write("\n".join([str(feature) for feature in features]))
-        cmd += " -feature features.txt "
+        cmd += " -feature data/features.txt "
 
     if kcv is not None and kcv > 0:
         cmd += " -kcv {} ".format(kcv)

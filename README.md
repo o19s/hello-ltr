@@ -12,15 +12,8 @@ With Docker installed, a script will launch Solr & the config under the solr/ di
 
 ```
 cd docker/solr
-./launch_solr.sh
+docker-compose up
 ```
-
-Or manually
-
-- Go into the "Solr" docker directory: `cd docker/solr`
-- Run `docker build . -t ltr-solr` to create a image running Solr with LTR
-- Start the instance by running: `docker run --name ltr-solr -p 8983:8983 -d ltr-solr`
-- Subsequently run with `docker start ltr-solr` and `docker stop ltr-solr`
 
 ## Setup Elasticsearch w/ LTR
 
@@ -28,22 +21,6 @@ With Docker installed, a script will launch Elasticsearch w/ Kibana tooling in t
 
 ```
 cd docker/elasticsearch
-./launch_es.sh
-```
-
-Manually build & run the containers
-
-```
-# Create Elasticsearch
-cd es-docker
-docker build -t ltr-elasticsearch .
-
-# Create Kibana
-cd kb-docker
-docker build -t ltr-kibana .
-
-# Launch
-cd ..
 docker-compose up
 ```
 
@@ -70,4 +47,4 @@ __Note:__ The above commands should be run from the root folder of the project.
 
 # Docker Compose
 
-If you hit any snags with the JDK or python dependencies, the [docker](docker/) folder has a docker-compose configuration that prepares an environment to run all of the notebooks.
+If you hit any snags with the JDK or python dependencies, the [docker](docker/) folder has a docker-compose configuration that prepares an environment to run all of the notebooks within a container.

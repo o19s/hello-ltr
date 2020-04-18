@@ -10,3 +10,8 @@ data/tmdb.json
 venv/*
 
 *.pyc
+.vscode
+.cache
+features.txt
+.trash
+.DS_store
