@@ -1,4 +1,4 @@
-hello-ltr
+# Hello LTR :)
 
 The overall goal of this project is to demonstrate all of the steps required to work with LTR in Elasticsearch or Solr. Follow the setup instructions and check out the LTR notebooks in Solr or Elasticsearch
 
