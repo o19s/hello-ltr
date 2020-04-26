@@ -1,13 +1,7 @@
-.ipynb_checkpoints
-data
-data/classic-model.txt
-data/classic-training.txt
-data/latest-model.txt
-data/latest-training.txt
-data/RankyMcRankFace-0.1.1.jar
-data/RankyMcRankFace.jar
-data/tmdb.json
+data/
+**/data
 venv/*
+**/.ipynb_checkpoints
 
 *.pyc
 .vscode
