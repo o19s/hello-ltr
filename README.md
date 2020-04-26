@@ -2,7 +2,7 @@
 
 The overall goal of this project is to demonstrate all of the steps required to work with LTR in Elasticsearch or Solr. There's two modes of running. Just running and editing notebooks in a docker container. Or local development (also requiring docker to run the search engine).
 
-## Just run examples with Docker
+## No fuss setup: You just want to play with LTR
 
 Follow these steps if you're just playing around & are OK with possibly losing some work (all notebooks exist just in the docker container)
 
@@ -14,7 +14,7 @@ docker-compose up
 
 at the root dir and go to town! This will run jupyter and all search engines in Docker containers
 
-## Developing your own LTR notebooks
+## You want to build your own LTR notebooks
 
 Follow these steps if you want to do more serious work with the notebooks. For example, if you want to build a demo with your work's data or something you want to preserve later.
 
