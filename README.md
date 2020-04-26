@@ -14,7 +14,7 @@ docker-compose up
 
 at the root dir and go to town! This will run jupyter and all search engines in Docker containers
 
-## Developing notebooks
+## Developing your own LTR notebooks
 
 Follow these steps if you want to do more serious work with the notebooks. For example, if you want to build a demo with your work's data or something you want to preserve later.
 
