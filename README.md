@@ -57,8 +57,3 @@ __Note:__ The above commands should be run from the root folder of the project.
 - Browse to notebooks/{search\_engine}/{collection} 
 - Open either the "hello-ltr (Solr)" or "hello-ltr (ES)" as appropriate and ensure you get a graph at the last cell
 
-
-## Running the notebooks
-
-- Run `jupyter notebook` and navigate to the folder with notebooks you want to run
-- Run thru each cell to get more familiar with various LTR use cases
