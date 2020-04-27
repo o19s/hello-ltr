@@ -9,8 +9,10 @@ RUN apt-get update && \
 RUN useradd -ms /bin/bash ltr 
 WORKDIR /home/ltr
 
-# Clone repo and pull requirements
-RUN git clone https://github.com/o19s/hello-ltr
+# Make current directory accesible
+ADD . /home/ltr/hello-ltr
+
+# Install requirements
 RUN chown -R ltr.ltr hello-ltr
 WORKDIR /home/ltr/hello-ltr
 

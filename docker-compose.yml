@@ -13,7 +13,7 @@ services:
   
   elastic:
     build:
-      context: elasticsearch/es-docker
+      context: ./notebooks/elasticsearch/.docker/es-docker/
       dockerfile: Dockerfile
     container_name: hello-ltr-elastic
     ports:
@@ -21,8 +21,8 @@ services:
 
   kibana:
     build:
-        context: elasticsearch/kb-docker
-        dockerfile: Dockerfile
+      context: ./notebooks/elasticsearch/.docker/kb-docker/
+      dockerfile: Dockerfile
     container_name: hello-ltr-kibana
     expose:
       - "5601"
@@ -35,7 +35,7 @@ services:
 
   solr:
     build:
-      context: solr/.
+      context: ./notebooks/solr/
       dockerfile: Dockerfile
     container_name: hello-ltr-solr
     ports:
