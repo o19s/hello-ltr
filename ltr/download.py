@@ -40,9 +40,9 @@ def download():
 def download_msmarco():
     resources = [
         'https://msmarco.blob.core.windows.net/msmarcoranking/msmarco-docs.tsv.gz',
-        'https://msmarco.blob.core.windows.net/msmarcoranking/msmarco-docs-lookup.tsv',
-        'https://msmarco.blob.core.windows.net/msmarcoranking/msmarco-doctrain-qrels.tsv',
-        'https://msmarco.blob.core.windows.net/msmarcoranking/msmarco-doctrain-queries.tsv']
+        'https://msmarco.blob.core.windows.net/msmarcoranking/msmarco-docs-lookup.tsv.gz',
+        'https://msmarco.blob.core.windows.net/msmarcoranking/msmarco-doctrain-qrels.tsv.gz',
+        'https://msmarco.blob.core.windows.net/msmarcoranking/msmarco-doctrain-queries.tsv.gz']
     for uri in resources:
         download_uri(uri)
 
