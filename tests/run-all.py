@@ -25,10 +25,12 @@ class TestAllNbs(unittest.TestCase):
         for subdir, nbs in nb_paths.items():
             print("EXECUTING NBS IN DIRECTORY: " + subdir)
             if nbs['setup']:
+                print("Setting up ... " + nb)
                 nb, errors = runner.run_notebook(nbs['setup'])
                 print(errors)
                 assert len(errors) == 0
             for nb in nbs['notebooks']:
+                print("Running... " + nb)
                 nb, errors = runner.run_notebook(nb)
                 print(errors)
                 assert len(errors) == 0
