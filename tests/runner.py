@@ -1,22 +1,25 @@
+# Notebook test runner, adapted from
+# https://www.blog.pythonlibrary.org/2018/10/16/testing-jupyter-notebooks/
 import nbformat
 import os
 
 from nbconvert.preprocessors import ExecutePreprocessor
 
+def hours(hours):
+    """ Hours as seconds """
+    hours * 60 * 60
 
-def run_notebook(notebook_path):
+def run_notebook(notebook_path, timeout=hours(6)):
     nb_name, _ = os.path.splitext(os.path.basename(notebook_path))
     dirname = os.path.dirname(notebook_path)
 
     with open(notebook_path) as f:
         nb = nbformat.read(f, as_version=4)
 
-    proc = ExecutePreprocessor(timeout=600, kernel_name='python3')
+    proc = ExecutePreprocessor(timeout=timeout, kernel_name='python3')
     proc.allow_errors = True
 
     proc.preprocess(nb, {'metadata': {'path': dirname}})
-
-    #output_path = os.path.join('.', '{}_all_output.ipynb'.format(nb_name))
 
     errors = []
     for cell in nb.cells:
