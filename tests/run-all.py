@@ -5,15 +5,28 @@ from collections import defaultdict
 
 class TestAllNbs(unittest.TestCase):
 
-    def get_nb_dirs(path='./notebooks'):
+    def get_nb_dirs(path='./notebooks', skip=['.ipynb_checkpoints',
+                                              'solr/msmarco', 'evaluation (Solr).ipynb']):
         nb_paths = defaultdict(lambda: {'setup': None, 'notebooks': []})
         for subdir, dirs, files in os.walk(path):
             for fname in files:
+                full_path = os.path.join(subdir, fname)
+                should_skip = False
+                for skipPath in skip:
+                    if skipPath in fname:
+                        should_skip = True
+                    if skipPath in subdir:
+                        should_skip = True
+
+                if should_skip:
+                    print("Skipping %s" % full_path)
+                    continue
+
                 if fname.endswith('.ipynb'):
                     if fname == 'setup.ipynb':
-                        nb_paths[subdir]['setup'] = os.path.join(subdir, fname)
+                        nb_paths[subdir]['setup'] = full_path
                     else:
-                        nb_paths[subdir]['notebooks'].append(os.path.join(subdir, fname))
+                        nb_paths[subdir]['notebooks'].append(full_path)
         return nb_paths
         print(os.path.join(subdir, fname))
 
@@ -25,7 +38,7 @@ class TestAllNbs(unittest.TestCase):
         for subdir, nbs in nb_paths.items():
             print("EXECUTING NBS IN DIRECTORY: " + subdir)
             if nbs['setup']:
-                print("Setting up ... " + nb)
+                print("Setting up ... " + subdir)
                 nb, errors = runner.run_notebook(nbs['setup'])
                 print(errors)
                 assert len(errors) == 0
