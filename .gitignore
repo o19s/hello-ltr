@@ -2,6 +2,7 @@ data/
 **/data
 venv/*
 **/.ipynb_checkpoints
+last.ipynb
 
 *.pyc
 .vscode

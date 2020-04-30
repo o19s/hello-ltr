@@ -5,8 +5,8 @@ from collections import defaultdict
 
 class TestAllNbs(unittest.TestCase):
 
-    def get_nb_dirs(path='./notebooks', skip=['.ipynb_checkpoints',
-                                              'solr/msmarco', 'evaluation (Solr).ipynb']):
+    def get_nb_dirs(path='./notebooks/', skip=['.ipynb_checkpoints', 'evaluation.ipynb',
+                                               'solr/msmarco', 'evaluation (Solr).ipynb']):
         nb_paths = defaultdict(lambda: {'setup': None, 'notebooks': []})
         for subdir, dirs, files in os.walk(path):
             for fname in files:

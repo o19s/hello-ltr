@@ -21,6 +21,11 @@ def run_notebook(notebook_path, timeout=hours(6)):
 
     proc.preprocess(nb, {'metadata': {'path': dirname}})
 
+    output_path = 'last.ipynb'.format(nb_name)
+
+    with open(output_path, mode='wt') as f:
+        nbformat.write(nb, f)
+
     errors = []
     for cell in nb.cells:
         if 'outputs' in cell:
