@@ -9,7 +9,7 @@ def hours(hours):
     """ Hours as seconds """
     hours * 60 * 60
 
-def run_notebook(notebook_path, timeout=hours(6)):
+def run_notebook(notebook_path, timeout=hours(6), save_nb_path=None):
     nb_name, _ = os.path.splitext(os.path.basename(notebook_path))
     dirname = os.path.dirname(notebook_path)
 
@@ -21,10 +21,9 @@ def run_notebook(notebook_path, timeout=hours(6)):
 
     proc.preprocess(nb, {'metadata': {'path': dirname}})
 
-    output_path = 'last.ipynb'.format(nb_name)
-
-    with open(output_path, mode='wt') as f:
-        nbformat.write(nb, f)
+    if save_nb_path:
+        with open(save_nb_path, mode='wt') as f:
+            nbformat.write(nb, f)
 
     errors = []
     for cell in nb.cells:
