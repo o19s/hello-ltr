@@ -39,7 +39,7 @@ class NotebooksTestCase(unittest.TestCase):
                         print("Ignored " + nb)
                     else:
                         print("Running... " + nb)
-                        nb, errors = runner.run_notebook(nb)
+                        nb, errors = runner.run_notebook(nb, save_nb_path=NotebooksTestCase.SAVE_NB_PATH)
                         print(errors)
                         assert len(errors) == 0
 
