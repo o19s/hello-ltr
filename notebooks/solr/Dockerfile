@@ -1,12 +1,12 @@
-FROM solr:7.7.1
+FROM solr:8.5.1
 
 USER root
 
-ADD tmdb/solr_config server/solr/configsets/tmdb
-RUN chown solr:solr server/solr/configsets/tmdb
+ADD tmdb/solr_config /var/solr/data/configsets/tmdb
+RUN chown solr:solr /var/solr/data/configsets/tmdb
 
-ADD msmarco/solr_config server/solr/configsets/msmarco
-RUN chown solr:solr server/solr/configsets/msmarco
+ADD msmarco/solr_config /var/solr/data/configsets/msmarco
+RUN chown solr:solr /var/solr/data/configsets/msmarco
 
 USER solr
 

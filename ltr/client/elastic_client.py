@@ -69,14 +69,13 @@ class ElasticClient(BaseClient):
             resp = self.es.indices.create(index, body=settings)
             resp_msg(msg="Created index {}".format(index), resp=ElasticResp(resp))
 
-    def index_documents(self, index, doc_type, doc_src):
+    def index_documents(self, index, doc_src):
 
         def bulkDocs(doc_src):
             for doc in doc_src:
                 if 'id' not in doc:
                     raise ValueError("Expecting docs to have field 'id' that uniquely identifies document")
                 addCmd = {"_index": index,
-                          "_type": doc_type,
                           "_id": doc['id'],
                           "_source": doc}
                 yield addCmd
@@ -230,8 +229,8 @@ class ElasticClient(BaseClient):
 
         return mapping, rawFeatureSet
 
-    def get_doc(self, doc_id, index, doc_type='movie'):
-        resp = self.es.get(index=index, doc_type=doc_type, id=doc_id)
+    def get_doc(self, doc_id, index):
+        resp = self.es.get(index=index, id=doc_id)
         #resp_msg(msg="Fetched Doc".format(docId), resp=ElasticResp(resp), throw=False)
         return resp['_source']
 
