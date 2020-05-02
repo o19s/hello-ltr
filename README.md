@@ -57,3 +57,11 @@ __Note:__ The above commands should be run from the root folder of the project.
 - Browse to notebooks/{search\_engine}/{collection} 
 - Open either the "hello-ltr (Solr)" or "hello-ltr (ES)" as appropriate and ensure you get a graph at the last cell
 
+## Tests
+To test the functionality of the notebooks:
+
+- Startup the Solr and ES Docker containers
+- Run the command:
+`python tests/run_most_nbs.py`
+- Tests fail if notebooks return any errors
+  - The failing notebook will be stored at `tests/last_run.ipynb`

@@ -43,9 +43,13 @@ class SolrClient(BaseClient):
         resp_msg(msg="Created index {}".format(index), resp=resp)
 
     def index_documents(self, index, doc_type, doc_src):
+        def commit():
+            resp = requests.get('{}/{}/update?commit=true'.format(self.solr_base_ep, index))
+            resp_msg(msg="Committed index {}".format(index), resp=resp)
+
         def flush(docs):
             print('Flushing {} docs'.format(len(docs)))
-            resp = requests.post('{}/{}/update?commitWithin=2500'.format(
+            resp = requests.post('{}/{}/update'.format(
                 self.solr_base_ep, index), json=docs)
             resp_msg(msg="Done", resp=resp)
             docs.clear()
@@ -62,6 +66,7 @@ class SolrClient(BaseClient):
                 flush(docs)
 
         flush(docs)
+        commit()
 
     def reset_ltr(self, index):
         models = self.get_models(index)

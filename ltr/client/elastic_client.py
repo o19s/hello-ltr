@@ -82,6 +82,7 @@ class ElasticClient(BaseClient):
                 yield addCmd
 
         resp = elasticsearch.helpers.bulk(self.es, bulkDocs(doc_src), chunk_size=100)
+        self.es.indices.refresh(index=index)
         resp_msg(msg="Streaming Bulk index DONE {}".format(index), resp=BulkResp(resp))
 
     def reset_ltr(self, index):
