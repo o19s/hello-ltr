@@ -9,12 +9,10 @@ RUN apt-get update && \
 RUN useradd -ms /bin/bash ltr 
 WORKDIR /home/ltr
 
-# Clone repo and pull requirements
-#RUN git clone https://github.com/o19s/hello-ltr
+# Make current directory accesible
+ADD . /home/ltr/hello-ltr
 
-# To debug a branch, comment the above line and run this instead
-RUN git clone --single-branch --branch fix/raw_url_hosts https://github.com/o19s/hello-ltr
-
+# Install requirements
 RUN chown -R ltr.ltr hello-ltr
 WORKDIR /home/ltr/hello-ltr
 

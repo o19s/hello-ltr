@@ -1,8 +1,19 @@
 import requests
+from os import path
 
 def download_uri(uri):
+    import os
+
+    if not os.path.exists('data'):
+        os.makedirs('data')
+
     filename = uri[uri.rfind('/') + 1:]
-    with open('data/{}'.format(filename), 'wb') as out:
+    filepath = 'data/{}'.format(filename)
+    if path.exists(filepath):
+        print(filepath + ' already exists')
+        return
+
+    with open(filepath, 'wb') as out:
         print('GET {}'.format(uri))
         resp = requests.get(uri, stream=True)
         for chunk in resp.iter_content(chunk_size=1024):
@@ -29,10 +40,9 @@ def download():
 def download_msmarco():
     resources = [
         'https://msmarco.blob.core.windows.net/msmarcoranking/msmarco-docs.tsv.gz',
-        'https://msmarco.blob.core.windows.net/msmarcoranking/msmarco-docs-lookup.tsv',
-        'https://msmarco.blob.core.windows.net/msmarcoranking/msmarco-doctrain-qrels.tsv',
-        'https://msmarco.blob.core.windows.net/msmarcoranking/msmarco-doctrain-queries.tsv']
-
+        'https://msmarco.blob.core.windows.net/msmarcoranking/msmarco-docs-lookup.tsv.gz',
+        'https://msmarco.blob.core.windows.net/msmarcoranking/msmarco-doctrain-qrels.tsv.gz',
+        'https://msmarco.blob.core.windows.net/msmarcoranking/msmarco-doctrain-queries.tsv.gz']
     for uri in resources:
         download_uri(uri)
 

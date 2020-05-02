@@ -1,4 +1,5 @@
 import csv
+import gzip
 
 
 class QRel():
@@ -21,13 +22,13 @@ class QRel():
         return 0.0
 
     @staticmethod
-    def read_qrels(qrels_fname='data/msmarco-doctrain-qrels.tsv',
-                   queries_fname='data/msmarco-doctrain-queries.tsv'):
+    def read_qrels(qrels_fname='data/msmarco-doctrain-qrels.tsv.gz',
+                   queries_fname='data/msmarco-doctrain-queries.tsv.gz'):
 
         qids_to_keywords = QRel.get_keyword_lookup(queries_fname)
 
-        with open(qrels_fname) as f:
-            reader = csv.reader(f, delimiter='\t')
+        with gzip.open(qrels_fname, 'rt') as f:
+            reader = csv.reader(f, delimiter=' ')
             for row in reader:
                 qid = row[0]
                 keywords = None
@@ -38,9 +39,9 @@ class QRel():
                 yield QRel(qid=row[0], docid=row[2], keywords=keywords)
 
     @staticmethod
-    def get_keyword_lookup(fname='data/msmarco-doctrain-queries.tsv'):
+    def get_keyword_lookup(fname='data/msmarco-doctrain-queries.tsv.gz'):
         qids_to_keywords = {}
-        with open(fname) as f:
+        with gzip.open(fname, 'rt') as f:
             reader = csv.reader(f, delimiter='\t')
             for row in reader:
                 qids_to_keywords[row[0]] = row[1]
