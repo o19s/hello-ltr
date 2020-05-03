@@ -59,7 +59,7 @@ __Note:__ The above commands should be run from the root folder of the project.
 
 ## Tests
 
-### Automatically
+### Automatically run everything...
 
 To run a full suite of tests, such as to verify a PR, you can simply run
 
@@ -71,7 +71,7 @@ Optionally with containers rebuilt
 
 Failing tests will have their output in `tests/last_run.ipynb`
 
-### Manually
+### While developing...
 
 For more informal development:
 
