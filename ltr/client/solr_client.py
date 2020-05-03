@@ -47,7 +47,7 @@ class SolrClient(BaseClient):
         resp = requests.get('{}/admin/cores?'.format(self.solr_base_ep), params=params)
         resp_msg(msg="Created index {}".format(index), resp=resp)
 
-    def index_documents(self, index, doc_type, doc_src):
+    def index_documents(self, index, doc_src):
         def commit():
             resp = requests.get('{}/{}/update?commit=true'.format(self.solr_base_ep, index))
             resp_msg(msg="Committed index {}".format(index), resp=resp)
