@@ -58,10 +58,26 @@ __Note:__ The above commands should be run from the root folder of the project.
 - Open either the "hello-ltr (Solr)" or "hello-ltr (ES)" as appropriate and ensure you get a graph at the last cell
 
 ## Tests
-To test the functionality of the notebooks:
+
+### Automatically
+
+To run a full suite of tests, such as to verify a PR, you can simply run
+
+./tests/test.sh
+
+Optionally with containers rebuilt
+
+./tests/test.sh --rebuild_containers
+
+Failing tests will have their output in `tests/last_run.ipynb`
+
+### Manually
+
+For more informal development:
 
 - Startup the Solr and ES Docker containers
-- Run the command:
+- Do your development
+- Run the command as needed:
 `python tests/run_most_nbs.py`
 - Tests fail if notebooks return any errors
   - The failing notebook will be stored at `tests/last_run.ipynb`
