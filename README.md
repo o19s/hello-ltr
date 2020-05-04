@@ -67,7 +67,7 @@ To run a full suite of tests, such as to verify a PR, you can simply run
 
 Optionally with containers rebuilt
 
-./tests/test.sh --rebuild_containers
+./tests/test.sh --rebuild-containers
 
 Failing tests will have their output in `tests/last_run.ipynb`
 

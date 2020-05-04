@@ -6,7 +6,7 @@ REBUILD_CONTAINERS=false
 for ARGUMENT in "$@"
 do
     echo $ARGUMENT
-    if [ "$ARGUMENT" == "--rebuild_containers" ]; then
+    if [ "$ARGUMENT" == "--rebuild-containers" ]; then
         REBUILD_CONTAINERS=true
     fi
 done
@@ -54,7 +54,7 @@ rm -rf tests_venv
 
 # Teardown Docker
 cd notebooks/solr
-docker-compose down 
+docker-compose down
 cd ../../notebooks/elasticsearch
 docker-compose down
 
@@ -65,7 +65,7 @@ then
    echo "> WOOHOO!  Tests Passed 👍 For:"
 else
    echo "================================================"
-   echo "> POOP!    Tests Failed 💩 For:" 
+   echo "> POOP!    Tests Failed 💩 For:"
 fi
 git log -n 1
 echo "================================================"
