@@ -10,6 +10,9 @@ from abc import ABC, abstractmethod
     their specific platform
 '''
 class BaseClient(ABC):
+    @abstractmethod
+    def get_host(self):
+        pass
 
     @abstractmethod
     def name(self):

@@ -53,6 +53,9 @@ class ElasticClient(BaseClient):
         self.elastic_ep = 'http://{}:9200/_ltr'.format(self.host)
         self.es = Elasticsearch('http://{}:9200'.format(self.host))
 
+    def get_host(self):
+        return self.host
+
     def name(self):
         return "elastic"
 
