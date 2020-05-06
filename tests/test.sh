@@ -1,13 +1,16 @@
-#!/bin/sh
-TESTS="python tests/run_most_nbs.py"
+#!/bin/bash
+TESTS="python tests/fail.py"
 # To test this script...
 #$TESTS=python tests/fail.py
 REBUILD_CONTAINERS=false
 for ARGUMENT in "$@"
 do
-    echo $ARGUMENT
-    if [ "$ARGUMENT" == "--rebuild-containers" ]; then
+    KEY=`echo $ARGUMENT | cut -d '=' -f 1`
+    if [ "$KEY" == "--rebuild-containers" ]; then
         REBUILD_CONTAINERS=true
+    fi
+    if [ "$KEY" == "--test-command" ]; then
+        TESTS=`echo $ARGUMENT | cut -d '=' -f 2`
     fi
 done
 
