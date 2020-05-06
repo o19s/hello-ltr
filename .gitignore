@@ -10,3 +10,4 @@ tests/last_run.ipynb
 features.txt
 .trash
 .DS_store
+notify.sh
