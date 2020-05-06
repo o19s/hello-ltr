@@ -1,7 +1,6 @@
 #!/bin/bash
-TESTS="python tests/fail.py"
+TESTS="pooton"
 # To test this script...
-#$TESTS=python tests/fail.py
 REBUILD_CONTAINERS=false
 for ARGUMENT in "$@"
 do
@@ -46,7 +45,7 @@ echo "================================================"
 echo "== RUN TESTS: "
 echo "== $TESTS "
 # Tests & save result...!
-$TESTS
+python $TESTS
 TESTS_CODE="$?"
 echo "================================================"
 echo "== TEARDOWN "
