@@ -1,5 +1,5 @@
 #!/bin/bash
-TESTS="pooton"
+TESTS="tests/run_most_nbs.py"
 # To test this script...
 REBUILD_CONTAINERS=false
 for ARGUMENT in "$@"
