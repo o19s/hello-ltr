@@ -1,7 +1,8 @@
 #!/bin/bash
 TESTS="tests/run_most_nbs.py"
-# To test this script...
 REBUILD_CONTAINERS=false
+
+# Parse any args...
 for ARGUMENT in "$@"
 do
     KEY=`echo $ARGUMENT | cut -d '=' -f 1`
@@ -10,6 +11,33 @@ do
     fi
     if [ "$KEY" == "--test-command" ]; then
         TESTS=`echo $ARGUMENT | cut -d '=' -f 2`
+    fi
+done
+
+# 
+if test -f $TESTS; then
+    echo "Running Tests: $TESTS - FOUND!"
+else
+    echo "================================================"
+    echo "> POOP!   Bad Argument for --test-command 😾:"
+    echo "> File $TESTS Missing  "
+    exit 1
+fi
+
+# Confirm needed Requirements are present here
+# TODO: may need to check version in future
+COMMANDS=( 'docker-compose' 'pyvenv' 'python3' 'python' 'pip3')
+
+for COMMAND in "${COMMANDS[@]}"
+do
+    echo "Checking for command $COMMAND"
+    if [[ `command -v $COMMAND` ]]; then
+        echo "$COMMAND Present"
+    else
+        echo "================================================"
+        echo "> POOP!   Fix Yer Environment ⚙️  For:"
+        echo "> $COMMAND Missing - Please Install!"
+        exit 1
     fi
 done
 
@@ -45,7 +73,7 @@ echo "================================================"
 echo "== RUN TESTS: "
 echo "== $TESTS "
 # Tests & save result...!
-python $TESTS
+python3 $TESTS
 TESTS_CODE="$?"
 echo "================================================"
 echo "== TEARDOWN "
