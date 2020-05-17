@@ -34,7 +34,7 @@ def trainModel(training, out, features=None, kcv=None, ranker=6,
 def save_model(client, modelName, modelFile, index, featureSet):
     with open(modelFile) as src:
         definition = src.read()
-        client.submit_model(featureSet, index, modelName, definition)
+        client.submit_ranklib_model(featureSet, index, modelName, definition)
 
 
 def train(client, trainingInFile, modelName, featureSet,

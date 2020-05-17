@@ -55,6 +55,10 @@ class BaseClient(ABC):
         pass
 
     @abstractmethod
+    def submit_ranklib_model(self, featureset, index, model_name, model_payload):
+        pass
+
+    @abstractmethod
     def model_query(self, index, model, model_params, query):
         pass
 

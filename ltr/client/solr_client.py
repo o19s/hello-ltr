@@ -136,9 +136,16 @@ class SolrClient(BaseClient):
 
         return resp['response']['docs']
 
+    def submit_model(self, featureset, index, model_name, solr_model):
+        url = '{}/{}/schema/model-store'.format(self.solr_base_ep, index)
+        resp = requests.delete('{}/{}'.format(url, model_name))
+        resp_msg(msg='Deleted Model {}'.format(model_name), resp=resp)
 
-    def submit_model(self, featureset, index, model_name, model_payload):
-        # Fetch feature metadata
+        resp = requests.put(url, json=solr_model)
+        resp_msg(msg='Created Model {}'.format(model_name), resp=resp)
+
+    def submit_ranklib_model(self, featureset, index, model_name, model_payload):
+        """ Submits a Ranklib model, converting it to Solr representation """
         resp = requests.get('{}/{}/schema/feature-store/{}'.format(self.solr_base_ep, index, featureset))
         resp_msg(msg='Submit Model {} Ftr Set {}'.format(model_name, featureset), resp=resp)
         metadata = resp.json()
@@ -151,14 +158,9 @@ class SolrClient(BaseClient):
         feature_mapping, _ = self.feature_set(index, featureset)
 
         solr_model = convert(model_payload, model_name, featureset, feature_mapping)
-
-        url = '{}/{}/schema/model-store'.format(self.solr_base_ep, index)
-        resp = requests.delete('{}/{}'.format(url, model_name))
-        resp_msg(msg='Deleted Model {}'.format(model_name), resp=resp)
-
-        resp = requests.put(url, json=solr_model)
-        resp_msg(msg='Created Model {}'.format(model_name), resp=resp)
-
+        import json
+        print(json.dumps(solr_model))
+        self.submit_model_raw(featureset, index, model_name, solr_model)
 
     def model_query(self, index, model, model_params, query):
         url = '{}/{}/select?'.format(self.solr_base_ep, index)
