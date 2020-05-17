@@ -172,7 +172,7 @@ class ElasticClient(BaseClient):
                 }
             }
         }
-        self.submit_model_raw(featureset, index, model_name, params)
+        self.submit_model(featureset, index, model_name, params)
 
     def model_query(self, index, model, model_params, query):
         params = {

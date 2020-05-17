@@ -158,9 +158,7 @@ class SolrClient(BaseClient):
         feature_mapping, _ = self.feature_set(index, featureset)
 
         solr_model = convert(model_payload, model_name, featureset, feature_mapping)
-        import json
-        print(json.dumps(solr_model))
-        self.submit_model_raw(featureset, index, model_name, solr_model)
+        self.submit_model(featureset, index, model_name, solr_model)
 
     def model_query(self, index, model, model_params, query):
         url = '{}/{}/select?'.format(self.solr_base_ep, index)
