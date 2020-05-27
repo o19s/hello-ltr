@@ -152,8 +152,6 @@ class ElasticClient(BaseClient):
 
         return matches
 
-
-
     def submit_model(self, featureset, index, model_name, model_payload):
         model_ep = "{}/_model/".format(self.elastic_ep)
         create_ep = "{}/_featureset/{}/_createmodel".format(self.elastic_ep, featureset)
@@ -161,6 +159,10 @@ class ElasticClient(BaseClient):
         resp = requests.delete('{}{}'.format(model_ep, model_name))
         print('Delete model {}: {}'.format(model_name, resp.status_code))
 
+        resp = requests.post(create_ep, json=model_payload)
+        resp_msg(msg="Created Model {}".format(model_name), resp=resp)
+
+    def submit_ranklib_model(self, featureset, index, model_name, model_payload):
         params = {
             'model': {
                 'name': model_name,
@@ -170,10 +172,7 @@ class ElasticClient(BaseClient):
                 }
             }
         }
-
-        resp = requests.post(create_ep, json=params)
-        resp_msg(msg="Created Model {}".format(model_name), resp=resp)
-
+        self.submit_model(featureset, index, model_name, params)
 
     def model_query(self, index, model, model_params, query):
         params = {
