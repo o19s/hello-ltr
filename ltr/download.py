@@ -28,6 +28,7 @@ def download():
         'http://es-learn-to-rank.labs.o19s.com/osc_judgments.txt',
         'http://es-learn-to-rank.labs.o19s.com/RankyMcRankFace.jar',
         'http://es-learn-to-rank.labs.o19s.com/title_judgments.txt',
+        'http://es-learn-to-rank.labs.o19s.com/title_judgments_binary.txt',
         'http://es-learn-to-rank.labs.o19s.com/genome_judgments.txt',
         'http://es-learn-to-rank.labs.o19s.com/sample_judgments_train.txt'
     ]
