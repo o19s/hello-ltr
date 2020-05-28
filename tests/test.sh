@@ -52,6 +52,7 @@ else
 fi
 docker-compose up -d
 
+
 # Setup docker, ES
 cd ../elasticsearch
 echo "Launch ES"
@@ -63,6 +64,38 @@ else
 fi
 docker-compose up -d
 cd ../..
+
+# Are all services Running?
+# If not, fail...
+function test_http_service () {
+    i=0
+    sleep_for=5
+    wait_up_to=300
+    echo "Waiting for $2"
+    until $(curl --output /dev/null --silent --head --fail http://localhost:$1); do     
+        ((waited=i*sleep_for))
+        printf "$waited,";   
+        sleep $sleep_for;
+        if [[ "$waited" -ge "$wait_up_to" ]]; then
+            echo "ERROR - $2 did not start after $wait_up_to seconds"
+            echo "TEARDOWN CONTAINERS"
+            cd notebooks/elasticsearch
+            docker-compose down -v
+            cd ../..
+            cd notebooks/solr
+            docker-compose down -v
+            cd ../..
+            exit 1
+        fi
+        ((i++))
+    done
+    echo "$2 Started"
+}
+test_http_service 9200 Elastic
+test_http_service 5601 Kibana
+test_http_service 8983 Solr
+
+exit
 
 # Rebuild venv
 pyvenv tests_venv
@@ -84,9 +117,9 @@ rm -rf tests_venv
 
 # Teardown Docker
 cd notebooks/solr
-docker-compose down
+docker-compose down -v
 cd ../../notebooks/elasticsearch
-docker-compose down
+docker-compose down -v
 
 echo "=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*"
 if [ "$TESTS_CODE" == "0" ]
