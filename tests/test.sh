@@ -46,6 +46,7 @@ echo "Launch Solr"
 cd notebooks/solr
 if "$REBUILD_CONTAINERS" = true; then
     echo "Rebuild Solr Containers, as requested"
+    docker-compose down -v
     docker-compose build
 else
     echo "Skip Solr Container Rebuild"
@@ -58,6 +59,7 @@ cd ../elasticsearch
 echo "Launch ES"
 if "$REBUILD_CONTAINERS" = true; then
     echo "Rebuild ES Containers, as requested"
+    docker-compose down -v
     docker-compose build
 else
     echo "Skip ES Container Rebuild"
