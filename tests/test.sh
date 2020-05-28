@@ -97,8 +97,6 @@ test_http_service 9200 Elastic
 test_http_service 5601 Kibana
 test_http_service 8983 Solr
 
-exit
-
 # Rebuild venv
 pyvenv tests_venv
 source tests_venv/bin/activate
