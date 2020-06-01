@@ -24,6 +24,7 @@ def download_uri(uri):
 def download():
     resources = [
         'http://es-learn-to-rank.labs.o19s.com/tmdb.json',
+        'http://es-learn-to-rank.labs.o19s.com/tmdb_2020-05-20.json',
         'http://es-learn-to-rank.labs.o19s.com/blog.jsonl',
         'http://es-learn-to-rank.labs.o19s.com/osc_judgments.txt',
         'http://es-learn-to-rank.labs.o19s.com/RankyMcRankFace.jar',
