@@ -1,17 +1,22 @@
 import requests
 from os import path
 
-def download_uri(uri):
+def download_one(uri, dest='data/', force=False):
     import os
 
-    if not os.path.exists('data'):
-        os.makedirs('data')
+    if not os.path.exists(dest):
+        os.makedirs(dest)
+
+    if not os.path.isdir(dest):
+        raise ValueError("dest {} is not a directory".format(dest))
 
     filename = uri[uri.rfind('/') + 1:]
-    filepath = 'data/{}'.format(filename)
+    filepath = os.path.join(dest, filename)
     if path.exists(filepath):
-        print(filepath + ' already exists')
-        return
+        if not force:
+            print(filepath + ' already exists')
+            return
+        print("exists but force=True, Downloading anyway")
 
     with open(filepath, 'wb') as out:
         print('GET {}'.format(uri))
@@ -20,8 +25,12 @@ def download_uri(uri):
             if chunk:
                 out.write(chunk)
 
+def download(uris, dest='data/', force=False):
+    for uri in uris:
+        download_one(uri=uri, dest=dest, force=force)
 
-def download():
+
+def download_tmdb(force=False):
     resources = [
         'http://es-learn-to-rank.labs.o19s.com/tmdb.json',
         'http://es-learn-to-rank.labs.o19s.com/tmdb_2020-05-20.json',
@@ -34,19 +43,15 @@ def download():
         'http://es-learn-to-rank.labs.o19s.com/sample_judgments_train.txt'
     ]
 
-    for uri in resources:
-        download_uri(uri)
-
+    download(resources)
     print('Done.')
 
-def download_msmarco():
+def download_msmarco(force=False):
     resources = [
         'https://msmarco.blob.core.windows.net/msmarcoranking/msmarco-docs.tsv.gz',
         'https://msmarco.blob.core.windows.net/msmarcoranking/msmarco-docs-lookup.tsv.gz',
         'https://msmarco.blob.core.windows.net/msmarcoranking/msmarco-doctrain-qrels.tsv.gz',
         'https://msmarco.blob.core.windows.net/msmarcoranking/msmarco-doctrain-queries.tsv.gz']
-    for uri in resources:
-        download_uri(uri)
-
+    download(resources)
     print('Done.')
 
