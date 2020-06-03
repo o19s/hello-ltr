@@ -90,10 +90,10 @@ class SolrClient(BaseClient):
             if 'store' not in feature or feature['store'] != name:
                 raise ValueError("Feature {} needs to be created with \"store\": \"{}\" ".format(feature['name'], name))
 
-    def create_featureset(self, index, name, feature_set):
-        self.validate_featureset(name, feature_set)
+    def create_featureset(self, index, name, ftr_config):
+        self.validate_featureset(name, ftr_config)
         resp = requests.put('{}/{}/schema/feature-store'.format(
-            self.solr_base_ep, index, name), json=feature_set)
+            self.solr_base_ep, index, name), json=ftr_config)
         resp_msg(msg='Created {} feature store under {}:'.format(name, index), resp=resp)
 
 

@@ -3,5 +3,4 @@
 from .download import download
 from .evaluate import evaluate, rre_table
 from .train import train
-from .setup import setup
 from .search import search
