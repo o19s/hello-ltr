@@ -8,7 +8,8 @@ except ImportError:
 
 
 def typoIt(judgmentInFile, judgmentOutFile, rounds=100):
-    currJudgments = [judg for judg in judgments_from_file(judgmentInFile)]
+    with open(judgmentInFile) as f:
+        currJudgments = [judg for judg in judgments_from_file(f)]
     lastQid = currJudgments[-1].qid
     judgDict = judgments_by_qid(currJudgments)
 
@@ -32,7 +33,8 @@ def typoIt(judgmentInFile, judgmentOutFile, rounds=100):
                     currJudgments.append(typoJudg)
                 existingTypos.add(keywordsWTypo)
 
-    judgments_to_file(filename=judgmentOutFile, judgmentsList=currJudgments)
+    with open(judgmentOutFile, 'w') as f:
+        judgments_to_file(f, judgmentsList=currJudgments)
 
 
 if __name__ == "__main__":

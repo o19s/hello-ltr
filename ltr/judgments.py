@@ -113,30 +113,33 @@ def _judgmentsFromBody(lines):
             #print("Not Recognized as Judgment %s" % line)
 
 
-def judgments_from_file(filename):
-    with open(filename) as f:
-        qidToKeywords = _queriesFromHeader(f)
-    with open(filename) as f:
-        lastQid = -1
-        for grade, qid, docId, features in _judgmentsFromBody(f):
-            if lastQid != qid and qid % 100 == 0:
-                print("Parsing QID %s" % qid)
-            yield Judgment(grade=grade, qid=qid,
-                           keywords=qidToKeywords[qid][0],
-                           weight=qidToKeywords[qid][1],
-                           docId=docId,
-                           features=features)
-            lastQid = qid
+def judgments_from_file(f):
+    """ Read judgments from a SVMRank File
+        f is a file object
+    """
+    qidToKeywords = _queriesFromHeader(f)
+    lastQid = -1
+    for grade, qid, docId, features in _judgmentsFromBody(f):
+        if lastQid != qid and qid % 100 == 0:
+            print("Parsing QID %s" % qid)
+        yield Judgment(grade=grade, qid=qid,
+                       keywords=qidToKeywords[qid][0],
+                       weight=qidToKeywords[qid][1],
+                       docId=docId,
+                       features=features)
+        lastQid = qid
 
 
-def judgments_to_file(filename, judgmentsList):
+def judgments_to_file(f, judgmentsList):
+    """ Write judgments from a SVMRank File
+        f is a file object
+    """
     judgToQid = judgments_by_qid(judgmentsList) #Pretty hideosly slow stuff
     fileHeader = _queriesToHeader({qid: (judgs[0].keywords, judgs[0].weight) for qid, judgs in judgToQid.items()})
     judgByQid = sorted(judgmentsList, key=lambda j: j.qid)
-    with open(filename, 'w+') as f:
-        f.write(fileHeader)
-        for judg in judgByQid:
-            f.write(judg.toRanklibFormat() + '\n')
+    f.write(fileHeader)
+    for judg in judgByQid:
+        f.write(judg.toRanklibFormat() + '\n')
 
 
 

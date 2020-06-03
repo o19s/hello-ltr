@@ -57,8 +57,10 @@ def log_features(client, index, judgments_by_qid, featureSet):
 def judgments_to_training_set(client, judgmentInFile, featureSet, trainingOutFile='judgments_wfeatures.txt', index='tmdb'):
     from .judgments import judgments_to_file, judgments_from_file, judgments_by_qid
 
-    judgments = judgments_from_file(judgmentInFile)
-    judgments = judgments_by_qid(judgments)
+    judgments = []
+    with open(judgmentInFile) as f:
+        judgments = judgments_from_file(f)
+        judgments = judgments_by_qid(judgments)
     log_features(client, index, judgments, featureSet=featureSet)
 
     judgmentsAsList = []
@@ -71,5 +73,6 @@ def judgments_to_training_set(client, judgmentInFile, featureSet, trainingOutFil
                 discarded.append(judgment)
     print("Discarded %s Keep %s" % (len(discarded), len(judgmentsAsList)))
 
-    judgments_to_file(filename=trainingOutFile, judgmentsList=judgmentsAsList)
+    with open(trainingOutFile, 'w+') as f:
+        judgments_to_file(f, judgmentsList=judgmentsAsList)
     return judgments

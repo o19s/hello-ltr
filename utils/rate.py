@@ -73,17 +73,18 @@ def load_judgments(judg_file):
     existingKws = set()
     last_qid = 0
     try:
-        currJudgments = [judg for judg in judgments_from_file(judg_file)]
-        existingKws = set([judg.keywords for judg in currJudgments])
-        judgDict = judgments_by_qid(currJudgments)
-        judgProfile = []
-        for qid, judglist in judgDict.items():
-            judgProfile.append((judglist[0], len(judglist)))
-        judgProfile.sort(key=lambda j: j[1], reverse=True)
-        for prof in judgProfile:
-            print("%s has %s judgments" % (prof[0].keywords, prof[1]))
+        with open(judg_file) as f:
+            currJudgments = [judg for judg in judgments_from_file(f)]
+            existingKws = set([judg.keywords for judg in currJudgments])
+            judgDict = judgments_by_qid(currJudgments)
+            judgProfile = []
+            for qid, judglist in judgDict.items():
+                judgProfile.append((judglist[0], len(judglist)))
+            judgProfile.sort(key=lambda j: j[1], reverse=True)
+            for prof in judgProfile:
+                print("%s has %s judgments" % (prof[0].keywords, prof[1]))
 
-        last_qid = currJudgments[-1].qid
+            last_qid = currJudgments[-1].qid
     except FileNotFoundError:
         pass
 
@@ -201,7 +202,8 @@ def rate_results():
 
         foldInNewRatings(full_judgments, orig_query_judgments, new_query_judgments)
 
-    judgments_to_file(judgFile, full_judgments)
+    with open(judgFile, 'w') as f:
+        judgments_to_file(f, full_judgments)
 
 
 
