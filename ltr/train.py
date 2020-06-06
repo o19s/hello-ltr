@@ -7,7 +7,6 @@ def check_for_rankymcrankface():
     ranky_url='http://es-learn-to-rank.labs.o19s.com/RankyMcRankFace.jar'
     import tempfile
     tempdir = tempfile.gettempdir()
-    import pdb; pdb.set_trace()
     download([ranky_url], dest=tempdir, force=False)
     return os.path.join(tempdir, 'RankyMcRankFace.jar')
 
