@@ -1,5 +1,15 @@
 import os
 from ltr.helpers.ranklib_result import parse_training_log
+from ltr import download
+
+def check_for_rankymcrankface():
+    """ Ensure ranky jar is in a temp dir somewhere..."""
+    ranky_url='http://es-learn-to-rank.labs.o19s.com/RankyMcRankFace.jar'
+    import tempfile
+    tempdir = tempfile.gettempdir()
+    import pdb; pdb.set_trace()
+    download([ranky_url], dest=tempdir, force=False)
+    return os.path.join(tempdir, 'RankyMcRankFace.jar')
 
 
 def trainModel(training, out, features=None, kcv=None, ranker=6,
@@ -15,8 +25,9 @@ def trainModel(training, out, features=None, kcv=None, ranker=6,
         srate - what proportion of the queries should be examined for each ensemble
     """
 
-    cmd = 'java -jar data/RankyMcRankFace.jar -ranker {} -shrinkage {} -metric2t {} -tree {} -bag {} -leaf {} -frate {} -srate {} -train {} -save {} '.format(
-            ranker, shrinkage, metric2t, trees, bag, leafs, frate, srate, training, out)
+    ranky_loc = check_for_rankymcrankface()
+    cmd = 'java -jar {} -ranker {} -shrinkage {} -metric2t {} -tree {} -bag {} -leaf {} -frate {} -srate {} -train {} -save {} '.format(
+            ranky_loc, ranker, shrinkage, metric2t, trees, bag, leafs, frate, srate, training, out)
 
     if features is not None:
         with open('data/features.txt', 'w') as f:
