@@ -134,7 +134,8 @@ def judgments_to_file(f, judgmentsList):
     """ Write judgments from a SVMRank File
         f is a file object
     """
-    judgToQid = judgments_by_qid(judgmentsList) #Pretty hideosly slow stuff
+    # TODO - consider if a groupby approach would work instead of needing everything in memory
+    judgToQid = _judgments_by_qid(judgmentsList) #Pretty hideosly slow stuff
     fileHeader = _queriesToHeader({qid: (judgs[0].keywords, judgs[0].weight) for qid, judgs in judgToQid.items()})
     judgByQid = sorted(judgmentsList, key=lambda j: j.qid)
     f.write(fileHeader)
@@ -144,7 +145,9 @@ def judgments_to_file(f, judgmentsList):
 
 
 
-def judgments_by_qid(judgments):
+def _judgments_by_qid(judgments):
+    """ Create a dictionary of qid->judgments
+        Prefer itertools groupby"""
     rVal = {}
     for judgment in judgments:
         try:

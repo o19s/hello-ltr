@@ -1,5 +1,5 @@
 import xml.etree.ElementTree as ET
-from ltr.judgments import judgments_by_qid
+from ltr.judgments import _judgments_by_qid
 
 def fold_whoopsies(whoopsies1, whoopsies2):
     """ Merge whoopsies2 into whoopsies1
@@ -161,7 +161,7 @@ class EvalReport:
         self.computeWhoopsies()
 
     def computeWhoopsies(self):
-        judgmentsByQid = judgments_by_qid(self.split.evals)
+        judgmentsByQid = _judgments_by_qid(self.split.evals)
         report = []
         for qid, judgList in judgmentsByQid.items():
             if len(judgList) > 1:
