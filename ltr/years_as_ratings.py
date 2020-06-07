@@ -23,6 +23,7 @@ def get_latest_rating(year):
         return 0
 
 def synthesize(client, featureSet='release', latestTrainingSetOut='data/latest-training.txt', classicTrainingSetOut='data/classic-training.txt'):
+    from ltr.judgments import judgments_to_file, Judgment
     print('Generating ratings for classic and latest model')
     NO_ZERO = False
 
@@ -36,24 +37,30 @@ def synthesize(client, featureSet='release', latestTrainingSetOut='data/latest-t
         docs.append([feature]) # Treat features as ordered lists
 
     # Classic film fan
+    judgments = []
+    for fv in docs:
+        rating = get_classic_rating(fv[0])
+
+        if rating == 0 and NO_ZERO:
+            continue
+
+        judgments.append(Judgment(qid=1,docId=rating,grade=rating,features=fv,keywords=''))
+
     with open(classicTrainingSetOut, 'w') as out:
-        for fv in docs:
-            rating = get_classic_rating(fv[0])
+        judgments_to_file(out, judgments)
 
-            if rating == 0 and NO_ZERO:
-                continue
+    judgments = []
+    for fv in docs:
+        rating = get_latest_rating(fv[0])
 
-            out.write("{}\tqid:1\t1:{}\n".format(rating, fv[0]))
+        if rating == 0 and NO_ZERO:
+            continue
 
-    # Newer film fan
+        judgments.append(Judgment(qid=1,docId=rating,grade=rating,features=fv,keywords=''))
+
+
     with open(latestTrainingSetOut, 'w') as out:
-        for fv in docs:
-            rating = get_latest_rating(fv[0])
-
-            if rating == 0 and NO_ZERO:
-                continue
-
-            out.write("{}\tqid:1\t1:{}\n".format(rating, fv[0]))
+        judgments_to_file(out, judgments)
 
     print('Done')
 
