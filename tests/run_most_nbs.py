@@ -3,10 +3,10 @@ import unittest
 
 class RunMostNotebooksTestCase(NotebooksTestCase):
 
-    TEST_PATHS = ['./notebooks/',
-                  './notebooks/solr/tmdb',
-                  './notebooks/elasticsearch/tmdb',
-                  './notebooks/elasticsearch/osc-blog']
+    TEST_PATHS = [#'./notebooks/',
+                  './notebooks/solr/tmdb']
+                  #'./notebooks/elasticsearch/tmdb',
+                  #'./notebooks/elasticsearch/osc-blog']
 
     IGNORED_NBS = ['./notebooks/solr/tmdb/evaluation (Solr).ipynb',
                    './notebooks/elasticsearch/tmdb/evaluation.ipynb']
