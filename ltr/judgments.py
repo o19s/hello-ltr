@@ -1,4 +1,68 @@
 import re
+from contextlib import contextmanager
+
+class JudgmentsWriter:
+    """ Wraps writing to file descriptor for
+        a list of judgments """
+    def __init__(self, f):
+        self.f = f
+        self.judgments=[]
+
+    def write(self, judgment=None, judgments=None):
+        if judgment is not None:
+            self.judgments.append(judgment)
+        elif judgments is not None:
+            self.judgments.extend(judgments)
+
+    def flush(self):
+        judgments_to_file(self.f, self.judgments)
+
+
+class JudgmentsReader:
+    """ Wraps reading from file descriptor for
+        lazy judgment reading..."""
+    def __init__(self, f):
+        self.f = f
+        self.judgments=judgments_from_file(f)
+
+    def __iter__(self):
+        return self.judgments
+
+
+@contextmanager
+def judgments_open(path=None, mode='r'):
+    """ Work with judgments from the filesystem,
+        either in a read or write mode"""
+    try:
+        f=open(path, mode)
+        if mode[0] == 'r':
+            yield JudgmentsReader(f)
+        elif mode[0] == 'w':
+            writer = JudgmentsWriter(f) # Its unfortunate we cannot yield from another context manager
+            yield writer
+            writer.flush()
+    finally:
+        f.close()
+
+@contextmanager
+def judgments_writer(f):
+    """ Write to a judgment list at
+        the provided file descripter (like StringIO)"""
+    try:
+        writer = JudgmentsWriter(f)
+        yield writer
+        writer.flush()
+    finally:
+        f.close()
+
+@contextmanager
+def judgments_reader(f):
+    """ Read from a judgment list at
+        the provided file descripter (like StringIO)"""
+    try:
+        yield JudgmentsReader(f)
+    finally:
+        f.close()
 
 class Judgment:
     def __init__(self, grade, qid, keywords, docId, features=[], weight=1):
@@ -58,7 +122,6 @@ def _queriesFromHeader(lines):
                     weight = int(keywordAndWeight[-1])
                 rVal[int(m.group(1))] = (keyword, weight)
         except ValueError as e:
-            import pdb; pdb.set_trace()
             print(e)
     print("Recognizing %s queries..." % len(rVal))
 
