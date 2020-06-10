@@ -38,7 +38,7 @@ def judgments_open(path=None, mode='r'):
         if mode[0] == 'r':
             yield JudgmentsReader(f)
         elif mode[0] == 'w':
-            writer = JudgmentsWriter(f) # Its unfortunate we cannot yield from another context manager
+            writer = JudgmentsWriter(f)
             yield writer
             writer.flush()
     finally:
@@ -183,6 +183,8 @@ def judgments_from_file(f):
     qidToKeywords = _queriesFromHeader(f)
     lastQid = -1
     for grade, qid, docId, features in _judgmentsFromBody(f):
+        if qid < lastQid:
+            raise ValueError("Judgments not sorted by qid in file")
         if lastQid != qid and qid % 100 == 0:
             print("Parsing QID %s" % qid)
         yield Judgment(grade=grade, qid=qid,

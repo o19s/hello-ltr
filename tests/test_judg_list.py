@@ -21,9 +21,10 @@ class JudgmentsTestCase(unittest.TestCase):
 
         judg_string_io=StringIO(judgment_list)
 
-        with judgments_reader(judg_string_io) as judg_list:
-            for j in judg_list:
-                print(j)
+        with self.assertRaises(ValueError):
+            with judgments_reader(judg_string_io) as judg_list:
+                for j in judg_list:
+                    print(j)
 
 
     def test_string_io_read(self):
@@ -40,36 +41,33 @@ class JudgmentsTestCase(unittest.TestCase):
 
         judg_string_io=StringIO(judgment_list)
         read_judgments=0
-
         with judgments_reader(judg_string_io) as judg_list:
             from itertools import groupby
             for qid, query_judgments in groupby(judg_list, key=lambda j: j.qid):
                 query_judgments = [j for j in query_judgments]
                 read_judgments += len(query_judgments)
                 if qid == 1:
-                    assert(len(query_judgments)==2)
+                    self.assertEqual(len(query_judgments),2)
                     for j in query_judgments:
-                        assert j.keywords=='rambo'
-                        assert j.qid==qid
+                        self.assertEqual(j.keywords,'rambo')
+                        self.assertEqual(j.qid,qid)
                         if j.docId == '1234':
-                            assert j.grade == 4
+                            self.assertEqual(j.grade, 4)
                         elif j.docId == '5670':
-                            assert j.grade == 3
+                            self.assertEqual(j.grade, 3)
                         else:
                             print("DocID:{} should not be present in qid:{}".format(j.docId, qid))
                             assert False
                 if qid == 2:
-                    assert(len(query_judgments)==1)
+                    self.assertEqual(len(query_judgments),1)
                     for j in query_judgments:
-                        assert j.keywords=='rocky ii'
-                        assert j.qid==qid
+                        self.assertEqual(j.keywords,'rocky ii')
+                        self.assertEqual(j.qid, qid)
                         if j.docId == '9876':
-                            assert j.grade == 1
+                            self.assertEqual(j.grade,1)
                         else:
-                            print("DocID:{} should not be present in qid:{}".format(j.docId, qid))
-                            assert False
-
-        assert read_judgments == 3
+                            self.fail("DocID:{} should not be present in qid:{}".format(j.docId, qid))
+        self.assertEqual(read_judgments,3)
 
     def test_write_read(self):
         from ltr.judgments import judgments_open, Judgment
@@ -85,32 +83,34 @@ class JudgmentsTestCase(unittest.TestCase):
             judg_list.write(judgment=Judgment(keywords='rambo', qid=1, grade=3, docId=5670))
             judg_list.write(judgment=Judgment(keywords='rocky ii', qid=2, grade=1, docId=9876))
 
+        read_judgments=0
         with judgments_open(judgment_file, 'r') as judg_list:
             from itertools import groupby
             for qid, query_judgments in groupby(judg_list, key=lambda j: j.qid):
                 query_judgments = [j for j in query_judgments]
+                read_judgments += len(query_judgments)
                 if qid == 1:
-                    assert(len(query_judgments)==2)
+                    self.assertEqual(len(query_judgments),2)
                     for j in query_judgments:
-                        assert j.keywords=='rambo'
-                        assert j.qid==qid
+                        self.assertEqual(j.keywords,'rambo')
+                        self.assertEqual(j.qid,qid)
                         if j.docId == '1234':
-                            assert j.grade == 4
+                            self.assertEqual(j.grade, 4)
                         elif j.docId == '5670':
-                            assert j.grade == 3
+                            self.assertEqual(j.grade, 3)
                         else:
                             print("DocID:{} should not be present in qid:{}".format(j.docId, qid))
                             assert False
                 if qid == 2:
-                    assert(len(query_judgments)==1)
+                    self.assertEqual(len(query_judgments),1)
                     for j in query_judgments:
-                        assert j.keywords=='rocky ii'
-                        assert j.qid==qid
+                        self.assertEqual(j.keywords,'rocky ii')
+                        self.assertEqual(j.qid, qid)
                         if j.docId == '9876':
-                            assert j.grade == 1
+                            self.assertEqual(j.grade,1)
                         else:
-                            print("DocID:{} should not be present in qid:{}".format(j.docId, qid))
-                            assert False
+                            self.fail("DocID:{} should not be present in qid:{}".format(j.docId, qid))
+        self.assertEqual(read_judgments,3)
 
 
 if __name__ == "__main__":
