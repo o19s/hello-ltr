@@ -93,7 +93,7 @@ def kcv(client, training_set, modelName, featureSet,
     """ Train and store a model into the search engine
         with the provided parameters"""
     modelFile='data/{}_model.txt'.format(modelName)
-    ranklibResult = trainModel(training=training_set,
+    ranklibResult = trainModel(training_set=training_set,
                                out=modelFile,
                                metric2t=metric2t,
                                features=features,
