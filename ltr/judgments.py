@@ -17,18 +17,6 @@ class JudgmentsWriter:
     def flush(self):
         judgments_to_file(self.f, self.judgments)
 
-
-class JudgmentsReader:
-    """ Wraps reading from file descriptor for
-        lazy judgment reading..."""
-    def __init__(self, f):
-        self.f = f
-        self.judgments=judgments_from_file(f)
-
-    def __iter__(self):
-        return self.judgments
-
-
 @contextmanager
 def judgments_open(path=None, mode='r'):
     """ Work with judgments from the filesystem,
@@ -36,7 +24,7 @@ def judgments_open(path=None, mode='r'):
     try:
         f=open(path, mode)
         if mode[0] == 'r':
-            yield JudgmentsReader(f)
+            yield judgments_from_file(f)
         elif mode[0] == 'w':
             writer = JudgmentsWriter(f)
             yield writer
@@ -60,7 +48,7 @@ def judgments_reader(f):
     """ Read from a judgment list at
         the provided file descripter (like StringIO)"""
     try:
-        yield JudgmentsReader(f)
+        yield judgments_from_file(f)
     finally:
         f.close()
 
