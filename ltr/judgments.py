@@ -39,9 +39,9 @@ def judgments_writer(f):
     try:
         writer = JudgmentsWriter(f)
         yield writer
-        writer.flush()
     finally:
-        f.close()
+        writer.flush()
+        pass
 
 @contextmanager
 def judgments_reader(f):
@@ -50,7 +50,7 @@ def judgments_reader(f):
     try:
         yield judgments_from_file(f)
     finally:
-        f.close()
+        pass
 
 class Judgment:
     def __init__(self, grade, qid, keywords, docId, features=[], weight=1):
