@@ -28,15 +28,3 @@ def download_one(uri, dest='data/', force=False):
 def download(uris, dest='data/', force=False):
     for uri in uris:
         download_one(uri=uri, dest=dest, force=force)
-
-
-
-def download_msmarco(force=False):
-    resources = [
-        'https://msmarco.blob.core.windows.net/msmarcoranking/msmarco-docs.tsv.gz',
-        'https://msmarco.blob.core.windows.net/msmarcoranking/msmarco-docs-lookup.tsv.gz',
-        'https://msmarco.blob.core.windows.net/msmarcoranking/msmarco-doctrain-qrels.tsv.gz',
-        'https://msmarco.blob.core.windows.net/msmarcoranking/msmarco-doctrain-queries.tsv.gz']
-    download(resources)
-    print('Done.')
-
