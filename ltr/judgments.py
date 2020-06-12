@@ -17,6 +17,21 @@ class JudgmentsWriter:
     def flush(self):
         judgments_to_file(self.f, self.judgments)
 
+
+class JudgmentsReader:
+    """ Wraps reading from file descriptor for
+     lazy judgment reading..."""
+    def __init__(self, f):
+        self.f = f
+        self.kw_with_weight = _queriesFromHeader(f)
+        self.judgments = _judgment_rows(f, self.kw_with_weight)
+
+    def keywords(self, qid):
+        return self.kw_with_weight[qid][0]
+
+    def __iter__(self):
+        return self.judgments
+
 @contextmanager
 def judgments_open(path=None, mode='r'):
     """ Work with judgments from the filesystem,
@@ -24,7 +39,7 @@ def judgments_open(path=None, mode='r'):
     try:
         f=open(path, mode)
         if mode[0] == 'r':
-            yield judgments_from_file(f)
+            yield JudgmentsReader(f)
         elif mode[0] == 'w':
             writer = JudgmentsWriter(f)
             yield writer
@@ -48,7 +63,7 @@ def judgments_reader(f):
     """ Read from a judgment list at
         the provided file descripter (like StringIO)"""
     try:
-        yield judgments_from_file(f)
+        yield JudgmentsReader(f)
     finally:
         pass
 
@@ -164,11 +179,7 @@ def _judgmentsFromBody(lines):
             #print("Not Recognized as Judgment %s" % line)
 
 
-def judgments_from_file(f):
-    """ Read judgments from a SVMRank File
-        f is a file object
-    """
-    qidToKeywords = _queriesFromHeader(f)
+def _judgment_rows(f, qidToKeywords):
     lastQid = -1
     for grade, qid, docId, features in _judgmentsFromBody(f):
         if qid < lastQid:
@@ -182,6 +193,13 @@ def judgments_from_file(f):
                        features=features)
         lastQid = qid
 
+
+def judgments_from_file(f):
+    """ Read judgments from a SVMRank File
+        f is a file object
+    """
+    qidToKeywords = _queriesFromHeader(f)
+    yield from _judgment_rows(f, qidToKeywords)
 
 def judgments_to_file(f, judgmentsList):
     """ Write judgments from a SVMRank File
