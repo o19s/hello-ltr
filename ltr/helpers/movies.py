@@ -13,23 +13,22 @@ class Memoize:
         return self.memo[args]
 
 @Memoize
-def load_movies():
-    return json.load(open('data/tmdb.json'))
+def load_movies(json_path):
+    return json.load(open(json_path))
 
-def get_movie(tmdb_id):
-    movies = load_movies()
+def get_movie(tmdb_id, movies='data/tmdb.json'):
+    movies = load_movies(movies)
     tmdb_id=str(tmdb_id)
     return movies[tmdb_id]
-
 
 def noop(src_movie, base_doc):
     return base_doc
 
 
-def indexable_movies(enrich=noop):
+def indexable_movies(enrich=noop, movies='data/tmdb.json'):
     """ Generates TMDB movies, similar to how ES Bulk indexing
-        uses a generator to generate bulk index/update actions """
-    movies = load_movies()
+    uses a generator to generate bulk index/update actions"""
+    movies = load_movies(movies)
     idx = 0
     for movieId, tmdbMovie in movies.items():
         try:
@@ -61,5 +60,3 @@ def indexable_movies(enrich=noop):
             idx += 1
         except KeyError as k: # Ignore any movies missing these attributes
             continue
-
-

@@ -93,8 +93,8 @@ class ElasticClient(BaseClient):
         resp = requests.put(self.elastic_ep)
         resp_msg(msg="Initialize Default LTR feature store".format(), resp=resp)
 
-    def create_featureset(self, index, name, config):
-        resp = requests.post('{}/_featureset/{}'.format(self.elastic_ep, name), json=config)
+    def create_featureset(self, index, name, ftr_config):
+        resp = requests.post('{}/_featureset/{}'.format(self.elastic_ep, name), json=ftr_config)
         resp_msg(msg="Create {} feature set".format(name), resp=resp)
 
     def log_query(self, index, featureset, ids, params={}):

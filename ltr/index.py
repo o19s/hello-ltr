@@ -17,8 +17,3 @@ def rebuild(client, index, doc_src):
                            doc_src=doc_src)
 
     print('Done')
-
-
-def rebuild_tmdb(client, enrich=noop):
-    movies=indexable_movies(enrich=enrich)
-    rebuild(client, index='tmdb', doc_src=movies)
