@@ -11,10 +11,10 @@ class FeatureLogger:
         self.index=index
         self.feature_set=feature_set
         self.drop_missing=drop_missing
-        self.logged_judgments=[]
+        self.logged=[]
 
     def clear(self):
-        self.logged_judgments=[]
+        self.logged=[]
 
     def log_for_qid(self, qid, judgments, keywords):
         """ Log a set of judgments associated with a single qid
@@ -81,5 +81,5 @@ class FeatureLogger:
             else:
                 training_set.append(judgment)
         print("Discarded %s Keep %s" % (len(discarded), len(training_set)))
-        self.logged_judgments.extend(training_set)
+        self.logged.extend(training_set)
         return training_set, discarded
