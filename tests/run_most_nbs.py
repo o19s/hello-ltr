@@ -3,8 +3,8 @@ import unittest
 
 class RunMostNotebooksTestCase(NotebooksTestCase):
 
-    TEST_PATHS = [#'./notebooks/',
-                  #'./notebooks/solr/tmdb']
+    TEST_PATHS = ['./notebooks/',
+                  './notebooks/solr/tmdb',
                   './notebooks/elasticsearch/tmdb',
                   './notebooks/elasticsearch/osc-blog']
 
