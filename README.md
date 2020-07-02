@@ -12,7 +12,13 @@ With docker & docker-compose simply run
 docker-compose up
 ```
 
-at the root dir and go to town! This will run jupyter and all search engines in Docker containers
+at the root dir and go to town!
+
+This will run jupyter and all search engines in Docker containers. Check that each is up at the default ports:
+
+- Elasticsearch: [localhost:9200](localhost:9200)
+- Kibana: [localhost:5601](localhost:5601)
+- Jupyter: [localhost:8888](localhost:8888)
 
 ## You want to build your own LTR notebooks
 
