@@ -11,7 +11,17 @@ def check_for_rankymcrankface():
     return os.path.join(tempdir, 'RankyMcRankFace.jar')
 
 
-def trainModel(training, out, features=None, kcv=None, ranker=6,
+def write_training_set(training_set):
+    import tempfile
+    from .judgments import judgments_to_file
+    tempdir = tempfile.gettempdir()
+    train_path = os.path.join(tempdir, 'training.txt')
+    with open(train_path, 'w') as outF:
+        judgments_to_file(outF, training_set)
+    return train_path
+
+
+def trainModel(training_set, out, features=None, kcv=None, ranker=6,
                leafs=10, trees=50, frate=1.0, shrinkage=0.1,
                srate=1.0, bag=1, metric2t='DCG@10'):
     """
@@ -25,13 +35,16 @@ def trainModel(training, out, features=None, kcv=None, ranker=6,
     """
 
     ranky_loc = check_for_rankymcrankface()
+    training_set_path = write_training_set(training_set)
     cmd = 'java -jar {} -ranker {} -shrinkage {} -metric2t {} -tree {} -bag {} -leaf {} -frate {} -srate {} -train {} -save {} '.format(
-            ranky_loc, ranker, shrinkage, metric2t, trees, bag, leafs, frate, srate, training, out)
+            ranky_loc, ranker, shrinkage, metric2t, trees, bag, leafs, frate, srate, training_set_path, out)
 
     if features is not None:
-        with open('data/features.txt', 'w') as f:
+        import tempfile
+        features_file = os.path.join(tempfile.gettempdir(),'features.txt')
+        with open(features_file, 'w') as f:
             f.write("\n".join([str(feature) for feature in features]))
-        cmd += " -feature data/features.txt "
+        cmd += " -feature {}".format(features_file)
 
     if kcv is not None and kcv > 0:
         cmd += " -kcv {} ".format(kcv)
@@ -47,14 +60,14 @@ def save_model(client, modelName, modelFile, index, featureSet):
         client.submit_ranklib_model(featureSet, index, modelName, definition)
 
 
-def train(client, trainingInFile, modelName, featureSet,
+def train(client, training_set, modelName, featureSet,
           index, features=None,
           metric2t='DCG@10', leafs=10, trees=50,
           frate=1.0, srate=1.0, bag=1, ranker=6, shrinkage=0.1):
     """ Train and store a model into the search engine
         with the provided parameters"""
     modelFile='data/{}_model.txt'.format(modelName)
-    ranklibResult = trainModel(training=trainingInFile,
+    ranklibResult = trainModel(training_set,
                                out=modelFile,
                                metric2t=metric2t,
                                features=features,
@@ -72,7 +85,7 @@ def train(client, trainingInFile, modelName, featureSet,
     print('Done')
 
 
-def kcv(client, trainingInFile, modelName, featureSet,
+def kcv(client, training_set, modelName, featureSet,
         index, features=None, kcv=5,
         metric2t='DCG@10', leafs=10, trees=50,
         frate=1.0, srate=1.0, bag=1, ranker=6,
@@ -80,7 +93,7 @@ def kcv(client, trainingInFile, modelName, featureSet,
     """ Train and store a model into the search engine
         with the provided parameters"""
     modelFile='data/{}_model.txt'.format(modelName)
-    ranklibResult = trainModel(training=trainingInFile,
+    ranklibResult = trainModel(training_set=training_set,
                                out=modelFile,
                                metric2t=metric2t,
                                features=features,
@@ -95,7 +108,7 @@ def kcv(client, trainingInFile, modelName, featureSet,
     return ranklibResult
 
 
-def feature_search(client, trainingInFile, featureSet,
+def feature_search(client, training_set, featureSet,
                    features=None,
                    featureCost=0.0,
                    metric2t='DCG@10',
@@ -112,7 +125,7 @@ def feature_search(client, trainingInFile, featureSet,
     for i in range(1, len(features)+1):
         for combination in combinations(features, i):
             cost = (1.0 - featureCost)**(len(combination)-1)
-            ranklibResult = trainModel(training=trainingInFile,
+            ranklibResult = trainModel(training_set=training_set,
                                        out=modelFile,
                                        kcv=kcv,
                                        metric2t=metric2t,

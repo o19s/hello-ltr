@@ -1,10 +1,28 @@
 import re
 
-def log_features(client, index, judgments_by_qid, featureSet):
-    idx = 0
-    for qid, judgments in judgments_by_qid.items():
-        keywords = judgments[0].keywords
+class FeatureLogger:
+    """ Logs LTR Features, one query at a time
+
+        ...Building up a training set...
+    """
+
+    def __init__(self, client, index, feature_set, drop_missing=True):
+        self.client=client
+        self.index=index
+        self.feature_set=feature_set
+        self.drop_missing=drop_missing
+        self.logged=[]
+
+    def clear(self):
+        self.logged=[]
+
+    def log_for_qid(self, qid, judgments, keywords):
+        """ Log a set of judgments associated with a single qid
+            judgments will be modified, a training set also returned, discarding
+            any judgments we could not log features for (because the doc was missing)
+        """
         featuresPerDoc = {}
+        judgments = [j for j in judgments]
         docIds = [judgment.docId for judgment in judgments]
 
         # Check for dups of documents
@@ -33,7 +51,7 @@ def log_features(client, index, judgments_by_qid, featureSet):
                 "fuzzy_keywords": ' '.join([x + '~' for x in keywords.split(' ')])
             }
 
-            res = client.log_query(index, featureSet, ids, params)
+            res = self.client.log_query(self.index, self.feature_set, ids, params)
 
             # Add feature back to each judgment
             for doc in res:
@@ -42,8 +60,7 @@ def log_features(client, index, judgments_by_qid, featureSet):
                 featuresPerDoc[docId] = features
             numLeft -= BATCH_SIZE
 
-        print("REBUILDING TRAINING DATA for %s (%s/%s)" % (judgments[0].keywords, idx, len(judgments_by_qid)))
-        # Append features from ES back to ranklib judgment list
+        # Append features from search engine back to ranklib judgment list
         for judgment in judgments:
             try:
                 features = featuresPerDoc[judgment.docId] # If KeyError, then we have a judgment but no movie in index
@@ -51,28 +68,18 @@ def log_features(client, index, judgments_by_qid, featureSet):
             except KeyError:
                 pass
                 print("Missing doc %s" % judgment.docId)
-        idx += 1
 
-
-def judgments_to_training_set(client, judgmentInFile, featureSet, trainingOutFile='judgments_wfeatures.txt', index='tmdb'):
-    from .judgments import judgments_to_file, judgments_from_file, judgments_by_qid
-
-    judgments = []
-    with open(judgmentInFile) as f:
-        judgments = judgments_from_file(f)
-        judgments = judgments_by_qid(judgments)
-    log_features(client, index, judgments, featureSet=featureSet)
-
-    judgmentsAsList = []
-    discarded = []
-    for qid, judgmentList in judgments.items():
-        for judgment in judgmentList:
-            if judgment.has_features():
-                judgmentsAsList.append(judgment)
+        # Return a paired down judgments if we are missing features for judgments
+        training_set = []
+        discarded = []
+        for judgment in judgments:
+            if self.drop_missing:
+                if judgment.has_features():
+                    training_set.append(judgment)
+                else:
+                    discarded.append(judgment)
             else:
-                discarded.append(judgment)
-    print("Discarded %s Keep %s" % (len(discarded), len(judgmentsAsList)))
-
-    with open(trainingOutFile, 'w+') as f:
-        judgments_to_file(f, judgmentsList=judgmentsAsList)
-    return judgments
+                training_set.append(judgment)
+        print("Discarded %s Keep %s" % (len(discarded), len(training_set)))
+        self.logged.extend(training_set)
+        return training_set, discarded
