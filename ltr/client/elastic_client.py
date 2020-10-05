@@ -202,7 +202,7 @@ class ElasticClient(BaseClient):
         return matches
 
     def query(self, index, query):
-        resp = self.es.search(index, body=query)
+        resp = self.es.search(index=index, body=query)
         resp_msg(msg="Searching {} - {}".format(index, str(query)[:20]), resp=SearchResp(resp))
 
         # Transform to consistent format between ES/Solr
