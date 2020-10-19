@@ -134,7 +134,7 @@ class ElasticClient(BaseClient):
         if ids is not None:
             params["query"]["bool"]["must"] = terms_query
 
-        resp = self.es.search(index, body=params)
+        resp = self.es.search(index=index, body=params)
         resp_msg(msg="Searching {} - {}".format(index, str(terms_query)[:20]), resp=SearchResp(resp))
 
         matches = []
@@ -191,7 +191,7 @@ class ElasticClient(BaseClient):
             "size": 1000
         }
 
-        resp = self.es.search(index, body=params)
+        resp = self.es.search(index=index, body=params)
         resp_msg(msg="Searching {} - {}".format(index, str(query)[:20]), resp=SearchResp(resp))
 
         # Transform to consistent format between ES/Solr
