@@ -61,39 +61,13 @@ def save_model(client, modelName, modelFile, index, featureSet):
 
 
 def train(client, training_set, modelName, featureSet,
-          index, features=None,
+          index, features=None, kcv=None,
           metric2t='DCG@10', leafs=10, trees=50,
           frate=1.0, srate=1.0, bag=1, ranker=6, shrinkage=0.1):
     """ Train and store a model into the search engine
         with the provided parameters"""
     modelFile='data/{}_model.txt'.format(modelName)
     ranklibResult = trainModel(training_set,
-                               out=modelFile,
-                               metric2t=metric2t,
-                               features=features,
-                               leafs=leafs,
-                               kcv=None,
-                               ranker=ranker,
-                               bag=bag,
-                               srate=srate,
-                               frate=frate,
-                               trees=trees,
-                               shrinkage=shrinkage)
-    save_model(client, modelName, modelFile, index, featureSet)
-    assert len(ranklibResult.trainingLogs) == 1
-    return ranklibResult.trainingLogs[0]
-    print('Done')
-
-
-def kcv(client, training_set, modelName, featureSet,
-        index, features=None, kcv=5,
-        metric2t='DCG@10', leafs=10, trees=50,
-        frate=1.0, srate=1.0, bag=1, ranker=6,
-        shrinkage=0.1):
-    """ Train and store a model into the search engine
-        with the provided parameters"""
-    modelFile='data/{}_model.txt'.format(modelName)
-    ranklibResult = trainModel(training_set=training_set,
                                out=modelFile,
                                metric2t=metric2t,
                                features=features,
@@ -105,8 +79,15 @@ def kcv(client, training_set, modelName, featureSet,
                                frate=frate,
                                trees=trees,
                                shrinkage=shrinkage)
-    return ranklibResult
 
+    assert len(ranklibResult.trainingLogs) > 0
+
+    if not kcv:
+        #Ranklib doesn't save a model to disk if KCV is used
+        save_model(client, modelName, modelFile, index, featureSet)
+        print('Model saved')
+
+    return ranklibResult
 
 def feature_search(client, training_set, featureSet,
                    features=None,

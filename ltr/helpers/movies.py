@@ -1,4 +1,5 @@
 import json
+from tqdm import tqdm
 
 class Memoize:
     """ Adapted from
@@ -30,7 +31,7 @@ def indexable_movies(enrich=noop, movies='data/tmdb.json'):
     uses a generator to generate bulk index/update actions"""
     movies = load_movies(movies)
     idx = 0
-    for movieId, tmdbMovie in movies.items():
+    for movieId, tmdbMovie in tqdm(movies.items(),total=len(movies)):
         try:
             releaseDate = None
             if 'release_date' in tmdbMovie and len(tmdbMovie['release_date']) > 0:
