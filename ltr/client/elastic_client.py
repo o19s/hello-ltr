@@ -8,6 +8,8 @@ import elasticsearch.helpers
 import json
 from elasticsearch import Elasticsearch
 
+from tqdm import tqdm
+
 class ElasticResp():
     def __init__(self, resp):
         self.status_code = 400
