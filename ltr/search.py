@@ -42,7 +42,9 @@ def search(client, keywords, modelName, index='tmdb', fields=tmdbFields):
     if client.name() == 'elastic':
         results = client.query(index, esLtrQuery(keywords, modelName))
     else:
-        results = client.query(index, solrLtrQuery(keywords, modelName))
+        q = solrLtrQuery(keywords, modelName)
+        print(q)
+        results = client.query(index, q)
 
     ti = fields['title']
 

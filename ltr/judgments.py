@@ -184,8 +184,8 @@ def _judgment_rows(f, qidToKeywords):
     for grade, qid, docId, features in _judgmentsFromBody(f):
         if qid < lastQid:
             raise ValueError("Judgments not sorted by qid in file")
-        if lastQid != qid and qid % 100 == 0:
-            print("Parsing QID %s" % qid)
+        # if lastQid != qid and qid % 100 == 0:
+        #     print("Parsing QID %s" % qid)
         yield Judgment(grade=grade, qid=qid,
                        keywords=qidToKeywords[qid][0],
                        weight=qidToKeywords[qid][1],

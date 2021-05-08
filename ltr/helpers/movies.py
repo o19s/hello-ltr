@@ -56,8 +56,6 @@ def indexable_movies(enrich=noop, movies='data/tmdb.json'):
                         'vote_count': int(tmdbMovie['vote_count']) if 'vote_count' in tmdbMovie else 0,
                       }
             yield enrich(tmdbMovie, base_doc)
-            if idx % 100 == 0:
-                print("Indexed %s movies (last %s)" % (idx, tmdbMovie['title']))
             idx += 1
         except KeyError as k: # Ignore any movies missing these attributes
             continue

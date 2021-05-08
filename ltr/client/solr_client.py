@@ -53,10 +53,10 @@ class SolrClient(BaseClient):
             resp_msg(msg="Committed index {}".format(index), resp=resp)
 
         def flush(docs):
-            print('Flushing {} docs'.format(len(docs)))
+            # print('Flushing {} docs'.format(len(docs)))
             resp = requests.post('{}/{}/update'.format(
                 self.solr_base_ep, index), json=docs)
-            resp_msg(msg="Done", resp=resp)
+            # resp_msg(msg="Done", resp=resp)
             docs.clear()
 
         BATCH_SIZE = 5000
@@ -116,7 +116,7 @@ class SolrClient(BaseClient):
             'wt': 'json'
         }
         resp = requests.post('{}/{}/select'.format(self.solr_base_ep, index), data=params)
-        resp_msg(msg='Searching {}'.format(index), resp=resp)
+        # resp_msg(msg='Searching {}'.format(index), resp=resp)
         resp = resp.json()
 
         def parseFeatures(features):
