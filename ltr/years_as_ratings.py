@@ -38,6 +38,7 @@ def synthesize(client, featureSet='release', latestTrainingSetOut='data/latest-t
 
     # Classic film fan
     judgments = []
+    print("Generating Classic judgments:")
     for fv in docs:
         rating = get_classic_rating(fv[0])
 
@@ -50,6 +51,7 @@ def synthesize(client, featureSet='release', latestTrainingSetOut='data/latest-t
         judgments_to_file(out, judgments)
 
     judgments = []
+    print("Gernerating Recent judgments:")
     for fv in docs:
         rating = get_latest_rating(fv[0])
 
@@ -62,7 +64,6 @@ def synthesize(client, featureSet='release', latestTrainingSetOut='data/latest-t
     with open(latestTrainingSetOut, 'w') as out:
         judgments_to_file(out, judgments)
 
-    print('Done')
 
 
 

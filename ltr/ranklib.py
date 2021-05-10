@@ -51,7 +51,6 @@ def trainModel(training_set, out, features=None, kcv=None, ranker=6,
 
     print("Running %s" % cmd)
     result = os.popen(cmd).read()
-    print("DONE")
     return parse_training_log(result)
 
 def save_model(client, modelName, modelFile, index, featureSet):
@@ -139,6 +138,4 @@ def feature_search(client, training_set, featureSet,
         else:
             metricPerFeature[i] = -1
 
-
     return bestCombo, metricPerFeature
-    print('Done')
