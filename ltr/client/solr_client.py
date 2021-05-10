@@ -1,4 +1,5 @@
 import os
+import re
 import requests
 
 from .base_client import BaseClient
@@ -22,6 +23,10 @@ class SolrClient(BaseClient):
 
     def name(self):
         return "solr"
+
+    def check_index_exists(self, index):
+        resp = requests.get('{}/admin/cores?action=STATUS&core={}'.format(self.solr_base_ep, index))
+        return bool(re.search('instanceDir', str(resp.content)))
 
     def delete_index(self, index):
         params = {
