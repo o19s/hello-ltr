@@ -6,7 +6,7 @@ def rebuild(client, index, doc_src, force = False):
         and reindex
     """
 
-    if (client.check_index_exists):
+    if client.check_index_exists(index):
         if (force):
             client.delete_index(index)
             client.create_index(index)
@@ -15,6 +15,5 @@ def rebuild(client, index, doc_src, force = False):
             print("Index {} already exists. Use `force = True` to delete and recreate".format(index))
             return None
     else:
-        client.delete_index(index)
         client.create_index(index)
         client.index_documents(index, doc_src=doc_src)
