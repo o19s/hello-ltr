@@ -1,6 +1,6 @@
-FROM docker.elastic.co/elasticsearch/elasticsearch:7.6.2
+FROM docker.elastic.co/elasticsearch/elasticsearch:7.12.1
 
-RUN bin/elasticsearch-plugin install -b http://es-learn-to-rank.labs.o19s.com/ltr-1.2.1-es7.6.2.zip 
+RUN bin/elasticsearch-plugin install -b https://github.com/o19s/elasticsearch-learning-to-rank/releases/download/v1.5.5-es7.12.1/ltr-plugin-v1.5.5-es7.12.1.zip
 COPY --chown=elasticsearch:elasticsearch elasticsearch.yml /usr/share/elasticsearch/config/
 RUN cat  /usr/share/elasticsearch/config/elasticsearch.yml
 
