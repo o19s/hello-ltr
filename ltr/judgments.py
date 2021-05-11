@@ -269,6 +269,11 @@ def to_dataframe(judgments, unnest = False):
 
     return dat
 
+def judgments_df_to_long(dat):
+    import pandas as pd
+    
+    return pd.wide_to_long(dat, ['features'], i='uid', j='feature_id').reset_index()
+
 def duplicateJudgmentsByWeight(judgmentsByQid):
 
     def copyJudgments(srcJudgments):
