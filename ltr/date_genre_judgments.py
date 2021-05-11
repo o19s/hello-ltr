@@ -1,4 +1,5 @@
 from .judgments import Judgment, judgments_to_file
+from tqdm import tqdm
 
 def genreQid(genre):
     if genre == "Science Fiction":
@@ -70,7 +71,7 @@ def synthesize(client, judgmentsOutFile='genre_by_date_judgments.txt', autoNegat
 
     # Build judgments for each film
     judgments = []
-    for movie in resp:
+    for movie in tqdm(resp):
         if 'genres' in movie and len(movie['genres']) > 0:
             genre=movie['genres'][0]
             qid = genreQid(genre)
@@ -97,8 +98,8 @@ def synthesize(client, judgmentsOutFile='genre_by_date_judgments.txt', autoNegat
                                     docId=movie['id'],
                                     keywords=negGenre)
                 judgments.append(judgment)
+                
     with open(judgmentsOutFile, 'w') as f:
         judgments_to_file(f, judgmentsList=judgments)
 
-    print('Done')
     return judgments

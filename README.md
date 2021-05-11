@@ -53,6 +53,7 @@ docker-compose up
 - Ensure Python 3 is installed on your system
 - Create a virtual environment: `python3 -m venv venv`
 - Start the virtual environment: `source venv/bin/activate`
+- Check install tooling is up to date `python -m pip install -U pip wheel setuptools`
 - Install the requirements `pip install -r requirements.txt`
 
 __Note:__ The above commands should be run from the root folder of the project.

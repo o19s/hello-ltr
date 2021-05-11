@@ -184,8 +184,8 @@ def _judgment_rows(f, qidToKeywords):
     for grade, qid, docId, features in _judgmentsFromBody(f):
         if qid < lastQid:
             raise ValueError("Judgments not sorted by qid in file")
-        if lastQid != qid and qid % 100 == 0:
-            print("Parsing QID %s" % qid)
+        # if lastQid != qid and qid % 100 == 0:
+        #     print("Parsing QID %s" % qid)
         yield Judgment(grade=grade, qid=qid,
                        keywords=qidToKeywords[qid][0],
                        weight=qidToKeywords[qid][1],
@@ -241,6 +241,38 @@ def judgments_to_nparray(judgments):
     features = np.array(features)
     predictors = np.array(predictors)
     return features, predictors
+
+def to_dataframe(judgments, unnest = False):
+    import pandas as pd
+    ret = []
+    for j in judgments:
+        ret.append(
+            {
+                "uid" : str(j.qid) + '_' + j.docId,
+                "qid": j.qid,
+                "keywords": j.keywords,
+                "docId": j.docId,
+                "grade": j.grade,
+                "features": j.features
+            }
+        )
+    dat = pd.DataFrame.from_dict(ret)
+
+    # https://stackoverflow.com/questions/53218931/how-to-unnest-explode-a-column-in-a-pandas-dataframe
+    def unnesting(df, explode):
+        df1 = pd.concat([
+                        pd.DataFrame(df[x].tolist(), index=df.index).add_prefix(x) for x in explode], axis=1)
+        return df1.join(df.drop(explode, 1), how='left')
+
+    if unnest:
+        dat = unnesting(dat, ['features'])
+
+    return dat
+
+def judgments_df_to_long(dat):
+    import pandas as pd
+    
+    return pd.wide_to_long(dat, ['features'], i='uid', j='feature_id').reset_index()
 
 def duplicateJudgmentsByWeight(judgmentsByQid):
 

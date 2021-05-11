@@ -1,4 +1,5 @@
 import os
+import re
 import requests
 
 from .base_client import BaseClient
@@ -22,6 +23,10 @@ class SolrClient(BaseClient):
 
     def name(self):
         return "solr"
+
+    def check_index_exists(self, index):
+        resp = requests.get('{}/admin/cores?action=STATUS&core={}'.format(self.solr_base_ep, index))
+        return bool(re.search('instanceDir', str(resp.content)))
 
     def delete_index(self, index):
         params = {
@@ -53,10 +58,10 @@ class SolrClient(BaseClient):
             resp_msg(msg="Committed index {}".format(index), resp=resp)
 
         def flush(docs):
-            print('Flushing {} docs'.format(len(docs)))
+            # print('Flushing {} docs'.format(len(docs)))
             resp = requests.post('{}/{}/update'.format(
                 self.solr_base_ep, index), json=docs)
-            resp_msg(msg="Done", resp=resp)
+            # resp_msg(msg="Done", resp=resp)
             docs.clear()
 
         BATCH_SIZE = 5000
@@ -116,7 +121,7 @@ class SolrClient(BaseClient):
             'wt': 'json'
         }
         resp = requests.post('{}/{}/select'.format(self.solr_base_ep, index), data=params)
-        resp_msg(msg='Searching {}'.format(index), resp=resp)
+        # resp_msg(msg='Searching {}'.format(index), resp=resp)
         resp = resp.json()
 
         def parseFeatures(features):

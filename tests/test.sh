@@ -26,7 +26,7 @@ fi
 
 # Confirm needed Requirements are present here
 # TODO: may need to check version in future
-COMMANDS=( 'docker-compose' 'pyvenv' 'python3' 'python' 'pip3')
+COMMANDS=( 'docker-compose' 'python3' 'pip3')
 
 for COMMAND in "${COMMANDS[@]}"
 do
@@ -98,9 +98,10 @@ test_http_service 5601 Kibana
 test_http_service 8983 Solr
 
 # Rebuild venv
-pyvenv tests_venv
+python3 -m venv tests_venv
 source tests_venv/bin/activate
-pip3 install -r requirements.txt
+python -m pip install -U pip wheel setuptools
+pip install -r requirements.txt
 
 echo "================================================"
 echo "== RUN TESTS: "

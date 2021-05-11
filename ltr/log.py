@@ -29,7 +29,8 @@ class FeatureLogger:
         for docId in docIds:
             indices = [i for i, x in enumerate(docIds) if x == docId]
             if len(indices) > 1:
-                print("Duplicate Doc in qid:%s %s" % (qid, docId))
+                # print("Duplicate Doc in qid:%s %s" % (qid, docId))
+                pass
 
         # For every batch of N docs to generate judgments for
         BATCH_SIZE = 500
@@ -67,7 +68,7 @@ class FeatureLogger:
                 judgment.features = features
             except KeyError:
                 pass
-                print("Missing doc %s" % judgment.docId)
+                # print("Missing doc %s" % judgment.docId)
 
         # Return a paired down judgments if we are missing features for judgments
         training_set = []
@@ -80,6 +81,6 @@ class FeatureLogger:
                     discarded.append(judgment)
             else:
                 training_set.append(judgment)
-        print("Discarded %s Keep %s" % (len(discarded), len(training_set)))
+        # print("Discarded %s Keep %s" % (len(discarded), len(training_set)))
         self.logged.extend(training_set)
         return training_set, discarded
