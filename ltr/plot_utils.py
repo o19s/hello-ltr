@@ -13,7 +13,7 @@ def plot_features(dat):
     import plotnine as p9
     
     p = {
-    p9.ggplot(dat_long, p9.aes('grade', 'features', color = 'keywords')) +
+    p9.ggplot(dat, p9.aes('grade', 'features', color = 'keywords')) +
     p9.geom_jitter(alpha = .5) +
     p9.facet_wrap('feature_id', scales = 'free_y')
     }
