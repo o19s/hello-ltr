@@ -242,6 +242,33 @@ def judgments_to_nparray(judgments):
     predictors = np.array(predictors)
     return features, predictors
 
+def to_dataframe(judgments, unnest = False):
+    import pandas as pd
+    ret = []
+    for j in judgments:
+        ret.append(
+            {
+                "uid" : str(j.qid) + '_' + j.docId,
+                "qid": j.qid,
+                "keywords": j.keywords,
+                "docId": j.docId,
+                "grade": j.grade,
+                "features": j.features
+            }
+        )
+    dat = pd.DataFrame.from_dict(ret)
+
+    # https://stackoverflow.com/questions/53218931/how-to-unnest-explode-a-column-in-a-pandas-dataframe
+    def unnesting(df, explode):
+        df1 = pd.concat([
+                        pd.DataFrame(df[x].tolist(), index=df.index).add_prefix(x) for x in explode], axis=1)
+        return df1.join(df.drop(explode, 1), how='left')
+
+    if unnest:
+        dat = unnesting(dat, ['features'])
+
+    return dat
+
 def duplicateJudgmentsByWeight(judgmentsByQid):
 
     def copyJudgments(srcJudgments):
