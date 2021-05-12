@@ -8,7 +8,11 @@ def search(client, user_query, model_name):
                 "must": {"match_all": {} },
                 "filter": {
                     "match": {"title": user_query}
+<<<<<<< HEAD
                 }
+=======
+                    }
+>>>>>>> 0ec9568 (hello-ltr (ES).ipynb now shows top-12 search results for both classic and latest models.)
             }
         }
     else:
