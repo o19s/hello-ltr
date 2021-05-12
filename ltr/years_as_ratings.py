@@ -22,7 +22,6 @@ def get_latest_rating(year):
     else:
         return 0
 
-import json
 def synthesize(client, featureSet='release', latestTrainingSetOut='data/latest-training.txt', classicTrainingSetOut='data/classic-training.txt'):
     from ltr.judgments import judgments_to_file, Judgment
     print('Generating ratings for classic and latest model')
