@@ -8,11 +8,7 @@ def search(client, user_query, model_name):
                 "must": {"match_all": {} },
                 "filter": {
                     "match": {"title": user_query}
-<<<<<<< HEAD
                 }
-=======
-                    }
->>>>>>> 0ec9568 (hello-ltr (ES).ipynb now shows top-12 search results for both classic and latest models.)
             }
         }
     else:
@@ -37,7 +33,11 @@ def plot(client, query):
         y = [x['release_year'] for x in modelData[0]],
         mode = "lines",
         name = "classic",
+<<<<<<< HEAD
         text = [f'{x["title"]} ({x["score"]})' for x in modelData[0]]
+=======
+        text = [x['title'] for x in modelData[0]] # show movie title on hover
+>>>>>>> 900910a (Added movie title on release date plot so that the results can be easily interpreted.)
     )
 
     trace1 = go.Scatter(
@@ -45,7 +45,11 @@ def plot(client, query):
         y = [x['release_year'] for x in modelData[1]],
         mode = "lines",
         name = "latest",
+<<<<<<< HEAD
         text = [f'{x["title"]} ({x["score"]})' for x in modelData[1]]
+=======
+        text = [x['title'] for x in modelData[1]] # show movie title on hover
+>>>>>>> 900910a (Added movie title on release date plot so that the results can be easily interpreted.)
     )
 
 
