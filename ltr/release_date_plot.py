@@ -32,14 +32,16 @@ def plot(client, query):
         x = xAxes,
         y = [x['release_year'] for x in modelData[0]],
         mode = "lines",
-        name = "classic"
+        name = "classic",
+        text = [x['title'] for x in modelData[0]] # show movie title on hover
     )
 
     trace1 = go.Scatter(
         x = xAxes,
         y = [x['release_year'] for x in modelData[1]],
         mode = "lines",
-        name = "latest"
+        name = "latest",
+        text = [x['title'] for x in modelData[1]] # show movie title on hover
     )
 
 
