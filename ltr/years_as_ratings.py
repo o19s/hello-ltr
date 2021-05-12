@@ -29,36 +29,30 @@ def synthesize(client, featureSet='release', latestTrainingSetOut='data/latest-t
 
     resp = client.log_query('tmdb', 'release', None)
 
-    docs = []
-    for hit in resp:
-        # Expect clients to return features per doc in ltr_features as ordered list
-        feature = hit['ltr_features'][0]
-
-        docs.append([feature]) # Treat features as ordered lists
-
     # Classic film fan
     judgments = []
     print("Generating Classic judgments:")
-    for fv in docs:
-        rating = get_classic_rating(fv[0])
+    for hit in resp:
+        rating = get_classic_rating(hit['ltr_features'][0])
 
         if rating == 0 and NO_ZERO:
             continue
 
-        judgments.append(Judgment(qid=1,docId=rating,grade=rating,features=fv,keywords=''))
+        judgments.append(Judgment(qid=1,docId=hit['id'],grade=rating,features=hit['ltr_features'],keywords=''))
 
     with open(classicTrainingSetOut, 'w') as out:
         judgments_to_file(out, judgments)
 
+    # Latest film fan
     judgments = []
-    print("Gernerating Recent judgments:")
-    for fv in docs:
-        rating = get_latest_rating(fv[0])
+    print("Generating Recent judgments:")
+    for hit in resp:
+        rating = get_latest_rating(hit['ltr_features'][0])
 
         if rating == 0 and NO_ZERO:
             continue
 
-        judgments.append(Judgment(qid=1,docId=rating,grade=rating,features=fv,keywords=''))
+        judgments.append(Judgment(qid=1,docId=hit['id'],grade=rating,features=hit['ltr_features'],keywords=''))
 
 
     with open(latestTrainingSetOut, 'w') as out:
