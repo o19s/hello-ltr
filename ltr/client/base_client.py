@@ -39,6 +39,10 @@ class BaseClient(ABC):
         pass
 
     @abstractmethod
+    def get_feature_name(self, config, ftr_idx):
+        pass
+
+    @abstractmethod
     def query(self, index, query):
         pass
 

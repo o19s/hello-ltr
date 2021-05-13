@@ -100,6 +100,10 @@ class ElasticClient(BaseClient):
         resp = requests.post('{}/_featureset/{}'.format(self.elastic_ep, name), json=ftr_config)
         resp_msg(msg="Create {} feature set".format(name), resp=resp)
 
+    def get_feature_name(self, config, ftr_idx):
+        return config["featureset"]["features"][int(ftr_idx) - 1]["name"]
+
+
     def log_query(self, index, featureset, ids, params={}):
         params = {
             "query": {
