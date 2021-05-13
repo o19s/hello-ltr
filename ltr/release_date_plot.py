@@ -33,11 +33,7 @@ def plot(client, query):
         y = [x['release_year'] for x in modelData[0]],
         mode = "lines",
         name = "classic",
-<<<<<<< HEAD
         text = [f'{x["title"]} ({x["score"]})' for x in modelData[0]]
-=======
-        text = [x['title'] for x in modelData[0]] # show movie title on hover
->>>>>>> 900910a (Added movie title on release date plot so that the results can be easily interpreted.)
     )
 
     trace1 = go.Scatter(
@@ -45,11 +41,7 @@ def plot(client, query):
         y = [x['release_year'] for x in modelData[1]],
         mode = "lines",
         name = "latest",
-<<<<<<< HEAD
         text = [f'{x["title"]} ({x["score"]})' for x in modelData[1]]
-=======
-        text = [x['title'] for x in modelData[1]] # show movie title on hover
->>>>>>> 900910a (Added movie title on release date plot so that the results can be easily interpreted.)
     )
 
 
