@@ -8,7 +8,7 @@ def search(client, user_query, model_name):
                 "must": {"match_all": {} },
                 "filter": {
                     "match": {"title": user_query}
-                    }
+                }
             }
         }
     else:
@@ -33,7 +33,7 @@ def plot(client, query):
         y = [x['release_year'] for x in modelData[0]],
         mode = "lines",
         name = "classic",
-        text = [x['title'] for x in modelData[0]] # show movie title on hover
+        text = [f'{x["title"]} ({x["_score"]})' for x in modelData[0]]
     )
 
     trace1 = go.Scatter(
@@ -41,7 +41,7 @@ def plot(client, query):
         y = [x['release_year'] for x in modelData[1]],
         mode = "lines",
         name = "latest",
-        text = [x['title'] for x in modelData[1]] # show movie title on hover
+        text = [f'{x["title"]} ({x["_score"]})' for x in modelData[1]]
     )
 
 
