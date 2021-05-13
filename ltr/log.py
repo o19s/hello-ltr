@@ -49,7 +49,8 @@ class FeatureLogger:
 
             params = {
                 "keywords": keywords,
-                "fuzzy_keywords": ' '.join([x + '~' for x in keywords.split(' ')])
+                "fuzzy_keywords": ' '.join([x + '~' for x in keywords.split(' ')]),
+                "keywordsList": [keywords] # Needed by TSQ for the time being
             }
 
             res = self.client.log_query(self.index, self.feature_set, ids, params)
