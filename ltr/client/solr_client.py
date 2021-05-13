@@ -101,6 +101,9 @@ class SolrClient(BaseClient):
             self.solr_base_ep, index, name), json=ftr_config)
         resp_msg(msg='Created {} feature store under {}:'.format(name, index), resp=resp)
 
+    def get_feature_name(self, config, ftr_idx):
+        return config[int(ftr_idx) - 1]["name"]
+
 
     def log_query(self, index, featureset, ids, options={}):
         efi_options = []
