@@ -15,6 +15,7 @@ baseEsQuery = {
 def esLtrQuery(keywords, modelName):
     import json
     baseEsQuery['query']['sltr']['params']['keywords'] = keywords
+    baseEsQuery['query']['sltr']['params']['keywordsList'] = [keywords]  # Needed by TSQ for now
     baseEsQuery['query']['sltr']['model'] = modelName
     print("%s" % json.dumps(baseEsQuery))
     return baseEsQuery
