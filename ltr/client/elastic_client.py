@@ -205,7 +205,7 @@ class ElasticClient(BaseClient):
         matches = []
         for hit in resp['hits']['hits']:
             match = hit['_source']
-            match['_score'] = hit['_score']
+            match['score'] = hit['_score']
             matches.append(match)
 
         return matches
