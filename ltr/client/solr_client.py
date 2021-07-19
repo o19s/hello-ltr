@@ -172,6 +172,7 @@ class SolrClient(BaseClient):
         url = '{}/{}/select?'.format(self.solr_base_ep, index)
         params = {
             'q': query,
+            'fl': 'score *',
             'rq': '{{!ltr model={}}}'.format(model),
             'rows': 10000
         }
