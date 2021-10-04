@@ -269,7 +269,7 @@ def judgments_to_dataframe(judgments, unnest = True):
 
     return dat
 
-def judgments_df_to_long(judgments_df):
+def judgments_dataframe_to_long(judgments_df):
     import pandas as pd
     
     return pd.wide_to_long(judgments_df, ['features'], i='uid', j='feature_id').reset_index()
