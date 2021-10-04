@@ -15,10 +15,9 @@ def search(client, user_query, model_name):
         engine_query = 'title:('+ user_query + ')^0'    
     return client.model_query('tmdb', model_name, {}, engine_query)
 
-def plot(client, query):
+def plot(client, query, models = ['classic', 'latest']):
     init_notebook_mode(connected=True)
 
-    models = ['classic', 'latest']
     modelData = []
 
     for model in models:
@@ -32,7 +31,7 @@ def plot(client, query):
         x = xAxes,
         y = [x['release_year'] for x in modelData[0]],
         mode = "lines",
-        name = "classic",
+        name = models[0],
         text = [f'{x["title"]} ({x["score"]})' for x in modelData[0]]
     )
 
@@ -40,7 +39,7 @@ def plot(client, query):
         x = xAxes,
         y = [x['release_year'] for x in modelData[1]],
         mode = "lines",
-        name = "latest",
+        name = models[1],
         text = [f'{x["title"]} ({x["score"]})' for x in modelData[1]]
     )
 
