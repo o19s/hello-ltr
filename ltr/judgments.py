@@ -242,7 +242,7 @@ def judgments_to_nparray(judgments):
     predictors = np.array(predictors)
     return features, predictors
 
-def judgments_to_df(judgments, unnest = True):
+def judgments_to_dataframe(judgments, unnest = True):
     import pandas as pd
     ret = []
     for j in judgments:
