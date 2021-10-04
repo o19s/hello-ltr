@@ -2,7 +2,7 @@ FROM python:3.7-stretch
 
 # Install openjdk
 RUN apt-get update && \
-    apt-get install -y openjdk-8-jdk && \
+    apt-get install -y openjdk-8-jdk graphviz && \
     apt-get clean;
 
 # Setup a user 
