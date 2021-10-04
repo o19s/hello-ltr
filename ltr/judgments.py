@@ -126,7 +126,7 @@ def _queriesFromHeader(lines):
                 rVal[int(m.group(1))] = (keyword, weight)
         except ValueError as e:
             print(e)
-    print("Recognizing %s queries..." % len(rVal))
+    print("Recognizing %s queries in: %s" % (len(rVal), lines.name))
 
     return rVal
 
@@ -242,7 +242,7 @@ def judgments_to_nparray(judgments):
     predictors = np.array(predictors)
     return features, predictors
 
-def to_dataframe(judgments, unnest = False):
+def judgments_to_df(judgments, unnest = True):
     import pandas as pd
     ret = []
     for j in judgments:
@@ -269,10 +269,10 @@ def to_dataframe(judgments, unnest = False):
 
     return dat
 
-def judgments_df_to_long(dat):
+def judgments_df_to_long(judgments_df):
     import pandas as pd
     
-    return pd.wide_to_long(dat, ['features'], i='uid', j='feature_id').reset_index()
+    return pd.wide_to_long(judgments_df, ['features'], i='uid', j='feature_id').reset_index()
 
 def duplicateJudgmentsByWeight(judgmentsByQid):
 
