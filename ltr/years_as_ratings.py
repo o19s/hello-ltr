@@ -35,7 +35,7 @@ def synthesize(
 
     # A classic film fan
     judgments = []
-    print("Generating 'latest' biased judgments:")
+    print("Generating 'classic' biased judgments:")
     for hit in resp:
         rating = get_classic_rating(hit['ltr_features'][0])
 
@@ -44,7 +44,7 @@ def synthesize(
 
         judgments.append(Judgment(qid=1,docId=hit['id'],grade=rating,features=hit['ltr_features'],keywords=''))
 
-        
+
     with open(classicTrainingSetOut, 'w') as out:
         judgments_to_file(out, judgments)
 
