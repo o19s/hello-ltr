@@ -180,6 +180,20 @@ class ElasticClient(BaseClient):
             }
         }
         self.submit_model(featureset, index, model_name, params)
+    
+    
+    def submit_xgboost_model(self, featureset, index, model_name, model_payload):
+        params = {
+            'model': {
+                'name': model_name,
+                'model': {
+                    'type': 'model/xgboost+json',
+                    'definition': model_payload
+                }
+            }
+        }
+        self.submit_model(featureset, index, model_name, params)
+    
 
     def model_query(self, index, model, model_params, query):
         params = {
