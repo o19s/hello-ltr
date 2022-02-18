@@ -64,8 +64,8 @@ class ElasticClient(BaseClient):
 
     def delete_index(self, index):
         resp = self.es.indices.delete(index=index, ignore=[400, 404])
-        resp_msg(msg="Deleted index {}".format(index), resp=ElasticResp(resp), throw=False)
-
+        resp_msg(msg="Deleted index {}".format(index),
+                 resp=ElasticResp(resp), throw=False, ignore=[400, 404])
 
     def create_index(self, index):
         """ Take the local config files for Elasticsearch for index, reload them into ES"""
