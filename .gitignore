@@ -11,3 +11,6 @@ features.txt
 .trash
 .DS_store
 notify.sh
+
+.idea/
+*.iml
