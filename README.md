@@ -51,7 +51,7 @@ docker-compose up
 
 #### Setup Python requirements
 
-- Ensure Python 3 is installed on your system
+- Ensure Python 3.7 or later is installed on your system
 - Create a virtual environment: `python3 -m venv venv`
 - Start the virtual environment: `source venv/bin/activate`
 - Check install tooling is up to date `python -m pip install -U pip wheel setuptools`
