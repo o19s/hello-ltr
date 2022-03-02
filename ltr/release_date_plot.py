@@ -29,7 +29,7 @@ def plot(client, query, models = ['classic', 'latest']):
 
     trace0 = go.Scatter(
         x = xAxes,
-        y = [x['release_year'] for x in modelData[0]],
+        y = [int(x['release_year']) for x in modelData[0]],
         mode = "lines",
         name = models[0],
         text = [f'{x["title"]} ({x["score"]})' for x in modelData[0]]
@@ -37,7 +37,7 @@ def plot(client, query, models = ['classic', 'latest']):
 
     trace1 = go.Scatter(
         x = xAxes,
-        y = [x['release_year'] for x in modelData[1]],
+        y = [int(x['release_year']) for x in modelData[1]],
         mode = "lines",
         name = models[1],
         text = [f'{x["title"]} ({x["score"]})' for x in modelData[1]]
