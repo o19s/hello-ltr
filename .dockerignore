@@ -1,9 +1,9 @@
-data/
+#data/
 venv/
 venv2/
 .git/
 .cache/
 .trash/
 **/venv*
-**/data/
+#**/data/
 **/__pycache__/
