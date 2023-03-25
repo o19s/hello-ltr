@@ -4,9 +4,9 @@ import requests
 from .base_client import BaseClient
 from ltr.helpers.handle_resp import resp_msg
 
-import elasticsearch.helpers
 import json
-from elasticsearch import Elasticsearch
+from opensearchpy import OpenSearch
+from opensearchpy import helpers
 
 class ElasticResp():
     def __init__(self, resp):
@@ -33,9 +33,9 @@ class SearchResp():
             self.text = json.dumps(resp, indent=2)
 
 
-class ElasticClient(BaseClient):
-    """ Note on the Elastic client,
-        Elastic LTR is not bound to an index like Solr LTR
+class OpenSearchClient(BaseClient):
+    """ Note on the OpenSearch client,
+        OpenSearch LTR is not bound to an index like Solr LTR
         so many calls take an index but do not use it
 
         In the future, we may wish to isolate an Index's feature
@@ -46,12 +46,12 @@ class ElasticClient(BaseClient):
         self.configs_dir = configs_dir #location of elastic configs
 
         if self.docker:
-            self.host = 'elastic'
+            self.host = 'opensearch'
         else:
             self.host = 'localhost'
 
         self.elastic_ep = 'http://{}:9200/_ltr'.format(self.host)
-        self.es = Elasticsearch('http://{}:9200'.format(self.host))
+        self.es = OpenSearch('http://{}:9200'.format(self.host))
 
     def get_host(self):
         return self.host
@@ -86,7 +86,7 @@ class ElasticClient(BaseClient):
                           "_source": doc}
                 yield addCmd
 
-        resp = elasticsearch.helpers.bulk(self.es, bulkDocs(doc_src), chunk_size=100)
+        resp = helpers.bulk(self.es, bulkDocs(doc_src), chunk_size=100)
         self.es.indices.refresh(index=index)
         resp_msg(msg="Streaming Bulk index DONE {}".format(index), resp=BulkResp(resp))
 
