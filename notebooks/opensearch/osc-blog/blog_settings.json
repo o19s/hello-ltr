@@ -1,0 +1,110 @@
+{
+  "mappings": {
+    "_source": {
+      "enabled": true
+    },
+    "properties": {
+      "post_id": {
+        "type": "long",
+        "store": true
+      },
+      "post_date": {
+        "type": "date",
+        "store": true
+      },
+      "es_update_date": {
+        "type": "date",
+        "store": true
+      },
+      "url": {
+        "type": "text",
+        "store": true
+      },
+      "title": {
+        "type": "text",
+        "store": true,
+        "analyzer": "content_analyzer",
+        "fields": {
+          "bigrams": {
+            "type": "text",
+            "analyzer": "content_bigrams"
+          }
+        }
+      },
+      "author": {
+        "type": "text",
+        "store": true,
+        "analyzer": "standard"
+      },
+      "content": {
+        "type": "text",
+        "store": true,
+        "analyzer": "content_analyzer",
+        "fields": {
+          "bigrams": {
+            "type": "text",
+            "analyzer": "content_bigrams"
+          }
+        }
+      },
+      "excerpt": {
+        "type": "text",
+        "store": true,
+        "analyzer": "content_analyzer"
+      },
+      "categories": {
+        "type": "text",
+        "store": true,
+        "analyzer": "content_analyzer"
+      }
+    }
+  },
+  "settings": {
+    "number_of_shards": 1,
+    "number_of_replicas": 1,
+    "analysis": {
+      "filter": {
+        "english_stemmer": {
+          "type": "stemmer",
+          "language": "english"
+        },
+        "english_possessive_stemmer": {
+          "type": "stemmer",
+          "language": "possessive_english"
+        },
+        "bigram": {
+          "type": "shingle",
+          "max_shingle_size": 2,
+          "output_unigrams": false
+        }
+      },
+      "analyzer": {
+        "content_analyzer": {
+          "type": "custom",
+          "char_filter": [
+            "html_strip"
+          ],
+          "filter": [
+            "english_possessive_stemmer",
+            "lowercase",
+            "english_stemmer"
+          ],
+          "tokenizer": "standard"
+        },
+        "content_bigrams": {
+          "type": "custom",
+          "char_filter": [
+            "html_strip"
+          ],
+          "filter": [
+            "english_possessive_stemmer",
+            "lowercase",
+            "english_stemmer",
+            "bigram"
+          ],
+          "tokenizer": "standard"
+        }
+      }
+    }
+  }
+}
