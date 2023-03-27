@@ -9,6 +9,7 @@ class RunMostNotebooksTestCase(NotebooksTestCase):
                   './notebooks/elasticsearch/osc-blog']
 
     IGNORED_NBS = ['./notebooks/solr/tmdb/evaluation (Solr).ipynb',
+                   './notebooks/elasticsearch/tmdb/XGBoost.ipynb',
                    './notebooks/elasticsearch/tmdb/evaluation.ipynb']
 
 
