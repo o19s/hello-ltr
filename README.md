@@ -69,6 +69,13 @@ __Note:__ The above commands should be run from the root folder of the project.
 
 ### Automatically run everything...
 
+NB: It may be necessary to increase the number of open files on MacOS to a
+higher value than the default 256 for the tests to complete successfully. Use:
+
+$ ulimit -n 4096
+
+to increase the value to a sensible amount.
+
 To run a full suite of tests, such as to verify a PR, you can simply run
 
 ./tests/test.sh
