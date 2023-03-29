@@ -50,14 +50,14 @@ class OpenSearchClient(BaseClient):
         else:
             self.host = 'localhost'
 
-        self.elastic_ep = 'http://{}:9200/_ltr'.format(self.host)
-        self.es = OpenSearch('http://{}:9200'.format(self.host))
+        self.elastic_ep = 'http://{}:9201/_ltr'.format(self.host)
+        self.es = OpenSearch('http://{}:9201'.format(self.host))
 
     def get_host(self):
         return self.host
 
     def name(self):
-        return "elastic"
+        return "opensearch"
 
     def check_index_exists(self, index):
         return self.es.indices.exists(index=index)

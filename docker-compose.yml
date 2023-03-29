@@ -33,6 +33,28 @@ services:
       ELASTICSEARCH_URL: "http://hello-ltr-elastic:9200"
       SERVER_HOST: "0.0.0.0"
 
+  opensearch:
+    build:
+      context: ./notebooks/opensearch/.docker/opensearch-docker/
+      dockerfile: Dockerfile
+    container_name: hello-ltr-opensearch
+    ports:
+      - 9201:9201
+
+  osd-dashboards:
+    build:
+      context: ./notebooks/opensearch/.docker/osd-docker/
+      dockerfile: Dockerfile
+    container_name: hello-ltr-osd
+    expose:
+      - "5602"
+    ports:
+     - "5602:5602"
+    environment:
+      OPENSEARCH_HOSTS: "http://hello-ltr-opensearch:9201"
+      OPENSEARCH_URL: "http://hello-ltr-opensearch:9201"
+      SERVER_HOST: "0.0.0.0"
+
   solr:
     build:
       context: ./notebooks/solr/
