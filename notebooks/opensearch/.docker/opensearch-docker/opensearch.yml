@@ -1,19 +1,36 @@
 ---
+http.cors.allow-origin: "/http?:.*/"
+#http.cors.allow-origin: /http?://localhost(:[0-9]+)?/
+http.cors.enabled: true
+indices.query.bool.max_clause_count: 10240
+network.host: 0.0.0.0
+http.port: 9201
+discovery.type: single-node
+
 # cluster.name: docker-cluster
 
-# Bind to all interfaces because we don't know what IP address Docker will assign to us.
-network.host: 0.0.0.0
+## # minimum_master_nodes need to be explicitly set when bound on a public IP
+## # set to 1 to allow single node clusters
+## discovery.zen.minimum_master_nodes: 1
+#
+## Setting network.host to a non-loopback address enables the annoying bootstrap checks. "Single-node" mode disables them again.
+## discovery.type: single-node
+#
+#http.host: 0.0.0.0
+#http.port: 9201
+#http.cors.allow-origin: "*"
+##http.cors.allow-origin: "/http?:.*/"
+#http.cors.enabled: true
+#http.cors.allow-headers: X-Requested-With,X-Auth-Token,Content-Type,Content-Length,Authorization
+#http.cors.allow-credentials: true
+#
+#
+#
+##http.cors.allow-origin: "/http?:.*/"
+##http.cors.allow-origin: /http?://localhost(:[0-9]+)?/
+##http.cors.enabled: true
+##indices.query.bool.max_clause_count: 10240
+##network.host: 0.0.0.0
+#
+#discovery.type: single-node
 
-# # minimum_master_nodes need to be explicitly set when bound on a public IP
-# # set to 1 to allow single node clusters
-# discovery.zen.minimum_master_nodes: 1
-
-# Setting network.host to a non-loopback address enables the annoying bootstrap checks. "Single-node" mode disables them again.
-# discovery.type: single-node
-
-http.host: 0.0.0.0
-http.port: 9200
-http.cors.allow-origin: "*"
-http.cors.enabled: true
-http.cors.allow-headers: X-Requested-With,X-Auth-Token,Content-Type,Content-Length,Authorization
-http.cors.allow-credentials: true
