@@ -46,12 +46,13 @@ class OpenSearchClient(BaseClient):
         self.configs_dir = configs_dir #location of elastic configs
 
         if self.docker:
-            self.host = 'opensearch'
+            self.host = 'opensearch-node1'
         else:
             self.host = 'localhost'
 
         self.elastic_ep = 'http://{}:9201/_ltr'.format(self.host)
         self.es = OpenSearch('http://{}:9201'.format(self.host))
+        print(f"{self.elastic_ep}; {self.es}")
 
     def get_host(self):
         return self.host
@@ -225,6 +226,7 @@ class OpenSearchClient(BaseClient):
         return matches
 
     def query(self, index, query):
+        print(query)
         resp = self.es.search(index=index, body=query)
         # resp_msg(msg="Searching {} - {}".format(index, str(query)[:20]), resp=SearchResp(resp))
 

@@ -40,7 +40,7 @@ tmdbFields = {
 
 
 def search(client, keywords, modelName, index='tmdb', fields=tmdbFields):
-    if client.name() == 'elastic' or client.name() == 'OpenSearch':
+    if client.name() == 'elastic' or client.name() == 'opensearch':
         results = client.query(index, esLtrQuery(keywords, modelName))
     else:
         q = solrLtrQuery(keywords, modelName)

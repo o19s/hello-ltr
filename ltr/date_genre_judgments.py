@@ -51,7 +51,7 @@ def genreGrade(movie):
 def synthesize(client, judgmentsOutFile='genre_by_date_judgments.txt', autoNegate=False):
     print('Generating judgments for scifi & drama movies')
 
-    if client.name() == 'elastic':
+    if client.name() in ['elastic', 'opensearch']:
         params = {
             "query": {
                 "match_all": {}

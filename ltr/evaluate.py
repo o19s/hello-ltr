@@ -13,10 +13,11 @@ def quiet_run(cmd):
 
 def evaluate(mode):
     # Build the docker image
-    if mode == 'elastic':
-        cmd = 'docker build --no-cache -t ltr-rre rre/elastic/.'
-    else:
-        cmd = 'docker build --no-cache -t ltr-rre rre/solr/.'
+    acceptable_modes = ['elastic', 'solr', 'opensearch']
+    if mode not in acceptable_modes:
+        raise ValueError(f"{mode} is not a supported value for mode. must be one of {acceptable_modes}")
+
+    cmd = f'docker build --no-cache -t ltr-rre rre/{mode}/.'
 
     print('Building RRE image - This will take a while')
     quiet_run(cmd)

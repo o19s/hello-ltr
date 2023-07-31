@@ -249,7 +249,7 @@ def judgments_to_dataframe(judgments, unnest = True):
     for j in judgments:
         ret.append(
             {
-                "uid" : str(j.qid) + '_' + j.docId,
+                "uid": str(j.qid) + '_' + j.docId,
                 "qid": j.qid,
                 "keywords": j.keywords,
                 "docId": j.docId,
@@ -263,7 +263,7 @@ def judgments_to_dataframe(judgments, unnest = True):
     def unnesting(df, explode):
         df1 = pd.concat([
                         pd.DataFrame(df[x].tolist(), index=df.index).add_prefix(x) for x in explode], axis=1)
-        return df1.join(df.drop(explode, 1), how='left')
+        return df1.join(df.drop(explode, axis=1), how='left')
 
     if unnest:
         dat = unnesting(dat, ['features'])
