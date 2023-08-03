@@ -1,6 +1,6 @@
 # Hello LTR :)
 
-The overall goal of this project is to demonstrate all of the steps required to work with LTR in Elasticsearch, Solr, oer OpenSearch. There's two modes of running. Just running and editing notebooks in a docker container. Or local development (also requiring docker to run the search engine).
+The overall goal of this project is to demonstrate all the steps required to work with LTR in Elasticsearch, Solr, or OpenSearch. There are two modes of running this project. You can run and edit notebooks in a docker container or you can do local development on the notebooks and connect to the search engine(s) running in Docker.
 
 ## No fuss setup: You just want to play with LTR
 
