@@ -33,13 +33,19 @@ services:
       ELASTICSEARCH_URL: "http://hello-ltr-elastic:9200"
       SERVER_HOST: "0.0.0.0"
 
-  opensearch:
+  opensearch-node1:
     build:
       context: ./notebooks/opensearch/.docker/opensearch-docker/
       dockerfile: Dockerfile
     container_name: hello-ltr-opensearch
     ports:
-      - 9201:9201
+      - "9201:9201"
+    environment:
+      - "SERVER_HOST=0.0.0.0"
+      - "OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m"
+      - "DISABLE_INSTALL_DEMO_CONFIG=true"
+      - "DISABLE_SECURITY_PLUGIN=true"
+      - "discovery.type=single-node"
 
   osd-dashboards:
     build:
@@ -54,6 +60,8 @@ services:
       OPENSEARCH_HOSTS: "http://hello-ltr-opensearch:9201"
       OPENSEARCH_URL: "http://hello-ltr-opensearch:9201"
       SERVER_HOST: "0.0.0.0"
+      DISABLE_SECURITY_DASHBOARDS_PLUGIN: true
+
 
   solr:
     build:

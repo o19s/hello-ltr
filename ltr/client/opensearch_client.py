@@ -8,7 +8,7 @@ import json
 from opensearchpy import OpenSearch
 from opensearchpy import helpers
 
-class ElasticResp():
+class OpenSearchResp():
     def __init__(self, resp):
         self.status_code = 400
         if 'acknowledged' in resp and resp['acknowledged']:
@@ -50,9 +50,9 @@ class OpenSearchClient(BaseClient):
         else:
             self.host = 'localhost'
 
-        self.elastic_ep = 'http://{}:9201/_ltr'.format(self.host)
-        self.es = OpenSearch('http://{}:9201'.format(self.host))
-        print(f"{self.elastic_ep}; {self.es}")
+        self.opensearch_ep = 'http://{}:9201/_ltr'.format(self.host)
+        self.opensearch = OpenSearch('http://{}:9201'.format(self.host))
+        print(f"{self.opensearch_ep}; {self.opensearch}")
 
     def get_host(self):
         return self.host
@@ -61,20 +61,20 @@ class OpenSearchClient(BaseClient):
         return "opensearch"
 
     def check_index_exists(self, index):
-        return self.es.indices.exists(index=index)
+        return self.opensearch.indices.exists(index=index)
 
     def delete_index(self, index):
-        resp = self.es.indices.delete(index=index, ignore=[400, 404])
+        resp = self.opensearch.indices.delete(index=index, ignore=[400, 404])
         resp_msg(msg="Deleted index {}".format(index),
-                 resp=ElasticResp(resp), throw=False, ignore=[400, 404])
+                 resp=OpenSearchResp(resp), throw=False, ignore=[400, 404])
 
     def create_index(self, index):
-        """ Take the local config files for Elasticsearch for index, reload them into ES"""
+        """ Take the local config files for OpenSearch for index, reload them into OpenSearch"""
         cfg_json_path = os.path.join(self.configs_dir, "%s_settings.json" % index)
         with open(cfg_json_path) as src:
             settings = json.load(src)
-            resp = self.es.indices.create(index, body=settings)
-            resp_msg(msg="Created index {}".format(index), resp=ElasticResp(resp))
+            resp = self.opensearch.indices.create(index, body=settings)
+            resp_msg(msg="Created index {}".format(index), resp=OpenSearchResp(resp))
 
     def index_documents(self, index, doc_src):
 
@@ -87,18 +87,18 @@ class OpenSearchClient(BaseClient):
                           "_source": doc}
                 yield addCmd
 
-        resp = helpers.bulk(self.es, bulkDocs(doc_src), chunk_size=100)
-        self.es.indices.refresh(index=index)
+        resp = helpers.bulk(self.opensearch, bulkDocs(doc_src), chunk_size=100)
+        self.opensearch.indices.refresh(index=index)
         resp_msg(msg="Streaming Bulk index DONE {}".format(index), resp=BulkResp(resp))
 
     def reset_ltr(self, index):
-        resp = requests.delete(self.elastic_ep)
+        resp = requests.delete(self.opensearch_ep)
         resp_msg(msg="Removed Default LTR feature store".format(), resp=resp, throw=False)
-        resp = requests.put(self.elastic_ep)
+        resp = requests.put(self.opensearch_ep)
         resp_msg(msg="Initialize Default LTR feature store".format(), resp=resp)
 
     def create_featureset(self, index, name, ftr_config):
-        resp = requests.post('{}/_featureset/{}'.format(self.elastic_ep, name), json=ftr_config)
+        resp = requests.post('{}/_featureset/{}'.format(self.opensearch_ep, name), json=ftr_config)
         resp_msg(msg="Create {} feature set".format(name), resp=resp)
 
     def get_feature_name(self, config, ftr_idx):
@@ -142,7 +142,7 @@ class OpenSearchClient(BaseClient):
         if ids is not None:
             params["query"]["bool"]["must"] = terms_query
 
-        resp = self.es.search(index=index, body=params)
+        resp = self.opensearch.search(index=index, body=params)
         # resp_msg(msg="Searching {} - {}".format(index, str(terms_query)[:20]), resp=SearchResp(resp))
 
         matches = []
@@ -161,8 +161,8 @@ class OpenSearchClient(BaseClient):
         return matches
 
     def submit_model(self, featureset, index, model_name, model_payload):
-        model_ep = "{}/_model/".format(self.elastic_ep)
-        create_ep = "{}/_featureset/{}/_createmodel".format(self.elastic_ep, featureset)
+        model_ep = "{}/_model/".format(self.opensearch_ep)
+        create_ep = "{}/_featureset/{}/_createmodel".format(self.opensearch_ep, featureset)
 
         resp = requests.delete('{}{}'.format(model_ep, model_name))
         print('Delete model {}: {}'.format(model_name, resp.status_code))
@@ -213,7 +213,7 @@ class OpenSearchClient(BaseClient):
             "size": 1000
         }
 
-        resp = self.es.search(index=index, body=params)
+        resp = self.opensearch.search(index=index, body=params)
         # resp_msg(msg="Searching {} - {}".format(index, str(query)[:20]), resp=SearchResp(resp))
 
         # Transform to consistent format between ES/Solr
@@ -227,7 +227,7 @@ class OpenSearchClient(BaseClient):
 
     def query(self, index, query):
         print(query)
-        resp = self.es.search(index=index, body=query)
+        resp = self.opensearch.search(index=index, body=query)
         # resp_msg(msg="Searching {} - {}".format(index, str(query)[:20]), resp=SearchResp(resp))
 
         # Transform to consistent format between ES/Solr
@@ -239,8 +239,8 @@ class OpenSearchClient(BaseClient):
         return matches
 
     def feature_set(self, index, name):
-        resp = requests.get('{}/_featureset/{}'.format(self.elastic_ep,
-                                                      name))
+        resp = requests.get('{}/_featureset/{}'.format(self.opensearch_ep,
+                                                       name))
 
         jsonResp = resp.json()
         if not jsonResp['found']:
@@ -257,7 +257,6 @@ class OpenSearchClient(BaseClient):
         return mapping, rawFeatureSet
 
     def get_doc(self, doc_id, index):
-        resp = self.es.get(index=index, id=doc_id)
-        #resp_msg(msg="Fetched Doc".format(docId), resp=ElasticResp(resp), throw=False)
+        resp = self.opensearch.get(index=index, id=doc_id)
         return resp['_source']
 
