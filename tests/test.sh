@@ -12,7 +12,19 @@ do
     if [ "$KEY" == "--test-command" ]; then
         TESTS=`echo $ARGUMENT | cut -d '=' -f 2`
     fi
+
+    if [ "$KEY" == "--engines" ]; then
+        ENGINE_ARG=$(echo "$ARGUMENT" | cut -d '=' -f 2)
+    fi
+
 done
+
+echo $ENGINE_ARG
+if [ -z "${ENGINE_ARG}" ]; then
+  ENGINE_ARG="solr,elasticsearch,opensearch"
+  echo $ENGINE_ARG
+fi
+ENGINES=$(awk -F',' '{ for( i=1; i<=NF; i++ ) print $i }' <<< "$ENGINE_ARG")
 
 # 
 if test -f $TESTS; then
@@ -41,31 +53,47 @@ do
     fi
 done
 
-# Setup docker, Solr
-echo "Launch Solr"
-cd notebooks/solr
-if "$REBUILD_CONTAINERS" = true; then
-    echo "Rebuild Solr Containers, as requested"
-    docker-compose down -v
-    docker-compose build
-else
-    echo "Skip Solr Container Rebuild"
-fi
-docker-compose up -d
+function launch_containers() {
+
+  engine="$1"
+  rebuild="$2"
+  echo "Launch $engine"
+  cd notebooks/$engine
+  if "$rebuild" = true; then
+      echo "Rebuild $engine Containers, as requested"
+      docker-compose down -v
+      docker-compose build
+  else
+      echo "Skip $engine Container Rebuild"
+  fi
+  docker-compose up -d
+  cd ../..
+}
+
+function down_containers() {
+
+  engine="$1"
+  rebuild="$2"
+  echo "Launch $engine"
+
+  cd notebooks/$engine
+  if "$rebuild" = true; then
+      echo "Rebuild $engine Containers, as requested"
+      docker-compose down -v
+      docker-compose build
+  else
+      echo "Skip $engine Container Rebuild"
+  fi
+  docker-compose up -d
+  cd ../..
+}
+
+for ENGINE in ${ENGINES}
+do
+  launch_containers "${ENGINE}" ${REBUILD_CONTAINERS}
+done
 
 
-# Setup docker, ES
-cd ../elasticsearch
-echo "Launch ES"
-if "$REBUILD_CONTAINERS" = true; then
-    echo "Rebuild ES Containers, as requested"
-    docker-compose down -v
-    docker-compose build
-else
-    echo "Skip ES Container Rebuild"
-fi
-docker-compose up -d
-cd ../..
 
 # Are all services Running?
 # If not, fail...
@@ -81,21 +109,24 @@ function test_http_service () {
         if [[ "$waited" -ge "$wait_up_to" ]]; then
             echo "ERROR - $2 did not start after $wait_up_to seconds"
             echo "TEARDOWN CONTAINERS"
-            cd notebooks/elasticsearch
-            docker-compose down -v
-            cd ../..
-            cd notebooks/solr
-            docker-compose down -v
-            cd ../..
+            for ENGINE in $ENGINES
+              do
+                cd notebooks/$ENGINE
+                docker-compose down -v
+                cd ../..
+              done
             exit 1
         fi
         ((i++))
     done
     echo "$2 Started"
 }
-test_http_service 9200 Elastic
-test_http_service 5601 Kibana
-test_http_service 8983 Solr
+
+test_http_service 9201 OpenSearch
+test_http_service 5602 OSD
+# test_http_service 9200 Elastic
+# test_http_service 5601 Kibana
+# test_http_service 8983 Solr
 
 # Rebuild venv
 python3 -m venv tests_venv
@@ -116,11 +147,7 @@ echo "== TEARDOWN "
 deactivate
 rm -rf tests_venv
 
-# Teardown Docker
-cd notebooks/solr
-docker-compose down -v
-cd ../../notebooks/elasticsearch
-docker-compose down -v
+
 
 echo "=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*"
 if [ "$TESTS_CODE" == "0" ]

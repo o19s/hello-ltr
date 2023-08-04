@@ -1,0 +1,9 @@
+{
+  "query": {
+    "match": {
+      "title": {
+        "query": "$query"
+      }
+    }
+  }
+}

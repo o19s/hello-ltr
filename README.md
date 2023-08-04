@@ -1,6 +1,6 @@
 # Hello LTR :)
 
-The overall goal of this project is to demonstrate all of the steps required to work with LTR in Elasticsearch or Solr. There's two modes of running. Just running and editing notebooks in a docker container. Or local development (also requiring docker to run the search engine).
+The overall goal of this project is to demonstrate all the steps required to work with LTR in Elasticsearch, Solr, or OpenSearch. There are two modes of running this project. You can run and edit notebooks in a docker container or you can do local development on the notebooks and connect to the search engine(s) running in Docker.
 
 ## No fuss setup: You just want to play with LTR
 
@@ -19,10 +19,12 @@ This will run jupyter and all search engines in Docker containers. Check that ea
 - Solr: [localhost:8983](localhost:8983)
 - Elasticsearch: [localhost:9200](localhost:9200)
 - Kibana: [localhost:5601](localhost:5601)
+- OpenSearch: [localhost:9201](localhost:9201)
+- OpenSearch Dashboards: [localhost:5602](localhost:5602)
 - Jupyter: [localhost:8888](localhost:8888)
 
 ## You want to build your own LTR notebooks
-
+git 
 Follow these steps if you want to do more serious work with the notebooks. For example, if you want to build a demo with your work's data or something you want to preserve later.
 
 ### Run your search engine with Docker
@@ -44,6 +46,15 @@ Setup Elasticsearch with docker compose to work with just Elasticsearch examples
 
 ```
 cd notebooks/elasticsearch
+docker-compose up
+```
+
+#### Running OpenSearch w/ LTR
+
+Setup OpenSearch with docker compose to work with just OpenSearch examples:
+
+```
+cd notebooks/opensearch
 docker-compose up
 ```
 
@@ -85,6 +96,9 @@ Optionally with containers rebuilt
 ./tests/test.sh --rebuild-containers
 
 Failing tests will have their output in `tests/last_run.ipynb`
+
+You can test one or more engines by specifying a comma delimited list:
+./tests/test.sh --engines=solr,opensearch,elasticsearch
 
 ### While developing...
 

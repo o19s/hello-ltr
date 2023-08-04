@@ -1,0 +1,18 @@
+{
+  "query": {
+    "bool": {
+      "should": [
+          {
+            "sltr": {
+                "featureset": "release",
+                "model": "classic",
+                "params": {}
+            }
+          }
+      ],
+      "filter": [
+        {"match": {"title": "$query"}}
+      ]
+    }
+  }
+}
