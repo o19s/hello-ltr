@@ -72,7 +72,7 @@ class ElasticClient(BaseClient):
         cfg_json_path = os.path.join(self.configs_dir, "%s_settings.json" % index)
         with open(cfg_json_path) as src:
             settings = json.load(src)
-            resp = self.es.indices.create(index, body=settings)
+            resp = self.es.indices.create(index=index, body=settings)
             resp_msg(msg="Created index {}".format(index), resp=ElasticResp(resp))
 
     def index_documents(self, index, doc_src):
