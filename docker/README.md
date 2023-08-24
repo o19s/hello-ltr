@@ -3,7 +3,7 @@ If you have issues getting jupyter or the JDK running on the host machine, you c
 ## Requirements
 
 - Docker with docker-compose
-- Ports 8888/8983/9200 must be available on your host machine
+- Ports 8888/8983/9200/9201 must be available on your host machine
 
 ## Setup
 
@@ -14,6 +14,7 @@ The above command will build all images necessary for the project and run the fo
 - Jupyter available at localhost:8888
 - Solr available at localhost:8983
 - Elasticsearch available at localhost:9200
+- OpenSearch available at localhost:9201
 
 ## Cleanup
 
