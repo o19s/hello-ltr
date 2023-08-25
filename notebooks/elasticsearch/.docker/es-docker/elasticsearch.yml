@@ -92,5 +92,8 @@ http.cors.allow-origin: "/http?:.*/"
 http.cors.enabled: true
 indices.query.bool.max_clause_count: 10240
 network.host: 0.0.0.0
+xpack.security.enabled: false
+xpack.security.enrollment.enabled: false
+indices.id_field_data.enabled: true
 
 discovery.type: single-node
