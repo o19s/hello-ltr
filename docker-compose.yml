@@ -16,6 +16,9 @@ services:
       context: ./notebooks/elasticsearch/.docker/es-docker/
       dockerfile: Dockerfile
     container_name: hello-ltr-elastic
+    environment:
+      - xpack.security.enabled=false
+      - xpack.security.enrollment.enabled=false
     ports:
       - 9200:9200
 
