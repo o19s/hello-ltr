@@ -72,7 +72,7 @@ testpath==0.5.0
 threadpoolctl==3.1.0
 tornado==6.2
 tqdm==4.62.3
-traitlets
+traitlets==5.9.0
 urllib3==1.26.8
 wcwidth==0.2.5
 webencodings==0.5.1
