@@ -107,7 +107,7 @@ You can test one or more engines by specifying a comma delimited list:
 
 For more informal development:
 
-- Startup the Solr and ES Docker containers
+- Startup the Solr, OS, and ES Docker containers
 - Do your development
 - Run the command as needed:
 `python tests/run_most_nbs.py`
