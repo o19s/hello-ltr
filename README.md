@@ -74,7 +74,10 @@ __Note:__ The above commands should be run from the root folder of the project.
 
 - Run `jupyter notebook`
 - Browse to notebooks/{search\_engine}/{collection} 
-- Open either the "hello-ltr (Solr)" or "hello-ltr (ES)" as appropriate and ensure you get a graph at the last cell
+- Open the appropriate notebook for your search engine, run each cell, and ensure you get a graph at the last cell:
+  - "hello-ltr (Solr).ipynb"
+  - "hello-ltr (ES).ipynb"
+  - "hello-ltr (OpenSearch).ipynb"
 
 ## Tests
 
