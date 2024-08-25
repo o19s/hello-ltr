@@ -1,6 +1,7 @@
 #!/bin/bash
 TESTS="tests/run_most_nbs.py"
 REBUILD_CONTAINERS=false
+DOCKER_COMPOSE_CMD="docker compose"
 
 # Parse any args...
 for ARGUMENT in "$@"
@@ -38,13 +39,33 @@ fi
 
 # Confirm needed Requirements are present here
 # TODO: may need to check version in future
-COMMANDS=( 'docker-compose' 'python3' 'pip3')
+COMMANDS=( 'docker' 'python3' 'pip3')
 
 for COMMAND in "${COMMANDS[@]}"
 do
     echo "Checking for command $COMMAND"
     if [[ `command -v $COMMAND` ]]; then
         echo "$COMMAND Present"
+        
+        if [[ "$COMMAND" == "docker" ]]; then
+            DOCKER_VERSION=$(docker version --format '{{.Client.Version}}' | cut -d '.' -f1-2)
+            MINIMUM_VERSION="20.10"
+            if [[ $(echo -e "$DOCKER_VERSION\n$MINIMUM_VERSION" | sort -V | head -n1) == "$MINIMUM_VERSION" ]]; then
+                echo "Docker version $DOCKER_VERSION supports 'docker compose'."
+            else
+                echo "Docker version $DOCKER_VERSION does not support 'docker compose'. Checking for 'docker-compose'."
+                if [[ `command -v docker-compose` ]]; then
+                    echo "docker-compose Present"
+                    DOCKER_COMPOSE_CMD="docker-compose"
+                else
+                    echo "================================================"
+                    echo "> POOP!   Fix Yer Environment ⚙️  For:"
+                    echo "> docker-compose Missing - Please Install!"
+                    exit 1
+                fi
+            fi
+        fi
+
     else
         echo "================================================"
         echo "> POOP!   Fix Yer Environment ⚙️  For:"
@@ -61,12 +82,12 @@ function launch_containers() {
   cd notebooks/$engine
   if "$rebuild" = true; then
       echo "Rebuild $engine Containers, as requested"
-      docker-compose down -v
-      docker-compose build
+      $DOCKER_COMPOSE_CMD down -v
+      $DOCKER_COMPOSE_CMD build
   else
       echo "Skip $engine Container Rebuild"
   fi
-  docker-compose up -d
+  $DOCKER_COMPOSE_CMD up -d
   cd ../..
 }
 
@@ -79,12 +100,12 @@ function down_containers() {
   cd notebooks/$engine
   if "$rebuild" = true; then
       echo "Rebuild $engine Containers, as requested"
-      docker-compose down -v
-      docker-compose build
+      $DOCKER_COMPOSE_CMD down -v
+      $DOCKER_COMPOSE_CMD build
   else
       echo "Skip $engine Container Rebuild"
   fi
-  docker-compose up -d
+  $DOCKER_COMPOSE_CMD up -d
   cd ../..
 }
 
@@ -112,7 +133,7 @@ function test_http_service () {
             for ENGINE in $ENGINES
               do
                 cd notebooks/$ENGINE
-                docker-compose down -v
+                $DOCKER_COMPOSE_CMD down -v
                 cd ../..
               done
             exit 1
