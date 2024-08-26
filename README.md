@@ -6,10 +6,10 @@ The overall goal of this project is to demonstrate all the steps required to wor
 
 Follow these steps if you're just playing around & are OK with possibly losing some work (all notebooks exist just in the docker container)
 
-With docker & docker-compose simply run
+With docker simply run
 
 ```
-docker-compose up
+docker compose up
 ```
 
 at the root dir and go to town!
@@ -37,7 +37,7 @@ Setup Solr with docker compose to work with just Solr examples:
 
 ```
 cd notebooks/solr
-docker-compose up
+docker compose up
 ```
 
 #### Running Elasticsearch w/ LTR
@@ -46,7 +46,7 @@ Setup Elasticsearch with docker compose to work with just Elasticsearch examples
 
 ```
 cd notebooks/elasticsearch
-docker-compose up
+docker compose up
 ```
 
 #### Running OpenSearch w/ LTR
@@ -55,14 +55,14 @@ Setup OpenSearch with docker compose to work with just OpenSearch examples:
 
 ```
 cd notebooks/opensearch
-docker-compose up
+docker compose up
 ```
 
 ### Run Jupyter locally w/ Python 3 and all prereqs
 
 #### Setup Python requirements
 
-- Ensure Python 3.7 or later is installed on your system
+- Ensure Python 3.8 or later is installed on your system
 - Create a virtual environment: `python3 -m venv venv`
 - Start the virtual environment: `source venv/bin/activate`
 - Check install tooling is up to date `python -m pip install -U pip wheel setuptools`
@@ -74,7 +74,10 @@ __Note:__ The above commands should be run from the root folder of the project.
 
 - Run `jupyter notebook`
 - Browse to notebooks/{search\_engine}/{collection} 
-- Open either the "hello-ltr (Solr)" or "hello-ltr (ES)" as appropriate and ensure you get a graph at the last cell
+- Open the appropriate notebook for your search engine, run each cell, and ensure you get a graph at the last cell:
+  - "hello-ltr (Solr).ipynb"
+  - "hello-ltr (ES).ipynb"
+  - "hello-ltr (OpenSearch).ipynb"
 
 ## Tests
 
@@ -104,7 +107,7 @@ You can test one or more engines by specifying a comma delimited list:
 
 For more informal development:
 
-- Startup the Solr and ES Docker containers
+- Startup the Solr, OS, and ES Docker containers
 - Do your development
 - Run the command as needed:
 `python tests/run_most_nbs.py`
