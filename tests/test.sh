@@ -152,7 +152,7 @@ test_http_service 5602 OSD
 # Rebuild venv
 python3 -m venv tests_venv
 source tests_venv/bin/activate
-python -m pip install -U pip wheel setuptools
+python3 -m pip install -U pip wheel setuptools
 pip install -r requirements.txt
 
 echo "================================================"
