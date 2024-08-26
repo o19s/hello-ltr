@@ -152,7 +152,7 @@ test_http_service 8983 Solr
 # Rebuild venv
 python3 -m venv tests_venv
 source tests_venv/bin/activate
-python -m pip install -U pip wheel setuptools
+python3 -m pip install -U pip wheel setuptools
 pip install -r requirements.txt
 
 echo "================================================"
@@ -179,7 +179,9 @@ else
    echo "================================================"
    echo "> POOP!    Tests Failed 💩 For:"
 fi
-git log -n 1
+git_log=$(git log -n 1)
+echo "Latest commit:"
+echo "$git_log"
 echo "================================================"
 echo " ==============================================="
 echo " HELLO-LTR TEST DETAILS"

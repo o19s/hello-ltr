@@ -24,7 +24,7 @@ This will run jupyter and all search engines in Docker containers. Check that ea
 - Jupyter: [localhost:8888](localhost:8888)
 
 ## You want to build your own LTR notebooks
-git 
+
 Follow these steps if you want to do more serious work with the notebooks. For example, if you want to build a demo with your work's data or something you want to preserve later.
 
 ### Run your search engine with Docker
