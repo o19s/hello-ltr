@@ -6,10 +6,10 @@ The overall goal of this project is to demonstrate all the steps required to wor
 
 Follow these steps if you're just playing around & are OK with possibly losing some work (all notebooks exist just in the docker container)
 
-With docker & docker-compose simply run
+With docker simply run
 
 ```
-docker-compose up
+docker compose up
 ```
 
 at the root dir and go to town!
@@ -37,7 +37,7 @@ Setup Solr with docker compose to work with just Solr examples:
 
 ```
 cd notebooks/solr
-docker-compose up
+docker compose up
 ```
 
 #### Running Elasticsearch w/ LTR
@@ -46,7 +46,7 @@ Setup Elasticsearch with docker compose to work with just Elasticsearch examples
 
 ```
 cd notebooks/elasticsearch
-docker-compose up
+docker compose up
 ```
 
 #### Running OpenSearch w/ LTR
@@ -55,7 +55,7 @@ Setup OpenSearch with docker compose to work with just OpenSearch examples:
 
 ```
 cd notebooks/opensearch
-docker-compose up
+docker compose up
 ```
 
 ### Run Jupyter locally w/ Python 3 and all prereqs
