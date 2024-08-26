@@ -179,7 +179,9 @@ else
    echo "================================================"
    echo "> POOP!    Tests Failed 💩 For:"
 fi
-git log -n 1
+git_log=$(git log -n 1)
+echo "Latest commit:"
+echo "$git_log"
 echo "================================================"
 echo " ==============================================="
 echo " HELLO-LTR TEST DETAILS"
