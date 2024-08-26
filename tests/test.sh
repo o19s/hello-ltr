@@ -145,9 +145,9 @@ function test_http_service () {
 
 test_http_service 9201 OpenSearch
 test_http_service 5602 OSD
-# test_http_service 9200 Elastic
-# test_http_service 5601 Kibana
-# test_http_service 8983 Solr
+test_http_service 9200 Elastic
+test_http_service 5601 Kibana
+test_http_service 8983 Solr
 
 # Rebuild venv
 python3 -m venv tests_venv
