@@ -1,0 +1,9 @@
+services:
+  opensearch-node1:
+    ports:
+      - "${OPENSEARCH_PORT:-19201}:9201"
+      - "${OPENSEARCH_PA_PORT:-19600}:9600"
+  opensearch-dashboards:
+    ports:
+      - "${OPENSEARCH_DASHBOARDS_PORT:-15602}:5602"
+

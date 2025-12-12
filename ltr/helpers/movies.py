@@ -8,7 +8,7 @@ class Memoize:
         self.f = f
         self.memo = {}
     def __call__(self, *args):
-        if not args in self.memo:
+        if args not in self.memo:
             self.memo[args] = self.f(*args)
         #Warning: You may wish to do a deepcopy here if returning objects
         return self.memo[args]
@@ -57,5 +57,5 @@ def indexable_movies(enrich=noop, movies='data/tmdb.json'):
                       }
             yield enrich(tmdbMovie, base_doc)
             idx += 1
-        except KeyError as k: # Ignore any movies missing these attributes
+        except KeyError: # Ignore any movies missing these attributes
             continue

@@ -2,7 +2,7 @@ import json
 import os
 
 import plotly.graph_objs as go
-from plotly.offline import download_plotlyjs, init_notebook_mode, plot, iplot
+from plotly.offline import init_notebook_mode, iplot
 
 def log_run(cmd):
     resp = os.popen(cmd).read()

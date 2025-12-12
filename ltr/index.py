@@ -1,5 +1,3 @@
-from ltr.helpers.movies import indexable_movies, noop
-
 def rebuild(client, index, doc_src, force = False):
     """ Reload a configuration on disk for each search engine
         (Solr a configset, Elasticsearch a json file)

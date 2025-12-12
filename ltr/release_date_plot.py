@@ -1,5 +1,5 @@
 import plotly.graph_objs as go
-from plotly.offline import download_plotlyjs, init_notebook_mode, plot, iplot
+from plotly.offline import init_notebook_mode, iplot
 
 def search(client, user_query, model_name):
     if client.name() in ['elastic', 'opensearch']:

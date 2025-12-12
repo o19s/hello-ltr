@@ -9,7 +9,8 @@ class Model():
         # Attractiveness per query-doc
         self.attracts = defaultdict(lambda : 0.1)
 
-reverse_enumerate = lambda l: zip(range(len(l)-1, -1, -1), reversed(l))
+def reverse_enumerate(lst):
+    return zip(range(len(lst)-1, -1, -1), reversed(lst))
 
 
 def sdbn(sessions):

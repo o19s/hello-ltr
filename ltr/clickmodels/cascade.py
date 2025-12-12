@@ -26,7 +26,7 @@ def cascade_model(sessions):
                 # clicks past the last one, so we count
                 # this one and break out
                 click_counts[query_doc_key] += 1
-                break;
+                break
 
     for (query_id, doc_id), count in session_counts.items():
         query_doc_key = (query_id, doc_id)

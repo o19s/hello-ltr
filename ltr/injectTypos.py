@@ -1,9 +1,9 @@
 try:
     from judgments import Judgment, judgments_from_file, judgments_to_file, judgments_by_qid
-    from butterfingers import butterfingers
+    from helpers.butterfingers import butterfingers
 except ImportError:
     from .judgments import Judgment, judgments_from_file, judgments_to_file, judgments_by_qid
-    from .butterfingers import butterfingers
+    from .helpers.butterfingers import butterfingers
 
 
 

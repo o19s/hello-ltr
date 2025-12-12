@@ -8,7 +8,7 @@ from ltr.helpers.handle_resp import resp_msg
 
 class SolrClient(BaseClient):
     def __init__(self):
-        self.docker = os.environ.get('LTR_DOCKER') != None
+        self.docker = os.environ.get('LTR_DOCKER') is not None
         self.solr = requests.Session()
 
         if self.docker:
@@ -59,7 +59,7 @@ class SolrClient(BaseClient):
 
         def flush(docs):
             # print('Flushing {} docs'.format(len(docs)))
-            resp = requests.post('{}/{}/update'.format(
+            requests.post('{}/{}/update'.format(
                 self.solr_base_ep, index), json=docs)
             # resp_msg(msg="Done", resp=resp)
             docs.clear()
@@ -112,7 +112,7 @@ class SolrClient(BaseClient):
 
         efi_str = ' '.join(efi_options)
 
-        if ids == None:
+        if ids is None:
             query = "*:*"
         else:
             query = "{{!terms f=id}}{}".format(','.join(ids))

@@ -42,7 +42,7 @@ class OpenSearchClient(BaseClient):
         store to a feature store of the same name of the index
     """
     def __init__(self, configs_dir='.'):
-        self.docker = os.environ.get('LTR_DOCKER') != None
+        self.docker = os.environ.get('LTR_DOCKER') is not None
         self.configs_dir = configs_dir #location of elastic configs
 
         if self.docker:

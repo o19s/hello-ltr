@@ -1,0 +1,8 @@
+services:
+  elasticsearch:
+    ports:
+      - "${ELASTICSEARCH_PORT:-19200}:9200"
+  kibana:
+    ports:
+      - "${KIBANA_PORT:-15601}:5601"
+

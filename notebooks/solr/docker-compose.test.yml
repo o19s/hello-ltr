@@ -1,0 +1,5 @@
+services:
+  solr:
+    ports:
+      - "${SOLR_PORT:-18983}:8983"
+

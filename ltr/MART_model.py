@@ -56,7 +56,7 @@ class MARTModel:
             if len(line) > 0 and line[0] == '#':
                 headerAt += 1
             else:
-                break;
+                break
 
         print("Header At %s" % headerAt)
         validXml = '\n'.join(ranklib_xml.split('\n')[headerAt:])
@@ -139,9 +139,12 @@ class Whoopsie:
                  minGrade, maxGrade,
                  minGradeDocId, maxGradeDocId,
                  output):
-        self.qid = qid; self.judgList = judgList
-        self.minGrade = minGrade; self.maxGrade = maxGrade
-        self.minGradeDocId = minGradeDocId; self.maxGradeDocId = maxGradeDocId
+        self.qid = qid
+        self.judgList = judgList
+        self.minGrade = minGrade
+        self.maxGrade = maxGrade
+        self.minGradeDocId = minGradeDocId
+        self.maxGradeDocId = maxGradeDocId
         self.output = output
 
     def magnitude(self):

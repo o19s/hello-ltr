@@ -1,4 +1,5 @@
-sign = lambda a: (a>0) - (a<0)
+def sign(a):
+    return (a>0) - (a<0)
 
 def pairs_in_order(ranking, both_ways=True):
     assert len(ranking) > 1
@@ -22,7 +23,8 @@ def tau(rank1, rank2, at=4):
             return 1
         return -1
 
-    rank1 = rank1[:at]; rank2 = rank2[:at]
+    rank1 = rank1[:at]
+    rank2 = rank2[:at]
 
     # gather concordances/discords for rank1
     for val1, val2, order in pairs_in_order(rank1, both_ways=True):
@@ -47,7 +49,8 @@ def avg_tau(rank1, rank2, at=4):
     if len(rank1) < at or len(rank2) < at:
         raise ValueError("rankings must be larger than provided at param(%s)" % at)
 
-    rank1 = rank1[:at]; rank2 = rank2[:at]
+    rank1 = rank1[:at]
+    rank2 = rank2[:at]
 
     tot = 0
     for i in range(1,at+1):
@@ -61,7 +64,9 @@ if __name__ == "__main__":
     print(tau([5,6,7,8],[1,2,3,4]))
     print(tau([1,2,3,5],[1,2,3,4]))
     print(tau([5,3,2,1],[4,3,2,1]))
-    l1=[1,2,4,3]; l2=[1,2,3,4]; l3=[2,1,3,4]
+    l1=[1,2,4,3]
+    l2=[1,2,3,4]
+    l3=[2,1,3,4]
     print("avg_tau(%s,%s,at=4) %s" % (l1, l1, avg_tau(l1,l1)))
     print("avg_tau(%s,%s,at=4) %s" % (l1, l2, avg_tau(l1,l2)))
     print("avg_tau(%s,%s,at=4) %s" % (l2, l3, avg_tau(l1,l3)))

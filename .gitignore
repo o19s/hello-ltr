@@ -15,3 +15,4 @@ notify.sh
 .idea/
 *.iml
 tests_venv/*
+*.egg-info

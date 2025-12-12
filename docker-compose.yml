@@ -3,7 +3,7 @@ services:
     build: .
     container_name: hello-ltr-notebook
     ports:
-      - 8888:8888 
+      - "8888:8888"
     environment:
       - LTR_DOCKER=yes 
     links:
@@ -19,7 +19,7 @@ services:
       - xpack.security.enabled=false
       - xpack.security.enrollment.enabled=false
     ports:
-      - 9200:9200
+      - "9200:9200"
 
   kibana:
     build:
@@ -71,5 +71,5 @@ services:
       dockerfile: Dockerfile
     container_name: hello-ltr-solr
     ports:
-      - 8983:8983 
+      - "8983:8983"
 
