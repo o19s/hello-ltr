@@ -62,17 +62,14 @@ docker compose up
 
 #### Setup Python requirements
 
-- Ensure Python 3.8 or later is installed on your system
-- Create a virtual environment: `python3 -m venv venv`
-- Start the virtual environment: `source venv/bin/activate`
-- Check install tooling is up to date `python -m pip install -U pip wheel setuptools`
-- Install the requirements `pip install -r requirements.txt`
+- Install `uv` if not already installed: `curl -LsSf https://astral.sh/uv/install.sh | sh`
+- Sync the project and dependencies (this will create a virtual environment and install Python if needed): `uv sync`
 
 __Note:__ The above commands should be run from the root folder of the project.
 
 #### Start Jupyter notebook and confirm operation
 
-- Run `jupyter notebook`
+- Run `uv run jupyter notebook` (or activate the venv with `source .venv/bin/activate` and then run `jupyter notebook`)
 - Browse to notebooks/{search\_engine}/{collection} 
 - Open the appropriate notebook for your search engine, run each cell, and ensure you get a graph at the last cell:
   - "hello-ltr (Solr).ipynb"
