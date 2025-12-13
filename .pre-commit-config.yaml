@@ -1,0 +1,81 @@
+# Pre-commit hooks configuration for hello-ltr
+# See https://pre-commit.com for more information
+#
+# To skip hooks, use one of these methods:
+#   1. git commit -m "message [skip lint]"  (requires setup, see setup-git-hooks.sh)
+#   2. SKIP=ruff,notebooks git commit
+#   3. git commit --no-verify  (skips all hooks)
+
+repos:
+
+  # Ruff for Python code linting and formatting
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.6.4
+    hooks:
+      # Run ruff linter
+      - id: ruff
+        name: ruff (lint)
+        args: [--fix]
+        types_or: [python, pyi, jupyter]
+        pass_filenames: true
+        # Exclude patterns match pyproject.toml
+        exclude: ^(\.git|__pycache__|\.venv|venv|build|dist|.*\.egg-info|htmlcov|\.pytest_cache)
+      
+      # Run ruff formatter
+      - id: ruff-format
+        name: ruff (format)
+        types_or: [python, pyi, jupyter]
+        pass_filenames: true
+        exclude: ^(\.git|__pycache__|\.venv|venv|build|dist|.*\.egg-info|htmlcov|\.pytest_cache)
+
+  # Notebook output stripping verification (DISABLED BY DEFAULT)
+  # This hook checks if notebook outputs are stripped. It's disabled by default because
+  # you may want to keep outputs in private repos. To enable, uncomment the section below.
+  # To manually strip outputs: nbstripout notebooks/
+  # - repo: local
+  #   hooks:
+  #     - id: notebook-output-check
+  #       name: Check notebook outputs are stripped
+  #       entry: >
+  #         bash -c
+  #         'if ! nbstripout --verify "$@" > /dev/null 2>&1;
+  #         then echo "Error: Notebook outputs detected. Run: nbstripout notebooks/";
+  #         exit 1; fi' --
+  #       language: system
+  #       types: [jupyter]
+  #       files: ^notebooks/.*\.ipynb$
+  #       pass_filenames: true
+
+  # Commit message linting (optional but recommended)
+  - repo: https://github.com/commitizen-tools/commitizen
+    rev: v3.13.0
+    hooks:
+      - id: commitizen
+        stages: [commit-msg]
+        # Note: This hook runs on commit-msg stage
+        # It will be skipped if you use: git commit --no-verify
+
+# Default configuration
+default_language_version:
+  python: python3
+
+# Skip patterns supported in commit messages (using git-commit-wrapper.sh or git alias):
+#   [skip lint]      - Skips ruff linting/formatting and notebook checks
+#   [skip all]       - Skips all hooks
+#   [skip pre-commit] - Skips all hooks
+#
+# To enable commit message-based skipping:
+#   1. Set up git alias: git config alias.commit '!./git-commit-wrapper.sh'
+#   2. Then use: git commit -m "message [skip lint]"
+#
+# You can also use SKIP environment variable:
+#   SKIP=ruff,notebook-output-check git commit  # Skip notebook check
+#   SKIP=ruff,notebooks git commit               # Skip notebook check (alias)
+#   SKIP=ruff git commit                         # Skip ruff only
+#
+# Or skip all hooks:
+#   git commit --no-verify
+#
+# Note: The notebook-output-check hook is optional by default (warns but doesn't fail).
+# To make it required, change 'exit 0' to 'exit 1' in the hook definition above.
+

@@ -84,6 +84,8 @@ dependencies = [
     "pytest-rerunfailures>=14.0",
     # Code quality
     "ruff>=0.14.9",
+    "pre-commit>=3.0.0",
+    "pyright>=1.1.0",
 ]
 
 [tool.setuptools]
@@ -130,7 +132,8 @@ exclude_lines = [
 target-version = "py39"
 
 # Line length (matches formatter)
-line-length = 100
+# Reduced from 100 to preserve multi-line formatting for readability
+line-length = 88
 
 # Exclude directories
 exclude = [
@@ -164,6 +167,10 @@ ignore = [
     "E501",  # Line too long (handled by formatter)
     "B008",  # Do not perform function calls in argument defaults
     "B904",  # Allow `raise` without specifying exception in `except` blocks
+    "N802",  # Function name should be lowercase
+    "N803",  # Argument name should be lowercase
+    "N806",  # Variable in function should be lowercase
+    "N816",  # Variable in global scope should not be mixedCase
 ]
 
 # Allow autofix for all enabled rules

@@ -13,11 +13,12 @@ from .base_client import BaseClient
 class ElasticResp:
     def __init__(self, resp):
         self.status_code = 400
-        if 'acknowledged' in resp and resp['acknowledged']:
+        if "acknowledged" in resp and resp["acknowledged"]:
             self.status_code = 200
         else:
-            self.status_code = resp['status']
+            self.status_code = resp["status"]
             self.text = json.dumps(resp, indent=2)
+
 
 class BulkResp:
     def __init__(self, resp):
@@ -25,35 +26,37 @@ class BulkResp:
         if resp[0] > 0:
             self.status_code = 201
 
+
 class SearchResp:
     def __init__(self, resp):
         self.status_code = 400
-        if 'hits' in resp:
+        if "hits" in resp:
             self.status_code = 200
         else:
-            self.status_code = resp['status']
+            self.status_code = resp["status"]
             self.text = json.dumps(resp, indent=2)
 
 
 class ElasticClient(BaseClient):
-    """ Note on the Elastic client,
-        Elastic LTR is not bound to an index like Solr LTR
-        so many calls take an index but do not use it
+    """Note on the Elastic client,
+    Elastic LTR is not bound to an index like Solr LTR
+    so many calls take an index but do not use it
 
-        In the future, we may wish to isolate an Index's feature
-        store to a feature store of the same name of the index
+    In the future, we may wish to isolate an Index's feature
+    store to a feature store of the same name of the index
     """
-    def __init__(self, configs_dir='.'):
-        self.docker = os.environ.get('LTR_DOCKER') is not None
-        self.configs_dir = configs_dir #location of elastic configs
+
+    def __init__(self, configs_dir="."):
+        self.docker = os.environ.get("LTR_DOCKER") is not None
+        self.configs_dir = configs_dir  # location of elastic configs
 
         if self.docker:
-            self.host = 'elastic'
+            self.host = "elastic"
         else:
-            self.host = 'localhost'
+            self.host = "localhost"
 
-        self.elastic_ep = f'http://{self.host}:9200/_ltr'
-        self.es = Elasticsearch(f'http://{self.host}:9200')
+        self.elastic_ep = f"http://{self.host}:9200/_ltr"
+        self.es = Elasticsearch(f"http://{self.host}:9200")
 
     def get_host(self):
         return self.host
@@ -66,11 +69,15 @@ class ElasticClient(BaseClient):
 
     def delete_index(self, index):
         resp = self.es.indices.delete(index=index, ignore=[400, 404])
-        resp_msg(msg=f"Deleted index {index}",
-                 resp=ElasticResp(resp), throw=False, ignore=[400, 404])
+        resp_msg(
+            msg=f"Deleted index {index}",
+            resp=ElasticResp(resp),
+            throw=False,
+            ignore=[400, 404],
+        )
 
     def create_index(self, index):
-        """ Take the local config files for Elasticsearch for index, reload them into ES"""
+        """Take the local config files for Elasticsearch for index, reload them into ES"""
         cfg_json_path = os.path.join(self.configs_dir, f"{index}_settings.json")
         with open(cfg_json_path) as src:
             settings = json.load(src)
@@ -78,14 +85,13 @@ class ElasticClient(BaseClient):
             resp_msg(msg=f"Created index {index}", resp=ElasticResp(resp))
 
     def index_documents(self, index, doc_src):
-
         def bulkDocs(doc_src):
             for doc in doc_src:
-                if 'id' not in doc:
-                    raise ValueError("Expecting docs to have field 'id' that uniquely identifies document")
-                addCmd = {"_index": index,
-                          "_id": doc['id'],
-                          "_source": doc}
+                if "id" not in doc:
+                    raise ValueError(
+                        "Expecting docs to have field 'id' that uniquely identifies document"
+                    )
+                addCmd = {"_index": index, "_id": doc["id"], "_source": doc}
                 yield addCmd
 
         resp = elasticsearch.helpers.bulk(self.es, bulkDocs(doc_src), chunk_size=100)
@@ -94,19 +100,22 @@ class ElasticClient(BaseClient):
 
     def reset_ltr(self, index):
         resp = requests.delete(self.elastic_ep)
-        resp_msg(msg="Removed Default LTR feature store".format(), resp=resp, throw=False)
+        resp_msg(
+            msg="Removed Default LTR feature store".format(), resp=resp, throw=False
+        )
         resp = requests.put(self.elastic_ep)
         resp_msg(msg="Initialize Default LTR feature store".format(), resp=resp)
 
     def create_featureset(self, index, name, ftr_config):
-        resp = requests.post(f'{self.elastic_ep}/_featureset/{name}', json=ftr_config)
+        resp = requests.post(f"{self.elastic_ep}/_featureset/{name}", json=ftr_config)
         resp_msg(msg=f"Create {name} feature set", resp=resp)
 
     def get_feature_name(self, config, ftr_idx):
         return config["featureset"]["features"][int(ftr_idx) - 1]["name"]
 
-
-    def log_query(self, index, featureset, ids, params={}):
+    def log_query(self, index, featureset, ids, params=None):
+        if params is None:
+            params = {}
         params = {
             "query": {
                 "bool": {
@@ -115,7 +124,7 @@ class ElasticClient(BaseClient):
                             "sltr": {
                                 "_name": "logged_features",
                                 "featureset": featureset,
-                                "params": params
+                                "params": params,
                             }
                         }
                     ]
@@ -125,20 +134,14 @@ class ElasticClient(BaseClient):
                 "ltr_log": {
                     "log_specs": {
                         "name": "ltr_features",
-                        "named_query": "logged_features"
+                        "named_query": "logged_features",
                     }
                 }
             },
-            "size": 1000
+            "size": 1000,
         }
 
-        terms_query = [
-            {
-                "terms": {
-                    "_id": ids
-                }
-            }
-        ]
+        terms_query = [{"terms": {"_id": ids}}]
 
         if ids is not None:
             params["query"]["bool"]["must"] = terms_query
@@ -147,17 +150,17 @@ class ElasticClient(BaseClient):
         # resp_msg(msg="Searching {} - {}".format(index, str(terms_query)[:20]), resp=SearchResp(resp))
 
         matches = []
-        for hit in resp['hits']['hits']:
-            hit['_source']['ltr_features'] = []
+        for hit in resp["hits"]["hits"]:
+            hit["_source"]["ltr_features"] = []
 
-            for feature in hit['fields']['_ltrlog'][0]['ltr_features']:
+            for feature in hit["fields"]["_ltrlog"][0]["ltr_features"]:
                 value = 0.0
-                if 'value' in feature:
-                    value = feature['value']
+                if "value" in feature:
+                    value = feature["value"]
 
-                hit['_source']['ltr_features'].append(value)
+                hit["_source"]["ltr_features"].append(value)
 
-            matches.append(hit['_source'])
+            matches.append(hit["_source"])
 
         return matches
 
@@ -165,37 +168,29 @@ class ElasticClient(BaseClient):
         model_ep = f"{self.elastic_ep}/_model/"
         create_ep = f"{self.elastic_ep}/_featureset/{featureset}/_createmodel"
 
-        resp = requests.delete(f'{model_ep}{model_name}')
-        print(f'Delete model {model_name}: {resp.status_code}')
+        resp = requests.delete(f"{model_ep}{model_name}")
+        print(f"Delete model {model_name}: {resp.status_code}")
 
         resp = requests.post(create_ep, json=model_payload)
         resp_msg(msg=f"Created Model {model_name}", resp=resp)
 
     def submit_ranklib_model(self, featureset, index, model_name, model_payload):
         params = {
-            'model': {
-                'name': model_name,
-                'model': {
-                    'type': 'model/ranklib',
-                    'definition': model_payload
-                }
+            "model": {
+                "name": model_name,
+                "model": {"type": "model/ranklib", "definition": model_payload},
             }
         }
         self.submit_model(featureset, index, model_name, params)
-
 
     def submit_xgboost_model(self, featureset, index, model_name, model_payload):
         params = {
-            'model': {
-                'name': model_name,
-                'model': {
-                    'type': 'model/xgboost+json',
-                    'definition': model_payload
-                }
+            "model": {
+                "name": model_name,
+                "model": {"type": "model/xgboost+json", "definition": model_payload},
             }
         }
         self.submit_model(featureset, index, model_name, params)
-
 
     def model_query(self, index, model, model_params, query):
         params = {
@@ -203,15 +198,10 @@ class ElasticClient(BaseClient):
             "rescore": {
                 "window_size": 1000,
                 "query": {
-                    "rescore_query": {
-                        "sltr": {
-                            "params": model_params,
-                            "model": model
-                        }
-                    }
-                }
+                    "rescore_query": {"sltr": {"params": model_params, "model": model}}
+                },
             },
-            "size": 1000
+            "size": 1000,
         }
 
         resp = self.es.search(index=index, body=params)
@@ -219,9 +209,9 @@ class ElasticClient(BaseClient):
 
         # Transform to consistent format between ES/Solr
         matches = []
-        for hit in resp['hits']['hits']:
-            match = hit['_source']
-            match['score'] = hit['_score']
+        for hit in resp["hits"]["hits"]:
+            match = hit["_source"]
+            match["score"] = hit["_score"]
             matches.append(match)
 
         return matches
@@ -232,31 +222,30 @@ class ElasticClient(BaseClient):
 
         # Transform to consistent format between ES/Solr
         matches = []
-        for hit in resp['hits']['hits']:
-            hit['_source']['_score'] = hit['_score']
-            matches.append(hit['_source'])
+        for hit in resp["hits"]["hits"]:
+            hit["_source"]["_score"] = hit["_score"]
+            matches.append(hit["_source"])
 
         return matches
 
     def feature_set(self, index, name):
-        resp = requests.get(f'{self.elastic_ep}/_featureset/{name}')
+        resp = requests.get(f"{self.elastic_ep}/_featureset/{name}")
 
         jsonResp = resp.json()
-        if not jsonResp['found']:
+        if not jsonResp["found"]:
             raise RuntimeError(f"Unable to find {name}")
 
         resp_msg(msg=f"Fetched FeatureSet {name}", resp=resp)
 
-        rawFeatureSet = jsonResp['_source']['featureset']['features']
+        rawFeatureSet = jsonResp["_source"]["featureset"]["features"]
 
         mapping = []
         for feature in rawFeatureSet:
-            mapping.append({'name': feature['name']})
+            mapping.append({"name": feature["name"]})
 
         return mapping, rawFeatureSet
 
     def get_doc(self, doc_id, index):
         resp = self.es.get(index=index, id=doc_id)
-        #resp_msg(msg="Fetched Doc".format(docId), resp=ElasticResp(resp), throw=False)
-        return resp['_source']
-
+        # resp_msg(msg="Fetched Doc".format(docId), resp=ElasticResp(resp), throw=False)
+        return resp["_source"]

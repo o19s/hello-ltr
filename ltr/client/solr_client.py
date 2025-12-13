@@ -28,7 +28,9 @@ class SolrClient(BaseClient):
         return "solr"
 
     def check_index_exists(self, index):
-        resp = requests.get(f"{self.solr_base_ep}/admin/cores?action=STATUS&core={index}")
+        resp = requests.get(
+            f"{self.solr_base_ep}/admin/cores?action=STATUS&core={index}"
+        )
         return bool(re.search("instanceDir", str(resp.content)))
 
     def delete_index(self, index):
@@ -83,12 +85,16 @@ class SolrClient(BaseClient):
     def reset_ltr(self, index):
         models = self.get_models(index)
         for model in models:
-            resp = requests.delete(f"{self.solr_base_ep}/{index}/schema/model-store/{model}")
+            resp = requests.delete(
+                f"{self.solr_base_ep}/{index}/schema/model-store/{model}"
+            )
             resp_msg(msg=f"Deleted {model} model", resp=resp)
 
         stores = self.get_feature_stores(index)
         for store in stores:
-            resp = requests.delete(f"{self.solr_base_ep}/{index}/schema/feature-store/{store}")
+            resp = requests.delete(
+                f"{self.solr_base_ep}/{index}/schema/feature-store/{store}"
+            )
             resp_msg(msg=f"Deleted {store} Featurestore", resp=resp)
 
     def validate_featureset(self, name, config):
@@ -100,23 +106,24 @@ class SolrClient(BaseClient):
 
     def create_featureset(self, index, name, ftr_config):
         self.validate_featureset(name, ftr_config)
-        resp = requests.put(f"{self.solr_base_ep}/{index}/schema/feature-store", json=ftr_config)
+        resp = requests.put(
+            f"{self.solr_base_ep}/{index}/schema/feature-store", json=ftr_config
+        )
         resp_msg(msg=f"Created {name} feature store under {index}:", resp=resp)
 
     def get_feature_name(self, config, ftr_idx):
         return config[int(ftr_idx) - 1]["name"]
 
-    def log_query(self, index, featureset, ids, options={}):
+    def log_query(self, index, featureset, ids, params=None):
+        if params is None:
+            params = {}
         efi_options = []
-        for key, val in options.items():
+        for key, val in params.items():
             efi_options.append(f'efi.{key}="{val}"')
 
         efi_str = " ".join(efi_options)
 
-        if ids is None:
-            query = "*:*"
-        else:
-            query = f"{{!terms f=id}}{','.join(ids)}"
+        query = "*:*" if ids is None else f"{{!terms f=id}}{','.join(ids)}"
 
         params = {
             "fl": f"id,[features store={featureset} {efi_str}]",
@@ -145,17 +152,19 @@ class SolrClient(BaseClient):
 
         return resp["response"]["docs"]
 
-    def submit_model(self, featureset, index, model_name, solr_model):
+    def submit_model(self, featureset, index, model_name, model_payload):
         url = f"{self.solr_base_ep}/{index}/schema/model-store"
         resp = requests.delete(f"{url}/{model_name}")
         resp_msg(msg=f"Deleted Model {model_name}", resp=resp)
 
-        resp = requests.put(url, json=solr_model)
+        resp = requests.put(url, json=model_payload)
         resp_msg(msg=f"Created Model {model_name}", resp=resp)
 
     def submit_ranklib_model(self, featureset, index, model_name, model_payload):
         """Submits a Ranklib model, converting it to Solr representation"""
-        resp = requests.get(f"{self.solr_base_ep}/{index}/schema/feature-store/{featureset}")
+        resp = requests.get(
+            f"{self.solr_base_ep}/{index}/schema/feature-store/{featureset}"
+        )
         resp_msg(msg=f"Submit Model {model_name} Ftr Set {featureset}", resp=resp)
         metadata = resp.json()
         features = metadata["features"]
@@ -171,7 +180,12 @@ class SolrClient(BaseClient):
 
     def model_query(self, index, model, model_params, query):
         url = f"{self.solr_base_ep}/{index}/select?"
-        params = {"q": query, "fl": "score *", "rq": f"{{!ltr model={model}}}", "rows": 10000}
+        params = {
+            "q": query,
+            "fl": "score *",
+            "rq": f"{{!ltr model={model}}}",
+            "rows": 10000,
+        }
 
         resp = requests.post(url, data=params)
         resp_msg(msg=f"Search keywords - {query}", resp=resp)
@@ -206,7 +220,13 @@ class SolrClient(BaseClient):
 
     def term_vectors_skip_to(self, index, q="*:*", skip=0):
         url = f"{self.solr_base_ep}/{index}/tvrh/"
-        query = {"q": q, "cursorMark": "*", "sort": "id asc", "fl": "id", "rows": str(skip)}
+        query = {
+            "q": q,
+            "cursorMark": "*",
+            "sort": "id asc",
+            "fl": "id",
+            "rows": str(skip),
+        }
         tvrh_resp = requests.post(url, data=query)
         return tvrh_resp.json()["nextCursorMark"]
 
@@ -214,15 +234,6 @@ class SolrClient(BaseClient):
         """Extract all term vectors for a field"""
         # http://localhost:8983/solr/msmarco/tvrh?q=*:*&start=0&rows=10&fl=id,body&tvComponent=true&tv.positions=true
         url = f"{self.solr_base_ep}/{index}/tvrh/"
-
-        def get_posns(weird_posns):
-            positions = []
-            if weird_posns[0] == "positions":
-                for posn in weird_posns[1]:
-                    if posn == "position":
-                        continue
-                    else:
-                        positions.append(posn)
 
         next_cursor = start_cursor
         while True:
@@ -243,7 +254,9 @@ class SolrClient(BaseClient):
             from ltr.client.solr_parse import parse_termvect_namedlist
 
             parsed = parse_termvect_namedlist(tvrh_resp["termVectors"], field=field)
-            for doc_id, terms in parsed.items():
+            # parse_termvect_namedlist returns a dict (it calls .items() internally)
+            parsed_dict: dict = parsed if isinstance(parsed, dict) else {}
+            for doc_id, terms in parsed_dict.items():
                 try:
                     yield doc_id, terms[field]
                 except KeyError:
@@ -278,7 +291,7 @@ class SolrClient(BaseClient):
 
         return mapping, rawFeatureSet
 
-    def get_doc(self, index, doc_id):
+    def get_doc(self, doc_id, index):
         params = {"q": f"id:{doc_id}", "wt": "json"}
 
         resp = requests.post(f"{self.solr_base_ep}/{index}/select", data=params).json()

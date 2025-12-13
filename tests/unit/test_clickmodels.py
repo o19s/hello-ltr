@@ -6,12 +6,17 @@ Tests cover:
 - ubm.py: user_browse_model, update_attractiveness, update_examines
 - Other click model modules
 """
+
 import pytest
 
 from ltr.clickmodels.cascade import cascade_model
 from ltr.clickmodels.session import Session, build
 from ltr.clickmodels.ubm import Model as UBMModel
-from ltr.clickmodels.ubm import update_attractiveness, update_examines, user_browse_model
+from ltr.clickmodels.ubm import (
+    update_attractiveness,
+    update_examines,
+    user_browse_model,
+)
 
 
 class TestCascadeModel:
@@ -20,16 +25,21 @@ class TestCascadeModel:
     def test_cascade_model_calculates_attractiveness(self):
         """Test cascade_model calculates attractiveness correctly."""
         # Arrange
-        sessions = build([
-            ("query1", ((1, True), (2, False))),  # Click on doc 1, stops here
-            ("query1", ((1, False), (2, True))),   # Doc 1 no click, doc 2 clicked, stops here
-            ("query1", ((1, True), (2, False))),   # Click on doc 1, stops here
-        ])
+        sessions = build(
+            [
+                ("query1", ((1, True), (2, False))),  # Click on doc 1, stops here
+                (
+                    "query1",
+                    ((1, False), (2, True)),
+                ),  # Doc 1 no click, doc 2 clicked, stops here
+                ("query1", ((1, True), (2, False))),  # Click on doc 1, stops here
+            ]
+        )
         # Act
         model = cascade_model(sessions)
         # Assert
         # Doc 1: appears in all 3 sessions, clicked in 2 = 2/3
-        assert model.attracts[("query1", 1)] == pytest.approx(2/3, rel=1e-6)
+        assert model.attracts[("query1", 1)] == pytest.approx(2 / 3, rel=1e-6)
         # Doc 2: appears in session 2 only, clicked in that session = 1/1 = 1.0
         # (Cascade model stops at first click, so doc 2 only gets counted in session 2)
         assert model.attracts[("query1", 2)] == pytest.approx(1.0, rel=1e-6)
@@ -37,22 +47,28 @@ class TestCascadeModel:
     def test_cascade_model_stops_at_first_click(self):
         """Test cascade_model stops counting at first click."""
         # Arrange
-        sessions = build([
-            ("query1", ((1, True), (2, True))),  # Should only count doc 1
-        ])
+        sessions = build(
+            [
+                ("query1", ((1, True), (2, True))),  # Should only count doc 1
+            ]
+        )
         # Act
         model = cascade_model(sessions)
         # Assert
         assert model.attracts[("query1", 1)] == 1.0
         # Doc 2 should not be counted (stopped at first click)
-        assert ("query1", 2) not in model.attracts or model.attracts[("query1", 2)] == 0.0
+        assert ("query1", 2) not in model.attracts or model.attracts[
+            ("query1", 2)
+        ] == 0.0
 
     def test_cascade_model_no_clicks(self):
         """Test cascade_model handles sessions with no clicks."""
         # Arrange
-        sessions = build([
-            ("query1", ((1, False), (2, False))),
-        ])
+        sessions = build(
+            [
+                ("query1", ((1, False), (2, False))),
+            ]
+        )
         # Act
         model = cascade_model(sessions)
         # Assert
@@ -66,22 +82,26 @@ class TestUBMModel:
     def test_user_browse_model_initializes(self):
         """Test user_browse_model initializes model."""
         # Arrange
-        sessions = build([
-            ("query1", ((1, True), (2, False))),
-        ])
+        sessions = build(
+            [
+                ("query1", ((1, True), (2, False))),
+            ]
+        )
         # Act
         model = user_browse_model(sessions, rounds=1)
         # Assert
         assert isinstance(model, UBMModel)
-        assert hasattr(model, 'ranks')
-        assert hasattr(model, 'attracts')
+        assert hasattr(model, "ranks")
+        assert hasattr(model, "attracts")
 
     def test_user_browse_model_multiple_rounds(self):
         """Test user_browse_model runs multiple rounds."""
         # Arrange
-        sessions = build([
-            ("query1", ((1, True), (2, False))),
-        ])
+        sessions = build(
+            [
+                ("query1", ((1, True), (2, False))),
+            ]
+        )
         # Act
         model = user_browse_model(sessions, rounds=5)
         # Assert
@@ -91,9 +111,11 @@ class TestUBMModel:
     def test_update_attractiveness_with_clicks(self):
         """Test update_attractiveness updates attractiveness for clicked docs."""
         # Arrange
-        sessions = build([
-            ("query1", ((1, True), (2, False))),
-        ])
+        sessions = build(
+            [
+                ("query1", ((1, True), (2, False))),
+            ]
+        )
         model = UBMModel()
         # Act
         update_attractiveness(sessions, model)
@@ -104,22 +126,26 @@ class TestUBMModel:
     def test_update_attractiveness_bounds(self):
         """Test update_attractiveness keeps values in valid range."""
         # Arrange
-        sessions = build([
-            ("query1", ((1, True), (2, False))),
-        ])
+        sessions = build(
+            [
+                ("query1", ((1, True), (2, False))),
+            ]
+        )
         model = UBMModel()
         # Act
         update_attractiveness(sessions, model)
         # Assert
-        for key, value in model.attracts.items():
+        for _key, value in model.attracts.items():
             assert 0.0 <= value <= 1.0
 
     def test_update_examines_updates_ranks(self):
         """Test update_examines updates rank probabilities."""
         # Arrange
-        sessions = build([
-            ("query1", ((1, True), (2, False))),
-        ])
+        sessions = build(
+            [
+                ("query1", ((1, True), (2, False))),
+            ]
+        )
         model = UBMModel()
         # Act
         update_examines(sessions, model)
@@ -130,14 +156,16 @@ class TestUBMModel:
     def test_update_examines_bounds(self):
         """Test update_examines keeps probabilities in valid range."""
         # Arrange
-        sessions = build([
-            ("query1", ((1, True), (2, False))),
-        ])
+        sessions = build(
+            [
+                ("query1", ((1, True), (2, False))),
+            ]
+        )
         model = UBMModel()
         # Act
         update_examines(sessions, model)
         # Assert
-        for key, value in model.ranks.items():
+        for _key, value in model.ranks.items():
             assert 0.0 <= value <= 1.0
 
 
@@ -202,10 +230,12 @@ class TestCascadeModelEdgeCases:
     def test_cascade_model_different_queries(self):
         """Test cascade_model handles different queries separately."""
         # Arrange
-        sessions = build([
-            ("query1", ((1, True),)),
-            ("query2", ((1, False),)),
-        ])
+        sessions = build(
+            [
+                ("query1", ((1, True),)),
+                ("query2", ((1, False),)),
+            ]
+        )
         # Act
         model = cascade_model(sessions)
         # Assert
@@ -229,11 +259,12 @@ class TestUBMModelEdgeCases:
     def test_ubm_model_zero_rounds(self):
         """Test user_browse_model with zero rounds."""
         # Arrange
-        sessions = build([
-            ("query1", ((1, True),)),
-        ])
+        sessions = build(
+            [
+                ("query1", ((1, True),)),
+            ]
+        )
         # Act
         model = user_browse_model(sessions, rounds=0)
         # Assert
         assert isinstance(model, UBMModel)
-

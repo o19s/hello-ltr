@@ -1,0 +1,7 @@
+#!/bin/bash
+# Git commit-msg hook for commitizen (commit message linting)
+# This hook is installed by pre-commit framework
+# The commit-msg hook functionality is handled by the commitizen hook in .pre-commit-config.yaml
+
+exit 0
+

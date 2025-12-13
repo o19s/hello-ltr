@@ -20,7 +20,8 @@ class Memoize:
 
 @Memoize
 def load_movies(json_path):
-    return json.load(open(json_path))
+    with open(json_path) as f:
+        return json.load(f)
 
 
 def get_movie(tmdb_id, movies="data/tmdb.json"):
@@ -51,7 +52,9 @@ def indexable_movies(enrich=noop, movies="data/tmdb.json"):
                 and tmdbMovie["poster_path"] is not None
                 and len(tmdbMovie["poster_path"]) > 0
             ):
-                full_poster_path = "https://image.tmdb.org/t/p/w185" + tmdbMovie["poster_path"]
+                full_poster_path = (
+                    "https://image.tmdb.org/t/p/w185" + tmdbMovie["poster_path"]
+                )
 
             base_doc = {
                 "id": movieId,
@@ -59,7 +62,9 @@ def indexable_movies(enrich=noop, movies="data/tmdb.json"):
                 "overview": tmdbMovie["overview"],
                 "tagline": tmdbMovie["tagline"],
                 "directors": [director["name"] for director in tmdbMovie["directors"]],
-                "cast": " ".join([castMember["name"] for castMember in tmdbMovie["cast"]]),
+                "cast": " ".join(
+                    [castMember["name"] for castMember in tmdbMovie["cast"]]
+                ),
                 "genres": [genre["name"] for genre in tmdbMovie["genres"]],
                 "release_date": releaseDate,
                 "release_year": releaseYear,
@@ -67,7 +72,9 @@ def indexable_movies(enrich=noop, movies="data/tmdb.json"):
                 "vote_average": float(tmdbMovie["vote_average"])
                 if "vote_average" in tmdbMovie
                 else None,
-                "vote_count": int(tmdbMovie["vote_count"]) if "vote_count" in tmdbMovie else 0,
+                "vote_count": int(tmdbMovie["vote_count"])
+                if "vote_count" in tmdbMovie
+                else 0,
             }
             yield enrich(tmdbMovie, base_doc)
             idx += 1

@@ -4,6 +4,7 @@ Test environment validation utilities.
 This module provides functions to validate that the test environment
 is properly configured before running tests.
 """
+
 import os
 import shutil
 import socket
@@ -19,16 +20,13 @@ def check_docker_installed() -> tuple[bool, Optional[str]]:
     Returns:
         Tuple of (is_installed, error_message)
     """
-    if not shutil.which('docker'):
+    if not shutil.which("docker"):
         return False, "Docker is not installed or not in PATH"
 
     try:
         # Check if Docker daemon is running
         result = subprocess.run(
-            ['docker', 'info'],
-            capture_output=True,
-            text=True,
-            timeout=5
+            ["docker", "info"], capture_output=True, text=True, timeout=5
         )
         if result.returncode != 0:
             return False, f"Docker daemon is not running: {result.stderr.strip()}"
@@ -48,22 +46,24 @@ def check_docker_compose() -> tuple[bool, Optional[str]]:
     """
     # Try 'docker compose' (newer syntax)
     result = subprocess.run(
-        ['docker', 'compose', 'version'],
-        capture_output=True,
-        text=True,
-        timeout=5
+        ["docker", "compose", "version"], capture_output=True, text=True, timeout=5
     )
     if result.returncode == 0:
         return True, None
 
     # Fall back to 'docker-compose' (older syntax)
-    if shutil.which('docker-compose'):
+    if shutil.which("docker-compose"):
         return True, None
 
-    return False, "Docker Compose is not available (neither 'docker compose' nor 'docker-compose' found)"
+    return (
+        False,
+        "Docker Compose is not available (neither 'docker compose' nor 'docker-compose' found)",
+    )
 
 
-def check_port_available(port: int, host: str = 'localhost') -> tuple[bool, Optional[str]]:
+def check_port_available(
+    port: int, host: str = "localhost"
+) -> tuple[bool, Optional[str]]:
     """
     Check if a port is available (not in use).
 
@@ -97,9 +97,9 @@ def check_test_ports() -> tuple[bool, list[str]]:
 
     # Get test ports from environment or use defaults
     test_ports = {
-        'SOLR_PORT': int(os.environ.get('SOLR_PORT', 18983)),
-        'ELASTICSEARCH_PORT': int(os.environ.get('ELASTICSEARCH_PORT', 19200)),
-        'OPENSEARCH_PORT': int(os.environ.get('OPENSEARCH_PORT', 19201)),
+        "SOLR_PORT": int(os.environ.get("SOLR_PORT", 18983)),
+        "ELASTICSEARCH_PORT": int(os.environ.get("ELASTICSEARCH_PORT", 19200)),
+        "OPENSEARCH_PORT": int(os.environ.get("OPENSEARCH_PORT", 19201)),
     }
 
     for port_name, port in test_ports.items():
@@ -122,11 +122,11 @@ def check_python_packages() -> tuple[bool, list[str]]:
     # Core test dependencies - map package name to import name
     # pytest-xdist imports as 'xdist', others use their package name with underscores
     required_packages = {
-        'pytest': 'pytest',
-        'pytest-xdist': 'xdist',
-        'pytest-timeout': 'pytest_timeout',
-        'pytest-html': 'pytest_html',
-        'pytest-cov': 'pytest_cov',
+        "pytest": "pytest",
+        "pytest-xdist": "xdist",
+        "pytest-timeout": "pytest_timeout",
+        "pytest-html": "pytest_html",
+        "pytest-cov": "pytest_cov",
     }
 
     missing = []
@@ -139,7 +139,9 @@ def check_python_packages() -> tuple[bool, list[str]]:
     return len(missing) == 0, missing
 
 
-def check_disk_space(min_gb: float = 1.0, path: str = '.') -> tuple[bool, Optional[str]]:
+def check_disk_space(
+    min_gb: float = 1.0, path: str = "."
+) -> tuple[bool, Optional[str]]:
     """
     Check if there's sufficient disk space available.
 
@@ -152,11 +154,15 @@ def check_disk_space(min_gb: float = 1.0, path: str = '.') -> tuple[bool, Option
     """
     try:
         import shutil
+
         stat = shutil.disk_usage(path)
-        available_gb = stat.free / (1024 ** 3)
+        available_gb = stat.free / (1024**3)
 
         if available_gb < min_gb:
-            return False, f"Insufficient disk space: {available_gb:.2f} GB available, {min_gb} GB required"
+            return (
+                False,
+                f"Insufficient disk space: {available_gb:.2f} GB available, {min_gb} GB required",
+            )
         return True, None
     except Exception:
         # If we can't check, assume it's OK (might be a permission issue)
@@ -169,7 +175,7 @@ def check_test_environment(
     check_packages: bool = True,
     check_disk: bool = True,
     min_disk_gb: float = 1.0,
-    verbose: bool = False
+    verbose: bool = False,
 ) -> tuple[bool, list[str]]:
     """
     Verify all test dependencies and environment are ready.
@@ -245,4 +251,3 @@ def check_test_environment(
 
     # Return True only if no errors (warnings are OK)
     return len(errors) == 0, all_issues
-

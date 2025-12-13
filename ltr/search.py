@@ -17,7 +17,9 @@ def esLtrQuery(keywords, modelName):
     import json
 
     baseEsQuery["query"]["sltr"]["params"]["keywords"] = keywords
-    baseEsQuery["query"]["sltr"]["params"]["keywordsList"] = [keywords]  # Needed by TSQ for now
+    baseEsQuery["query"]["sltr"]["params"]["keywordsList"] = [
+        keywords
+    ]  # Needed by TSQ for now
     baseEsQuery["query"]["sltr"]["model"] = modelName
     print(f"{json.dumps(baseEsQuery)}")
     return baseEsQuery
@@ -35,7 +37,10 @@ def solrLtrQuery(keywords, modelName):
     }
 
 
-tmdbFields = {"title": "title", "display_fields": ["release_year", "genres", "overview"]}
+tmdbFields = {
+    "title": "title",
+    "display_fields": ["release_year", "genres", "overview"],
+}
 
 
 def search(client, keywords, modelName, index="tmdb", fields=tmdbFields):
@@ -49,10 +54,10 @@ def search(client, keywords, modelName, index="tmdb", fields=tmdbFields):
     ti = fields["title"]
 
     for result in results:
-        print("%s " % (result[ti] if ti in result else "N/A"))
+        print("{} ".format(result.get(ti, "N/A")))
         print(f"{result['_score']} ")
 
         for df in fields["display_fields"]:
-            print("%s " % (result[df] if df in result else "N/A"))
+            print("{} ".format(result.get(df, "N/A")))
 
         print("---------------------------------------")

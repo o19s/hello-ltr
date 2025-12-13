@@ -7,12 +7,12 @@ Separated from conftest.py to avoid import anti-patterns.
 
 # Test configuration migrated from RunMostNotebooksTestCase
 TEST_PATHS = [
-    './notebooks/',
-    './notebooks/solr/tmdb',
-    './notebooks/elasticsearch/tmdb',
-    './notebooks/elasticsearch/osc-blog',
-    './notebooks/opensearch/tmdb',
-    './notebooks/opensearch/osc-blog'
+    "./notebooks/",
+    "./notebooks/solr/tmdb",
+    "./notebooks/elasticsearch/tmdb",
+    "./notebooks/elasticsearch/osc-blog",
+    "./notebooks/opensearch/tmdb",
+    "./notebooks/opensearch/osc-blog",
 ]
 
 IGNORED_NOTEBOOKS = [
@@ -34,10 +34,9 @@ IGNORED_NOTEBOOKS = [
     # - Add progress checkpoints to allow resuming long-running evaluations
     # - Consider splitting into smaller, focused evaluation notebooks
     # - Add resource usage monitoring and limits
-    './notebooks/solr/tmdb/evaluation (Solr).ipynb',
-    './notebooks/elasticsearch/tmdb/evaluation.ipynb',
-    './notebooks/opensearch/tmdb/evaluation.ipynb',
-
+    "./notebooks/solr/tmdb/evaluation (Solr).ipynb",
+    "./notebooks/elasticsearch/tmdb/evaluation.ipynb",
+    "./notebooks/opensearch/tmdb/evaluation.ipynb",
     # ========================================================================
     # XGBoost Notebooks
     # ========================================================================
@@ -58,7 +57,6 @@ IGNORED_NOTEBOOKS = [
     # - Create platform-specific test configurations
     # - Add fallback handling for missing XGBoost dependencies
     # - Consider mocking XGBoost for faster unit tests
-    './notebooks/elasticsearch/tmdb/XGBoost.ipynb',
-    './notebooks/opensearch/tmdb/XGBoost.ipynb',
+    "./notebooks/elasticsearch/tmdb/XGBoost.ipynb",
+    "./notebooks/opensearch/tmdb/XGBoost.ipynb",
 ]
-

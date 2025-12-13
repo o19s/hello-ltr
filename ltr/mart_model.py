@@ -46,12 +46,17 @@ class MARTModel:
         if linesSplit[0] == "## LambdaMART":
             print("Whoopsies on LAMBDAMart")
             valid = True
-        if linesSplit[0] == "## Random Forests" and linesSplit[1] == "## No. of bags = 1":
+        if (
+            linesSplit[0] == "## Random Forests"
+            and linesSplit[1] == "## No. of bags = 1"
+        ):
             print("RF with 1 bag")
             valid = True
 
         if not valid:
-            raise ValueError("Whoopsies only support LambdaMART of Random Forest of bags=1")
+            raise ValueError(
+                "Whoopsies only support LambdaMART of Random Forest of bags=1"
+            )
 
         headerAt = 0
         for line in linesSplit:
@@ -135,7 +140,9 @@ class QueryWhoopsie:
 
 
 class Whoopsie:
-    def __init__(self, qid, judgList, minGrade, maxGrade, minGradeDocId, maxGradeDocId, output):
+    def __init__(
+        self, qid, judgList, minGrade, maxGrade, minGradeDocId, maxGradeDocId, output
+    ):
         self.qid = qid
         self.judgList = judgList
         self.minGrade = minGrade
@@ -229,7 +236,9 @@ class Split:
                 elif el.attrib["pos"] == "left":
                     self.left = Split(splitEl=el, features=features)
                 else:
-                    raise ValueError("Unrecognized Split Pos {}".format(el.attrib["pos"]))
+                    raise ValueError(
+                        "Unrecognized Split Pos {}".format(el.attrib["pos"])
+                    )
             elif el.tag == "output":
                 self.output = float(el.text.strip())
 

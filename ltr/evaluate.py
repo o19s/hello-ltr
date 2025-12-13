@@ -9,65 +9,66 @@ def log_run(cmd):
     resp = os.popen(cmd).read()
     print(resp)
 
+
 def quiet_run(cmd):
     os.popen(cmd).read()
 
+
 def evaluate(mode):
     # Build the docker image
-    acceptable_modes = ['elastic', 'solr', 'opensearch']
+    acceptable_modes = ["elastic", "solr", "opensearch"]
     if mode not in acceptable_modes:
-        raise ValueError(f"{mode} is not a supported value for mode. must be one of {acceptable_modes}")
+        raise ValueError(
+            f"{mode} is not a supported value for mode. must be one of {acceptable_modes}"
+        )
 
-    cmd = f'docker build --no-cache -t ltr-rre rre/{mode}/.'
+    cmd = f"docker build --no-cache -t ltr-rre rre/{mode}/."
 
-    print('Building RRE image - This will take a while')
+    print("Building RRE image - This will take a while")
     quiet_run(cmd)
 
     # Remove and run a fresh docker image
-    cmd = 'docker rm -f ltr-rre'
+    cmd = "docker rm -f ltr-rre"
     quiet_run(cmd)
 
-    cmd = 'docker run --name ltr-rre ltr-rre'
-    print('Running evaluation')
+    cmd = "docker run --name ltr-rre ltr-rre"
+    print("Running evaluation")
     log_run(cmd)
 
     # Copy out reports
-    cmd = 'docker cp ltr-rre:/rre/target/rre/evaluation.json data/rre-evaluation.json'
+    cmd = "docker cp ltr-rre:/rre/target/rre/evaluation.json data/rre-evaluation.json"
     log_run(cmd)
 
-    cmd = 'docker cp ltr-rre:/rre/target/site/rre-report.xlsx data/rre-report.xlsx'
+    cmd = "docker cp ltr-rre:/rre/target/site/rre-report.xlsx data/rre-report.xlsx"
     log_run(cmd)
 
-    print('RRE Evaluation complete')
+    print("RRE Evaluation complete")
 
 
 def rre_table():
     init_notebook_mode(connected=True)
 
-    with open('data/rre-evaluation.json') as src:
+    with open("data/rre-evaluation.json") as src:
         report = json.load(src)
-        metrics = report['metrics']
+        metrics = report["metrics"]
 
-    experiments = ['baseline', 'classic', 'latest']
+    experiments = ["baseline", "classic", "latest"]
     precisions = []
     recalls = []
     errs = []
 
     for exp in experiments:
-        precisions.append(metrics['P']['versions'][exp]['value'])
-        recalls.append(metrics['R']['versions'][exp]['value'])
-        errs.append(metrics['ERR@30']['versions'][exp]['value'])
+        precisions.append(metrics["P"]["versions"][exp]["value"])
+        recalls.append(metrics["R"]["versions"][exp]["value"])
+        errs.append(metrics["ERR@30"]["versions"][exp]["value"])
 
     trace = go.Table(
-            header={'values': ['', 'Precision', 'Recall', 'ERR'], 'fill': {'color': '#AAAAAA'}},
-            cells={'values': [
-                    experiments,
-                    precisions,
-                    recalls,
-                    errs
-                ]}
+        header={
+            "values": ["", "Precision", "Recall", "ERR"],
+            "fill": {"color": "#AAAAAA"},
+        },
+        cells={"values": [experiments, precisions, recalls, errs]},
     )
 
     data = [trace]
     iplot(data)
-

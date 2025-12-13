@@ -20,7 +20,7 @@ def cascade_model(sessions):
     model = Model()
 
     for session in sessions:
-        for rank, doc in enumerate(session.docs):
+        for doc in session.docs:
             query_doc_key = (session.query, doc.doc_id)
             session_counts[query_doc_key] += 1
 
@@ -33,7 +33,7 @@ def cascade_model(sessions):
 
     for (query_id, doc_id), count in session_counts.items():
         query_doc_key = (query_id, doc_id)
-        model.attracts[query_doc_key] = click_counts[query_doc_key] / session_counts[query_doc_key]
+        model.attracts[query_doc_key] = click_counts[query_doc_key] / count
     return model
 
 

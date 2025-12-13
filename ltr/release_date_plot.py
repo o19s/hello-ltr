@@ -5,14 +5,19 @@ from plotly.offline import init_notebook_mode, iplot
 def search(client, user_query, model_name):
     if client.name() in ["elastic", "opensearch"]:
         engine_query = {
-            "bool": {"must": {"match_all": {}}, "filter": {"match": {"title": user_query}}}
+            "bool": {
+                "must": {"match_all": {}},
+                "filter": {"match": {"title": user_query}},
+            }
         }
     else:
         engine_query = "title:(" + user_query + ")^0"
     return client.model_query("tmdb", model_name, {}, engine_query)
 
 
-def plot(client, query, models=["classic", "latest"]):
+def plot(client, query, models=None):
+    if models is None:
+        models = ["classic", "latest"]
     init_notebook_mode(connected=True)
 
     modelData = []

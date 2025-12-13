@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 
-'''
+"""
     This project demonstrates working with LTR in Elasticsearch and Solr
 
     The goal of this class is to abstract away the server and highlight the steps
@@ -8,14 +8,16 @@ from abc import ABC, abstractmethod
     which backend is being used, but the implementations of each client
     should be useful references to those getting started with LTR on
     their specific platform
-'''
+"""
+
+
 class BaseClient(ABC):
     @abstractmethod
-    def get_host(self):
+    def get_host(self) -> str:
         pass
 
     @abstractmethod
-    def name(self):
+    def name(self) -> str:
         pass
 
     @abstractmethod
@@ -43,15 +45,15 @@ class BaseClient(ABC):
         pass
 
     @abstractmethod
-    def query(self, index, query):
+    def query(self, index, query) -> list[dict]:
         pass
 
     @abstractmethod
-    def get_doc(self, doc_id):
+    def get_doc(self, doc_id, index):
         pass
 
     @abstractmethod
-    def log_query(self, index, featureset, ids, params):
+    def log_query(self, index, featureset, ids, params) -> list[dict]:
         pass
 
     @abstractmethod
@@ -63,13 +65,11 @@ class BaseClient(ABC):
         pass
 
     @abstractmethod
-    def model_query(self, index, model, model_params, query):
+    def model_query(self, index, model, model_params, query) -> list[dict]:
         pass
 
     @abstractmethod
-    def feature_set(self, index, name):
-        """ Return a mapping of name/feature ordinal
-            and the raw (search engine specific) feature list"""
+    def feature_set(self, index, name) -> tuple[list[dict], list]:
+        """Return a mapping of name/feature ordinal
+        and the raw (search engine specific) feature list"""
         pass
-
-

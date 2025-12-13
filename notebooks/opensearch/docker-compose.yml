@@ -24,8 +24,10 @@ services:
     volumes:
       - opensearch-data1:/usr/share/opensearch/data
     ports:
-      - "9201:9201"
-      - "9600:9600" # required for Performance Analyzer
+      # Use environment variables instead of hard-coded ports to allow multiple instances
+      # to run simultaneously without port conflicts, and to support different environments
+      - "${OPENSEARCH_PORT:-9201}:9201"
+      - "${OPENSEARCH_PA_PORT:-9600}:9600" # required for Performance Analyzer
     networks:
       - opensearch-net
 
@@ -35,7 +37,9 @@ services:
     build: ./.docker/osd-docker/.
     container_name: opensearch-dashboards
     ports:
-      - "5602:5602"
+      # Use environment variable instead of hard-coded port to allow multiple instances
+      # to run simultaneously without port conflicts, and to support different environments
+      - "${OPENSEARCH_DASHBOARDS_PORT:-5602}:5602"
     environment:
       - 'OPENSEARCH_HOSTS=["http://opensearch-node1:9201"]'
       - "DISABLE_SECURITY_DASHBOARDS_PLUGIN=true" # disables security dashboards plugin in OpenSearch Dashboards

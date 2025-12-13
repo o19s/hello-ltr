@@ -47,7 +47,11 @@ def synthesize(
 
         judgments.append(
             Judgment(
-                qid=1, docId=hit["id"], grade=rating, features=hit["ltr_features"], keywords=""
+                qid=1,
+                docId=hit["id"],
+                grade=rating,
+                features=hit["ltr_features"],
+                keywords="",
             )
         )
 
@@ -65,7 +69,11 @@ def synthesize(
 
         judgments.append(
             Judgment(
-                qid=1, docId=hit["id"], grade=rating, features=hit["ltr_features"], keywords=""
+                qid=1,
+                docId=hit["id"],
+                grade=rating,
+                features=hit["ltr_features"],
+                keywords="",
             )
         )
 

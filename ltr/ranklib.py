@@ -142,6 +142,9 @@ def feature_search(
 ):
     from itertools import combinations
 
+    if features is None:
+        raise ValueError("features parameter is required for feature_search")
+
     modelFile = "data/{}_model.txt".format("temp")
     best = 0
     bestCombo = None
@@ -176,7 +179,9 @@ def feature_search(
                     f"Trying features {repr(list(combination))} TEST {metric2t}={kcvTestMetric} after cost {kcvTestMetric * cost}"
                 )
             else:
-                print(f"Trying features {repr(list(combination))} TEST {metric2t}={kcvTestMetric}")
+                print(
+                    f"Trying features {repr(list(combination))} TEST {metric2t}={kcvTestMetric}"
+                )
 
             if kcvTestMetric > best:
                 best = kcvTestMetric
@@ -189,7 +194,9 @@ def feature_search(
     # Compute avg metric with each feature
     for i in range(1, max(features) + 1):
         if metricPerFeature[i][0] > 0:
-            metricPerFeature[i] = metricPerFeature[i][1] / metricPerFeature[i][0]  # count, sum
+            metricPerFeature[i] = (
+                metricPerFeature[i][1] / metricPerFeature[i][0]
+            )  # count, sum
         else:
             metricPerFeature[i] = -1
 

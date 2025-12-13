@@ -29,6 +29,7 @@ def test_imports():
 
     try:
         import numpy as np  # noqa: F401
+
         print(f"  ✓ numpy {np.__version__}")
     except Exception as e:
         errors.append(f"numpy import failed: {e}")
@@ -37,6 +38,7 @@ def test_imports():
 
     try:
         import scipy  # noqa: F401
+
         print(f"  ✓ scipy {scipy.__version__}")
     except Exception as e:
         errors.append(f"scipy import failed: {e}")
@@ -45,6 +47,7 @@ def test_imports():
 
     try:
         import sklearn  # noqa: F401
+
         print(f"  ✓ scikit-learn {sklearn.__version__}")
     except Exception as e:
         errors.append(f"scikit-learn import failed: {e}")
@@ -53,6 +56,7 @@ def test_imports():
 
     try:
         import pandas as pd  # noqa: F401
+
         print(f"  ✓ pandas {pd.__version__}")
     except Exception as e:
         errors.append(f"pandas import failed: {e}")
@@ -61,6 +65,7 @@ def test_imports():
 
     try:
         import matplotlib  # noqa: F401
+
         print(f"  ✓ matplotlib {matplotlib.__version__}")
     except Exception as e:
         errors.append(f"matplotlib import failed: {e}")
@@ -69,6 +74,7 @@ def test_imports():
 
     if errors:
         pytest.fail(f"Import errors: {errors}")
+
 
 def test_numpy_operations():
     """Test numpy operations used in codebase."""
@@ -100,6 +106,7 @@ def test_numpy_operations():
     if errors:
         pytest.fail(f"Numpy operation errors: {errors}")
 
+
 def test_scipy_operations():
     """Test scipy operations used in Bayesian optimization notebooks."""
     print("\nTesting scipy operations...")
@@ -126,6 +133,7 @@ def test_scipy_operations():
 
     if errors:
         pytest.fail(f"Scipy operation errors: {errors}")
+
 
 def test_sklearn_operations():
     """Test scikit-learn operations used in Lambda-MART notebooks."""
@@ -159,7 +167,7 @@ def test_sklearn_operations():
         model = svm.LinearSVC(max_iter=1000)
         model.fit(x_data, y_binary)
 
-        assert hasattr(model, 'coef_')
+        assert hasattr(model, "coef_")
 
         print("  ✓ scikit-learn operations")
     except Exception as e:
@@ -171,6 +179,7 @@ def test_sklearn_operations():
     if errors:
         pytest.fail(f"Scikit-learn operation errors: {errors}")
 
+
 def test_pandas_operations():
     """Test pandas DataFrame operations used in notebooks."""
     print("\nTesting pandas operations...")
@@ -181,19 +190,19 @@ def test_pandas_operations():
 
         # Test DataFrame creation (used in judgments_to_dataframe)
         data = {
-            'uid': ['1_a', '2_b', '3_c'],
-            'qid': [1, 1, 2],
-            'grade': [1, 2, 1],
-            'features': [[1, 2], [3, 4], [5, 6]]
+            "uid": ["1_a", "2_b", "3_c"],
+            "qid": [1, 1, 2],
+            "grade": [1, 2, 1],
+            "features": [[1, 2], [3, 4], [5, 6]],
         }
         df = pd.DataFrame(data)
 
         assert len(df) == 3
-        assert 'qid' in df.columns
+        assert "qid" in df.columns
 
         # Test DataFrame operations (used in lambda-mart notebooks)
-        df['last_prediction'] = 0.0
-        grouped = df.groupby('qid')['grade'].sum()
+        df["last_prediction"] = 0.0
+        grouped = df.groupby("qid")["grade"].sum()
 
         assert len(grouped) == 2
 
@@ -202,7 +211,7 @@ def test_pandas_operations():
         assert len(df_copy) == len(df)
 
         # Test DataFrame operations with lists (used in lambda-mart notebooks)
-        features_list = df['features'].tolist()
+        features_list = df["features"].tolist()
         assert len(features_list) == 3
 
         print("  ✓ pandas DataFrame operations")
@@ -215,6 +224,7 @@ def test_pandas_operations():
     if errors:
         pytest.fail(f"Pandas operation errors: {errors}")
 
+
 def test_matplotlib_operations():
     """Test matplotlib operations used in notebooks."""
     print("\nTesting matplotlib operations...")
@@ -222,7 +232,8 @@ def test_matplotlib_operations():
 
     try:
         import matplotlib
-        matplotlib.use('Agg')  # Use non-interactive backend
+
+        matplotlib.use("Agg")  # Use non-interactive backend
         import matplotlib.pyplot as plt
         import numpy as np
 
@@ -232,8 +243,8 @@ def test_matplotlib_operations():
 
         fig, ax = plt.subplots()
         ax.plot(x, y)
-        ax.set_xlabel('X')
-        ax.set_ylabel('Y')
+        ax.set_xlabel("X")
+        ax.set_ylabel("Y")
 
         # Close figure to avoid warnings
         plt.close(fig)
@@ -247,6 +258,7 @@ def test_matplotlib_operations():
 
     if errors:
         pytest.fail(f"Matplotlib operation errors: {errors}")
+
 
 def test_integration():
     """Test integration of packages together (as used in notebooks)."""
@@ -271,11 +283,13 @@ def test_integration():
         features_scaled = scaler.transform(features)
 
         # Convert to DataFrame (as in lambda-mart notebooks)
-        df = pd.DataFrame({
-            'qid': predictors[:, 1],
-            'grade': predictors[:, 0],
-            'features': features_list
-        })
+        df = pd.DataFrame(
+            {
+                "qid": predictors[:, 1],
+                "grade": predictors[:, 0],
+                "features": features_list,
+            }
+        )
 
         assert len(df) == 3
         assert features_scaled.shape == features.shape
@@ -290,6 +304,7 @@ def test_integration():
     if errors:
         pytest.fail(f"Integration test errors: {errors}")
 
+
 def main():
     """Run all compatibility tests (standalone mode)."""
     print("=" * 60)
@@ -297,17 +312,15 @@ def main():
     print("Testing Python 3.12 compatibility after package updates")
     print("=" * 60)
     print("\nNote: For coverage reporting, run with pytest:")
-    print("  pytest tests/test_package_compatibility.py --cov=ltr --cov-report=term-missing")
+    print(
+        "  pytest tests/test_package_compatibility.py --cov=ltr --cov-report=term-missing"
+    )
     print("=" * 60 + "\n")
 
     # Run pytest programmatically
-    exit_code = pytest.main([
-        __file__,
-        "-v",
-        "--tb=short"
-    ])
+    exit_code = pytest.main([__file__, "-v", "--tb=short"])
     return exit_code
 
-if __name__ == '__main__':
-    sys.exit(main())
 
+if __name__ == "__main__":
+    sys.exit(main())

@@ -6,19 +6,24 @@ This directory contains the test infrastructure for the hello-ltr project, focus
 
 The test suite validates that all Jupyter notebooks execute successfully without errors. It covers:
 - 36+ notebooks across Solr, Elasticsearch, and OpenSearch
-- Integration testing with Docker containers
+- Per-worker Docker container isolation (default)
 - Automated setup and teardown
-- Parallel execution support
+- Parallel execution support with isolated containers
 
 ## Quick Start
 
 ### Run All Tests
 ```bash
-# With Docker orchestration (recommended)
+# Recommended: Use test.sh wrapper (handles environment setup)
 ./tests/test.sh
 
-# Direct pytest (requires services already running)
+# Direct pytest (per-worker containers enabled by default)
 pytest tests/test_notebooks.py
+
+# Parallel execution with isolated containers per worker
+pytest -n auto tests/test_notebooks.py
+# or
+PYTEST_ARGS="-n auto" ./tests/test.sh
 ```
 
 ### Run Specific Tests
@@ -190,12 +195,26 @@ sudo systemctl start docker  # Linux
 ```
 
 **Issue: Port conflicts**
+
+With per-worker containers (default), port conflicts are automatically handled:
+- Each worker gets unique ports (base_port + worker_id * 1000)
+- Containers are isolated per worker
+- No manual port management needed
+
+If you see port conflicts:
 ```bash
-# Error: "Port already in use"
-# Solution: Stop conflicting services or use different ports
-export SOLR_PORT=28983
-export ELASTICSEARCH_PORT=29200
-export OPENSEARCH_PORT=29201
+# Error: "Port already in use" or "Ports not available"
+# Solution 1: Clean up leftover containers
+docker ps -a | grep hello-ltr
+docker stop <container-id>
+docker rm <container-id>
+
+# Solution 2: Use legacy mode with custom ports
+USE_WORKER_CONTAINERS=false \
+SOLR_PORT=28983 \
+ELASTICSEARCH_PORT=29200 \
+OPENSEARCH_PORT=29201 \
+./tests/test.sh
 ```
 
 **Issue: Permission denied (Docker)**
@@ -222,7 +241,7 @@ For CI/CD environments (GitHub Actions, Jenkins, etc.):
 ```bash
 AUTO_CLEANUP_CONFLICTS=true      # Auto-cleanup without prompts
 SERVICE_WAIT_TIMEOUT=600         # Longer timeout for CI
-NOTEBOOK_TIMEOUT_HOURS=12        # Extended timeout for CI
+NOTEBOOK_TIMEOUT_MINUTES=10      # Extended timeout for CI (default: 5 minutes)
 ```
 
 **CI Setup Script:**
@@ -236,8 +255,8 @@ uv pip install -e .
 # Verify Docker
 docker compose version
 
-# Run tests non-interactively
-AUTO_CLEANUP_CONFLICTS=true ./tests/test.sh --non-interactive
+# Run tests (containers are managed automatically by fixtures)
+./tests/test.sh
 ```
 
 ## Pytest Command Reference
@@ -331,10 +350,13 @@ pytest -n auto --dist loadgroup tests/test_notebooks.py
 - Port offset: base_port + (worker_id * 1000)
 - Example: Worker 0 uses ports 18983, 19200, 19201; Worker 1 uses 19983, 20200, 20201
 - Ports are logged at worker startup for debugging
+- Each worker gets its own isolated containers (per-worker containers are default)
 
-**Note**: When using `test.sh` with Docker, containers are started once before pytest runs. For best results with parallel execution:
-- Use `--dist loadgroup` to group by engine (recommended)
-- Or run sequential tests if you need all engines available to all workers
+**Per-Worker Containers (Default):**
+- Containers are automatically started per worker
+- No port conflicts between workers
+- Automatic cleanup after tests complete
+- Use `--dist loadgroup` to group by engine for better resource usage
 
 ### Verbose Output
 ```bash
@@ -391,13 +413,28 @@ pytest -vv -s -x tests/test_notebooks.py
 ```
 tests/
 ├── conftest.py              # Pytest fixtures and configuration
+│                            # - Per-worker container fixtures (default)
+│                            # - Port management and isolation
+│                            # - Health checks and timing
 ├── test_notebooks.py        # Main test suite (parametrized)
 ├── runner.py                # Notebook execution engine
 ├── nb_test_config.py        # Test path configuration
 ├── patch_clients_for_tests.py  # Port patching for isolation
-├── test.sh                  # Docker orchestration script
+├── test.sh                  # Test runner wrapper (simplified)
 └── README.md               # This file
 ```
+
+### Container Management
+
+**Per-Worker Containers (Default):**
+- Each pytest worker gets its own isolated containers
+- Containers automatically start before tests and clean up after
+- Unique ports per worker prevent conflicts
+- Enabled by default (`USE_WORKER_CONTAINERS=true`)
+
+**Legacy Mode (Externally Managed):**
+- Set `USE_WORKER_CONTAINERS=false` to use externally managed containers
+- Useful if you want to manage containers manually or reuse existing ones
 
 ### Key Components
 
@@ -417,11 +454,376 @@ tests/
 - Prevents conflicts with production services
 - Patches: Solr (8983→18983), ES (9200→19200), OpenSearch (9201→19201)
 
-**4. Docker Orchestration ([test.sh](test.sh))**
-- Starts required Docker containers
-- Port conflict detection and resolution
-- Service health checking
-- Automatic cleanup on exit/interrupt
+**4. Container Fixtures ([conftest.py](conftest.py))**
+- Per-worker container isolation (default)
+- Automatic container startup and cleanup
+- Health checks with timing logs
+- Port management and conflict prevention
+- File locking for parallel execution safety
+
+**5. Test Runner ([test.sh](test.sh))**
+- Simplified wrapper for pytest
+- Environment setup and dependency management
+- Per-worker containers enabled by default
+- Legacy mode support for externally managed containers
+
+## Test Documentation
+
+This section provides comprehensive documentation of the test suite, including test organization, fixtures, and examples.
+
+### Test Organization
+
+The test suite is organized into three main categories:
+
+#### 1. Notebook Tests (`tests/notebooks/`)
+
+**Purpose:** End-to-end validation of Jupyter notebooks executing successfully.
+
+**Test Files:**
+- `test_notebooks.py` - Parametrized test suite that executes all notebooks
+- `runner.py` - Notebook execution engine with error capture and port patching
+- `nb_test_config.py` - Configuration for notebook test paths and ignored notebooks
+
+**Coverage:**
+- 36+ notebooks across Solr, Elasticsearch, and OpenSearch
+- Setup notebooks (index creation, data preparation)
+- Training notebooks (feature engineering, model training)
+- Evaluation notebooks (performance metrics, analysis)
+
+**Example:**
+```python
+# Each notebook becomes a parametrized test
+@pytest.mark.parametrize("notebook_path,notebook_type,engine", NOTEBOOK_LIST)
+def test_notebook_executes_without_errors(notebook_path, notebook_type, engine, notebook_runner, request):
+    """Test that a notebook executes without errors."""
+    # Request container fixtures based on engine
+    if engine == 'solr':
+        request.getfixturevalue('solr_container')
+    # ... execute notebook and check for errors
+```
+
+#### 2. Unit Tests (`tests/unit/`)
+
+**Purpose:** Test individual functions and classes in isolation.
+
+**Test Files and Coverage:**
+
+| Test File | What It Tests | Key Test Cases |
+|-----------|---------------|----------------|
+| `test_client_solr.py` | SolrClient class | Initialization, index operations, LTR features, queries, document retrieval |
+| `test_client_elastic.py` | ElasticClient class | Initialization, index operations, LTR features, queries, model submission |
+| `client_test_helpers.py` | All client classes (parametrized) | Shared tests for Solr, OpenSearch, and Elastic clients |
+| `test_search.py` | Search query generation | esLtrQuery, solrLtrQuery, search function with all engines |
+| `test_index.py` | Index rebuild functionality | Force rebuild, create new index, method ordering |
+| `test_evaluate.py` | Evaluation functions | evaluate() with all engines, rre_table() data loading |
+| `test_ranklib.py` | RankLib integration | Training, feature search, model saving, KCV support |
+| `test_clickmodels.py` | Click model algorithms | Cascade model, User Browse Model, session building |
+| `test_judg_list.py` | Judgment list parsing | StringIO reading, file I/O, unsorted detection |
+| `test_utils.py` | Utility functions | Helper functions used across the codebase |
+| `test_notebook_patterns.py` | Notebook code patterns | Common patterns and anti-patterns in notebooks |
+| `test_package_compatibility.py` | Package compatibility | NumPy, SciPy, scikit-learn, pandas, matplotlib operations |
+
+**Total:** 13 test files, 200+ individual test cases
+
+**Example:**
+```python
+def test_solr_client_initializes_with_localhost():
+    """Test client initializes with localhost when not in Docker."""
+    client = SolrClient()
+    assert client.get_host() == 'localhost'
+    assert client.port == 8983
+```
+
+#### 3. Integration Tests (`tests/integration/`)
+
+**Purpose:** Test interactions between components and external services.
+
+**Test Files:**
+- `test_container_fixtures.py` - Verifies container fixtures work correctly
+- `test_env_validation.py` - Validates test environment setup
+
+**Coverage:**
+- Container fixture initialization and cleanup
+- Port management and conflict resolution
+- Environment validation (Docker, ports, packages, disk space)
+- Health check functionality
+
+### Test Fixtures
+
+Fixtures are defined in `tests/conftest.py` and provide reusable test setup and teardown.
+
+#### Container Fixtures (Session Scope)
+
+**Purpose:** Start and manage Docker containers for search engines.
+
+**Available Fixtures:**
+
+1. **`solr_container`** - Solr container
+   - **Scope:** Session (shared across all tests in a worker)
+   - **Port:** `SOLR_PORT` environment variable (default: 18983)
+   - **Health Check:** `/solr/admin/info/system`
+   - **Usage:**
+     ```python
+     def test_something(solr_container):
+         # Container is ready, SOLR_PORT is set
+         client = SolrClient()
+         # Use client...
+     ```
+
+2. **`elasticsearch_container`** - Elasticsearch + Kibana containers
+   - **Scope:** Session
+   - **Ports:** `ELASTICSEARCH_PORT` (default: 19200), `KIBANA_PORT` (default: 15601)
+   - **Health Checks:** `/_cluster/health`, `/api/status`
+   - **Usage:**
+     ```python
+     def test_something(elasticsearch_container):
+         # Containers are ready
+         client = ElasticClient()
+         # Use client...
+     ```
+
+3. **`opensearch_container`** - OpenSearch + OpenSearch Dashboards containers
+   - **Scope:** Session
+   - **Ports:** `OPENSEARCH_PORT` (default: 19201), `OPENSEARCH_DASHBOARDS_PORT` (default: 15602)
+   - **Health Checks:** `/_cluster/health`, `/api/status`
+   - **Usage:**
+     ```python
+     def test_something(opensearch_container):
+         # Containers are ready
+         client = OpenSearchClient()
+         # Use client...
+     ```
+
+**Features:**
+- Per-worker isolation (each pytest-xdist worker gets its own containers)
+- Automatic cleanup after session ends
+- Port conflict prevention via file locking
+- Health checks with exponential backoff retry logic
+- Startup timing logs for performance debugging
+
+**Configuration:**
+- Set `USE_WORKER_CONTAINERS=false` to disable per-worker containers (legacy mode)
+- Containers are skipped if already running externally
+
+#### Notebook Runner Fixture
+
+**`notebook_runner`** - Function fixture for executing notebooks
+
+**Purpose:** Execute notebooks and return structured results.
+
+**Usage:**
+```python
+def test_my_notebook(notebook_runner):
+    """Test a specific notebook."""
+    result = notebook_runner('path/to/notebook.ipynb')
+    
+    # Check results
+    assert result['errors'] == []
+    assert result['execution_time'] < 3600  # Less than 1 hour
+    assert result['notebook'] is not None
+```
+
+**Returns:**
+```python
+{
+    'notebook': nbformat.NotebookNode,  # Executed notebook object
+    'errors': List[Dict],                # List of errors encountered
+    'execution_time': float,            # Time taken in seconds
+    'path': str                         # Path to the notebook
+}
+```
+
+**Features:**
+- Automatic port patching injection
+- Cell-by-cell progress logging
+- Error capture with context (cell index, source code)
+- Configurable timeout (default: 5 minutes from `NOTEBOOK_TIMEOUT_MINUTES`)
+
+### Running Specific Test Scenarios
+
+#### Run Tests by Category
+
+```bash
+# Run only unit tests
+pytest tests/unit/
+
+# Run only integration tests
+pytest tests/integration/
+
+# Run only notebook tests
+pytest tests/notebooks/test_notebooks.py
+
+# Run tests for a specific engine
+pytest -k solr tests/
+pytest -k elasticsearch tests/
+pytest -k opensearch tests/
+```
+
+#### Run Tests by Module
+
+```bash
+# Test Solr client functionality
+pytest tests/unit/test_client_solr.py
+
+# Test search query generation
+pytest tests/unit/test_search.py
+
+# Test click models
+pytest tests/unit/test_clickmodels.py
+
+# Test RankLib integration
+pytest tests/unit/test_ranklib.py
+```
+
+#### Run Specific Test Cases
+
+```bash
+# Run a specific test function
+pytest tests/unit/test_client_solr.py::test_solr_client_initializes_with_localhost
+
+# Run tests matching a pattern
+pytest -k "initialization" tests/unit/
+
+# Run tests in a specific class
+pytest tests/unit/test_clickmodels.py::TestCascadeModel
+```
+
+#### Run with Different Options
+
+```bash
+# Verbose output with print statements
+pytest -vv -s tests/unit/test_client_solr.py
+
+# Stop at first failure
+pytest -x tests/
+
+# Show slowest tests
+pytest --durations=10 tests/
+
+# Run in parallel (4 workers)
+pytest -n 4 tests/unit/
+
+# Retry flaky tests
+pytest --reruns 3 --reruns-delay 2 tests/
+```
+
+### Test Data Sources
+
+#### Notebook Test Data
+
+**Source:** External URLs and local files
+- TMDB dataset: `http://es-learn-to-rank.labs.o19s.com/tmdb.json`
+- Local copies: `data/tmdb.json` (when available)
+
+**Setup Requirements:**
+- Internet connection for downloading test data (first run)
+- Docker containers running for search engines
+- Sufficient disk space for indices (~2GB per engine)
+
+#### Unit Test Data
+
+**Source:** Inline test data and mocks
+- Test data created inline in test functions
+- Mock objects for external dependencies
+- Temporary files for file I/O tests
+
+**Example:**
+```python
+def test_judgment_parsing():
+    """Test parsing judgment lists."""
+    # Inline test data
+    judgment_list = """
+    4	qid:1	 # 1234	rambo
+    3	qid:1	 # 5670	rambo
+    """
+    # Test parsing...
+```
+
+### Test Docstring Standards
+
+All tests should have descriptive docstrings explaining their purpose.
+
+**Format:**
+```python
+def test_feature_name():
+    """Test description of what is being tested.
+    
+    Optionally include:
+    - What the test verifies
+    - Expected behavior
+    - Edge cases covered
+    """
+    # Test implementation...
+```
+
+**Good Examples:**
+```python
+def test_solr_client_initializes_with_localhost():
+    """Test client initializes with localhost when not in Docker."""
+    # Clear, concise, explains the scenario
+
+def test_cascade_model_stops_counting_at_first_click():
+    """Test cascade_model stops counting attractiveness at first click.
+    
+    Verifies that the cascade model correctly implements the assumption
+    that users stop examining results after the first click.
+    """
+    # More detailed explanation for complex tests
+```
+
+**Bad Examples:**
+```python
+def test_client():
+    """Test client."""  # Too vague
+
+def test_1():
+    """Test."""  # No information
+```
+
+### Test Execution Examples
+
+#### Example 1: Run All Unit Tests for a Specific Module
+
+```bash
+# Test all Solr client functionality
+pytest tests/unit/test_client_solr.py -v
+
+# Expected output:
+# test_client_solr.py::test_solr_client_initializes_with_localhost PASSED
+# test_client_solr.py::test_solr_client_initializes_with_docker_host PASSED
+# ... (25 tests total)
+```
+
+#### Example 2: Run Notebook Tests for One Engine
+
+```bash
+# Test only Solr notebooks
+pytest -k solr tests/notebooks/test_notebooks.py -v
+
+# Expected: All Solr notebook tests run with solr_container fixture
+```
+
+#### Example 3: Debug a Failing Test
+
+```bash
+# Run with verbose output and stop at first failure
+pytest -vv -s -x tests/unit/test_client_solr.py::test_solr_client_query
+
+# Shows:
+# - Detailed test output
+# - Print statements
+# - Stops immediately on failure
+```
+
+#### Example 4: Run Tests in Parallel
+
+```bash
+# Run unit tests with 4 parallel workers
+pytest -n 4 tests/unit/
+
+# Each worker gets isolated containers (if needed)
+# Ports automatically assigned: worker 0 (18983), worker 1 (19983), etc.
+```
 
 ## Test Configuration
 
@@ -429,8 +831,8 @@ tests/
 
 ```ini
 [pytest]
-# Timeout: 6 hours per test (matches notebook execution needs)
-timeout = 21600
+# Timeout: 5 minutes per test (fail fast if notebooks hang)
+timeout = 300
 
 # Markers for test categorization
 markers =
@@ -472,7 +874,7 @@ See `IGNORED_NOTEBOOKS` in [test_config.py](test_config.py) for the full list wi
 ## Environment Variables
 
 ### Test Execution
-- `NOTEBOOK_TIMEOUT_HOURS`: Timeout per notebook (default: 6)
+- `NOTEBOOK_TIMEOUT_MINUTES`: Timeout per notebook in minutes (default: 5)
 - `PYTEST_ARGS`: Additional pytest arguments for test.sh
 
 ### Service Ports
@@ -639,7 +1041,7 @@ This section covers common issues and their solutions.
 
 1. **Increase timeout**:
    ```bash
-   NOTEBOOK_TIMEOUT_HOURS=12 ./tests/test.sh
+   NOTEBOOK_TIMEOUT_MINUTES=10 ./tests/test.sh
    ```
 
 2. **Check for infinite loops** in notebook:
@@ -648,7 +1050,7 @@ This section covers common issues and their solutions.
 
 3. **Run specific slow notebook with extended timeout**:
    ```bash
-   NOTEBOOK_TIMEOUT_HOURS=24 pytest -k "specific-notebook" tests/test_notebooks.py
+   NOTEBOOK_TIMEOUT_MINUTES=15 pytest -k "specific-notebook" tests/test_notebooks.py
    ```
 
 4. **Check system resources**:
@@ -699,9 +1101,9 @@ This section covers common issues and their solutions.
 
 4. **Run tests by engine** (reduces memory usage):
    ```bash
-   ./tests/test.sh --engines=solr
-   ./tests/test.sh --engines=elasticsearch
-   ./tests/test.sh --engines=opensearch
+   pytest -k solr tests/notebooks/test_notebooks.py
+   pytest -k elasticsearch tests/notebooks/test_notebooks.py
+   pytest -k opensearch tests/notebooks/test_notebooks.py
    ```
 
 ### Parallel Execution Port Conflicts
@@ -735,10 +1137,12 @@ This section covers common issues and their solutions.
    - Look for `[Worker gw0] Using ports:` messages in test output
    - Verify each worker has unique ports
 
-**Note**: When using `test.sh` with Docker, containers are started once before pytest runs. For true parallel execution with isolated containers per worker, consider:
-- Using `--dist loadgroup` to group tests by engine
-- Starting containers manually per worker (advanced)
-- Running sequential tests: `pytest tests/test_notebooks.py` (no `-n` flag)
+**Note**: Containers are automatically managed by pytest fixtures (per-worker isolation is the default). Each worker gets its own isolated containers with unique ports. For optimal parallel execution:
+- Use `--dist loadgroup` to group tests by engine (reduces resource usage)
+- Containers are automatically cleaned up after tests complete
+- Cleanup also runs on interruption (Ctrl+C) via signal handlers and `pytest_sessionfinish` hook
+- If containers are left running after interruption, use `python tests/cleanup_test_containers.py` to clean them up
+- To disable per-worker containers, set `USE_WORKER_CONTAINERS=false` (legacy mode)
 
 ### Test Cache Issues
 
@@ -789,9 +1193,15 @@ This section covers common issues and their solutions.
    docker compose logs --tail=100
    ```
 
-2. **Rebuild containers**:
+2. **Rebuild containers** (containers are managed per-worker by fixtures):
    ```bash
-   ./tests/test.sh --rebuild-containers
+   # Containers are automatically rebuilt when started by fixtures
+   # To force rebuild, stop containers manually first:
+   docker ps -a | grep hello-ltr
+   docker stop <container-id>
+   docker rm <container-id>
+   # Then run tests - fixtures will rebuild containers
+   ./tests/test.sh
    ```
 
 3. **Check disk space**:
@@ -811,6 +1221,63 @@ This section covers common issues and their solutions.
    cd notebooks/solr
    docker compose config  # Validate configuration
    ```
+
+### Leftover Test Containers
+
+**Problem**: Test containers remain running after tests are interrupted or canceled
+
+**Symptoms:**
+- Containers with names like `test-unit-solr-gw0-*`, `test-integration-opensearch-gw0-*`, or `test-notebooks-elasticsearch-gw0-*` still running after tests
+- Port conflicts when running tests again
+- `docker ps` shows test containers from previous runs
+
+**Solutions:**
+
+1. **Automatic cleanup** (already implemented):
+   - Containers are automatically cleaned up when tests complete normally
+   - Cleanup also runs on interruption (Ctrl+C) via signal handlers
+   - `pytest_sessionfinish` hook ensures cleanup even if pytest is killed
+
+2. **Manual cleanup with utility script**:
+   ```bash
+   # Clean up all leftover test containers
+   python tests/cleanup_test_containers.py
+   
+   # Dry run to see what would be cleaned up
+   python tests/cleanup_test_containers.py --dry-run
+   
+   # Verbose output
+   python tests/cleanup_test_containers.py --verbose
+   ```
+
+3. **Manual cleanup with Docker commands**:
+   ```bash
+   # List test containers
+   docker ps -a --filter "name=test-"
+   
+   # Stop and remove specific containers
+   docker stop <container-name>
+   docker rm <container-name>
+   
+   # Or clean up by project name (for a specific worker)
+   cd notebooks/solr
+   docker compose -p test-unit-solr-gw0 down -v
+   ```
+
+4. **Clean up all test containers**:
+   ```bash
+   # Stop all test containers
+   docker ps -a --filter "name=test-" --format "{{.Names}}" | \
+     grep -E "test-(unit|integration|notebooks)-(solr|elasticsearch|opensearch)-gw" | \
+     xargs -r docker stop
+   
+   # Remove all test containers
+   docker ps -a --filter "name=test-" --format "{{.Names}}" | \
+     grep -E "test-(unit|integration|notebooks)-(solr|elasticsearch|opensearch)-gw" | \
+     xargs -r docker rm
+   ```
+
+**Note**: The cleanup script and automatic cleanup only affect containers with test project names (starting with `test-{test_type}-{engine}-gw`, e.g., `test-unit-solr-gw0`, `test-integration-opensearch-gw0`, `test-notebooks-elasticsearch-gw0`). Manually started containers (like `hello-ltr-notebook` or containers from root `docker-compose.yml`) are never touched by automatic cleanup.
 
 ### Notebook Execution Errors
 
@@ -933,6 +1400,60 @@ This section covers common issues and their solutions.
 
 **Note**: Environment validation runs automatically before tests. Warnings about port conflicts are non-fatal (test.sh handles them automatically).
 
+### Fast-Failing Tests (0.001s)
+
+**Problem**: Tests complete in ~0.001 seconds and fail immediately
+
+**Symptoms:**
+- Tests show 0.001s execution time
+- Tests fail before actually executing
+- Docker Compose errors in test output
+
+**Common Causes:**
+
+1. **Docker Compose Configuration Conflict** (Most Common):
+   - Old-style resource limits (`mem_limit`, `mem_reservation`) conflict with new-style `deploy.resources`
+   - **Error**: `can't set distinct values on 'mem_reservation' and 'deploy.resources.reservations.memory'`
+   - **Fix**: Remove old-style limits from base `docker-compose.yml` files
+   - Resource limits should be managed only through `docker-compose.test.yml` override files
+
+2. **Import/Module Errors**:
+   - Tests fail immediately due to import failures
+   - **Investigation**: Use `tests/investigate_fast_failures.py` to identify
+   - **Fix**: Ensure all dependencies installed (`uv sync`)
+
+3. **Legitimately Fast Tests**:
+   - Most unit tests complete in <0.01 seconds (this is normal!)
+   - These are **not failures** - they're working as designed
+   - Use investigation tool to verify: `python tests/investigate_fast_failures.py --unit`
+
+**Solutions:**
+
+1. **Investigate fast-failing tests**:
+   ```bash
+   # Identify which tests are failing quickly
+   python tests/investigate_fast_failures.py --unit
+   
+   # Check for import errors specifically
+   python tests/investigate_fast_failures.py --unit --threshold 0.01
+   ```
+
+2. **Fix Docker Compose conflicts**:
+   ```bash
+   # Verify Docker Compose config is valid
+   docker compose -f notebooks/solr/docker-compose.yml -f notebooks/solr/docker-compose.test.yml config --services
+   
+   # If errors, check for old-style resource limits in base docker-compose.yml files
+   # Remove mem_limit and mem_reservation from base files
+   ```
+
+3. **Clear pytest cache** (if cached failures):
+   ```bash
+   rm -rf .pytest_cache
+   ```
+
+**Note**: Most 0.001s tests are **legitimately fast** unit tests. Only investigate if they're actually failing.
+
 ### Slow Test Execution
 
 **Problem**: Tests run very slowly
@@ -956,7 +1477,9 @@ This section covers common issues and their solutions.
 
 3. **Run specific engines**:
    ```bash
-   ./tests/test.sh --engines=solr  # Test only Solr
+   pytest -k solr tests/notebooks/test_notebooks.py  # Test only Solr
+   pytest -k elasticsearch tests/notebooks/test_notebooks.py  # Test only Elasticsearch
+   pytest -k opensearch tests/notebooks/test_notebooks.py  # Test only OpenSearch
    ```
 
 4. **Check system resources**:
@@ -1094,14 +1617,77 @@ pytest --html=report.html --self-contained-html tests/test_notebooks.py
 
 ### Test Execution Time
 
+**Notebook Tests:**
 - **Sequential**: ~20 minutes for all 36 notebooks
 - **Parallel (-n auto)**: ~5-7 minutes (4x faster)
 
+**Unit Tests:**
+- **Sequential**: ~1-2 minutes (13 test files, 200+ tests)
+- **Parallel**: ~30 seconds (minimal benefit due to low overhead)
+
+**Integration Tests:**
+- **Sequential**: ~1-2 minutes (container-dependent)
+
+### Investigating Fast-Failing Tests
+
+If tests complete very quickly (<0.01s) and you suspect they're failing:
+
+```bash
+# Investigate all fast tests
+python tests/investigate_fast_failures.py
+
+# Investigate unit tests only
+python tests/investigate_fast_failures.py --unit
+
+# Custom threshold (default 0.005s)
+python tests/investigate_fast_failures.py --threshold 0.01
+```
+
+The investigation tool categorizes tests into:
+- ✅ Legitimately fast tests (passing, just very fast)
+- ⚠️ Import/module errors (failing due to import issues)
+- ❌ Other failures (failing for other reasons)
+- ⏭️ Skipped tests (intentionally skipped)
+
+**Note**: Most unit tests legitimately complete in <0.01 seconds. Only investigate if tests are actually failing.
+
+### Measuring Test Performance
+
+Use the performance measurement script to get detailed timing information:
+
+```bash
+# Measure all tests (unit + integration)
+python tests/measure_performance.py
+
+# Measure unit tests only
+python tests/measure_performance.py --unit
+
+# Measure integration tests only
+python tests/measure_performance.py --integration
+
+# Measure with parallel execution for comparison
+python tests/measure_performance.py --parallel
+
+# Generate JSON report for CI/CD
+python tests/measure_performance.py --output performance.json
+```
+
+The script generates a detailed report including:
+- Total execution time per test category
+- Average, fastest, and slowest test times
+- List of slow tests (configurable thresholds)
+- JSON output for programmatic analysis
+
 ### Per-Notebook Timing
 
-See slowest tests:
+See slowest notebook tests:
 ```bash
 pytest --durations=10 tests/test_notebooks.py
+```
+
+See slowest unit/integration tests:
+```bash
+pytest --durations=10 tests/unit tests/integration
 ```
 
 ## CI/CD Integration
@@ -1110,10 +1696,9 @@ pytest --durations=10 tests/test_notebooks.py
 ```yaml
 - name: Run tests
   run: |
-    ./tests/test.sh --non-interactive
+    ./tests/test.sh
   env:
-    AUTO_CLEANUP_CONFLICTS: true
-    NOTEBOOK_TIMEOUT_HOURS: 12
+    NOTEBOOK_TIMEOUT_MINUTES: 10
 ```
 
 ### Jenkins Example
@@ -1121,8 +1706,7 @@ pytest --durations=10 tests/test_notebooks.py
 stage('Test') {
     steps {
         sh '''
-            export AUTO_CLEANUP_CONFLICTS=true
-            ./tests/test.sh --non-interactive
+            ./tests/test.sh
         '''
     }
 }

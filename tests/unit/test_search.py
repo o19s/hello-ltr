@@ -6,6 +6,7 @@ Tests cover:
 - solrLtrQuery function
 - search function for different clients
 """
+
 from unittest.mock import Mock
 
 from ltr.search import esLtrQuery, search, solrLtrQuery, tmdbFields
@@ -19,12 +20,15 @@ class TestEsLtrQuery:
         # Act
         query = esLtrQuery("test query", "mymodel")
         # Assert
-        assert query["query"]["sltr"]["params"]["keywords"] == "test query", \
-            f"Keywords mismatch. Expected 'test query', got {query['query']['sltr']['params'].get('keywords', 'MISSING')}"
-        assert query["query"]["sltr"]["params"]["keywordsList"] == ["test query"], \
-            f"KeywordsList mismatch. Expected ['test query'], got {query['query']['sltr']['params'].get('keywordsList', 'MISSING')}"
-        assert query["query"]["sltr"]["model"] == "mymodel", \
-            f"Model name mismatch. Expected 'mymodel', got {query['query']['sltr'].get('model', 'MISSING')}"
+        assert (
+            query["query"]["sltr"]["params"]["keywords"] == "test query"
+        ), f"Keywords mismatch. Expected 'test query', got {query['query']['sltr']['params'].get('keywords', 'MISSING')}"
+        assert (
+            query["query"]["sltr"]["params"]["keywordsList"] == ["test query"]
+        ), f"KeywordsList mismatch. Expected ['test query'], got {query['query']['sltr']['params'].get('keywordsList', 'MISSING')}"
+        assert (
+            query["query"]["sltr"]["model"] == "mymodel"
+        ), f"Model name mismatch. Expected 'mymodel', got {query['query']['sltr'].get('model', 'MISSING')}"
 
     def test_es_ltr_query_uses_base_structure(self):
         """Test esLtrQuery uses base query structure."""
@@ -87,21 +91,23 @@ class TestSearch:
         # Act
         search(mock_client, "test query", "mymodel", index="tmdb", fields=tmdbFields)
         # Assert
-        assert mock_client.query.called, "Expected query() to be called on Elasticsearch client"
+        assert (
+            mock_client.query.called
+        ), "Expected query() to be called on Elasticsearch client"
         call_args = mock_client.query.call_args
-        assert call_args[0][0] == "tmdb", \
-            f"Index mismatch. Expected 'tmdb', got {call_args[0][0]!r}. Full call args: {call_args}"
-        assert call_args[0][1]["query"]["sltr"]["model"] == "mymodel", \
-            f"Model mismatch. Expected 'mymodel', got {call_args[0][1]['query']['sltr'].get('model', 'MISSING')}. Full query: {call_args[0][1]}"
+        assert (
+            call_args[0][0] == "tmdb"
+        ), f"Index mismatch. Expected 'tmdb', got {call_args[0][0]!r}. Full call args: {call_args}"
+        assert (
+            call_args[0][1]["query"]["sltr"]["model"] == "mymodel"
+        ), f"Model mismatch. Expected 'mymodel', got {call_args[0][1]['query']['sltr'].get('model', 'MISSING')}. Full query: {call_args[0][1]}"
 
     def test_search_opensearch_client(self):
         """Test search with OpenSearch client."""
         # Arrange
         mock_client = Mock()
         mock_client.name.return_value = "opensearch"
-        mock_client.query.return_value = [
-            {"title": "Movie1", "_score": 0.9}
-        ]
+        mock_client.query.return_value = [{"title": "Movie1", "_score": 0.9}]
         # Act
         search(mock_client, "test query", "mymodel", index="tmdb", fields=tmdbFields)
         # Assert
@@ -114,9 +120,7 @@ class TestSearch:
         # Arrange
         mock_client = Mock()
         mock_client.name.return_value = "solr"
-        mock_client.query.return_value = [
-            {"title": "Movie1", "_score": 0.9}
-        ]
+        mock_client.query.return_value = [{"title": "Movie1", "_score": 0.9}]
         # Act
         search(mock_client, "test query", "mymodel", index="tmdb", fields=tmdbFields)
         # Assert
@@ -130,13 +134,8 @@ class TestSearch:
         # Arrange
         mock_client = Mock()
         mock_client.name.return_value = "elastic"
-        mock_client.query.return_value = [
-            {"name": "Movie1", "_score": 0.9}
-        ]
-        custom_fields = {
-            "title": "name",
-            "display_fields": ["year"]
-        }
+        mock_client.query.return_value = [{"name": "Movie1", "_score": 0.9}]
+        custom_fields = {"title": "name", "display_fields": ["year"]}
         # Act
         search(mock_client, "test", "model", index="test", fields=custom_fields)
         # Assert
@@ -153,4 +152,3 @@ class TestSearch:
         # Assert
         call_args = mock_client.query.call_args
         assert call_args[0][0] == "tmdb"
-

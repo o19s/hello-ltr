@@ -19,7 +19,9 @@ class Session:
         docset = set()
         for doc in docs:
             if doc.doc_id in docset:
-                raise ValueError("A session may only list a doc exactly once in search results")
+                raise ValueError(
+                    "A session may only list a doc exactly once in search results"
+                )
             docset.add(doc.doc_id)
 
     def __repr__(self):

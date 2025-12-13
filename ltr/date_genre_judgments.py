@@ -50,7 +50,9 @@ def genreGrade(movie):
     return 0
 
 
-def synthesize(client, judgmentsOutFile="genre_by_date_judgments.txt", autoNegate=False):
+def synthesize(
+    client, judgmentsOutFile="genre_by_date_judgments.txt", autoNegate=False
+):
     print("Generating judgments for scifi & drama movies")
 
     if client.name() in ["elastic", "opensearch"]:
@@ -68,7 +70,9 @@ def synthesize(client, judgmentsOutFile="genre_by_date_judgments.txt", autoNegat
             qid = genreQid(genre)
             if qid == 0:
                 continue
-            judgment = Judgment(qid=qid, grade=genreGrade(movie), docId=movie["id"], keywords=genre)
+            judgment = Judgment(
+                qid=qid, grade=genreGrade(movie), docId=movie["id"], keywords=genre
+            )
             judgments.append(judgment)
 
             # This movie is good for its genre, but
@@ -81,7 +85,9 @@ def synthesize(client, judgmentsOutFile="genre_by_date_judgments.txt", autoNegat
 
             if autoNegate and negGenre is not None:
                 negQid = genreQid(negGenre)
-                judgment = Judgment(qid=negQid, grade=0, docId=movie["id"], keywords=negGenre)
+                judgment = Judgment(
+                    qid=negQid, grade=0, docId=movie["id"], keywords=negGenre
+                )
                 judgments.append(judgment)
 
     with open(judgmentsOutFile, "w") as f:

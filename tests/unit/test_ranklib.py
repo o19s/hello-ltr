@@ -9,6 +9,7 @@ Tests cover:
 - train function
 - feature_search function
 """
+
 from unittest.mock import Mock, mock_open, patch
 
 import pytest
@@ -26,8 +27,8 @@ from ltr.ranklib import (
 class TestCheckForRankyMcRankFace:
     """Test check_for_rankymcrankface function."""
 
-    @patch('ltr.ranklib.download')
-    @patch('tempfile.gettempdir')
+    @patch("ltr.ranklib.download")
+    @patch("tempfile.gettempdir")
     def test_check_for_rankymcrankface_downloads_jar(self, mock_tempdir, mock_download):
         """Test check_for_rankymcrankface downloads jar file."""
         # Arrange
@@ -44,9 +45,9 @@ class TestCheckForRankyMcRankFace:
 class TestWriteTrainingSet:
     """Test write_training_set function."""
 
-    @patch('ltr.judgments.judgments_to_file')
-    @patch('tempfile.gettempdir')
-    @patch('builtins.open', new_callable=mock_open)
+    @patch("ltr.judgments.judgments_to_file")
+    @patch("tempfile.gettempdir")
+    @patch("builtins.open", new_callable=mock_open)
     def test_write_training_set(self, mock_file, mock_tempdir, mock_judgments_to_file):
         """Test write_training_set writes training set to file."""
         # Arrange
@@ -63,10 +64,10 @@ class TestWriteTrainingSet:
 class TestTrainModel:
     """Test trainModel function."""
 
-    @patch('ltr.ranklib.parse_training_log')
-    @patch('os.popen')
-    @patch('ltr.ranklib.write_training_set')
-    @patch('ltr.ranklib.check_for_rankymcrankface')
+    @patch("ltr.ranklib.parse_training_log")
+    @patch("os.popen")
+    @patch("ltr.ranklib.write_training_set")
+    @patch("ltr.ranklib.check_for_rankymcrankface")
     def test_train_model_basic(self, mock_check, mock_write, mock_popen, mock_parse):
         """Test trainModel with basic parameters."""
         # Arrange
@@ -86,13 +87,15 @@ class TestTrainModel:
         assert "-train /tmp/training.txt" in call_args
         assert "-save /tmp/model.txt" in call_args
 
-    @patch('ltr.ranklib.parse_training_log')
-    @patch('os.popen')
-    @patch('ltr.ranklib.write_training_set')
-    @patch('ltr.ranklib.check_for_rankymcrankface')
-    @patch('builtins.open', new_callable=mock_open)
-    @patch('tempfile.gettempdir')
-    def test_train_model_with_features(self, mock_tempdir, mock_file, mock_check, mock_write, mock_popen, mock_parse):
+    @patch("ltr.ranklib.parse_training_log")
+    @patch("os.popen")
+    @patch("ltr.ranklib.write_training_set")
+    @patch("ltr.ranklib.check_for_rankymcrankface")
+    @patch("builtins.open", new_callable=mock_open)
+    @patch("tempfile.gettempdir")
+    def test_train_model_with_features(
+        self, mock_tempdir, mock_file, mock_check, mock_write, mock_popen, mock_parse
+    ):
         """Test trainModel with features parameter."""
         # Arrange
         mock_tempdir.return_value = "/tmp"
@@ -109,10 +112,10 @@ class TestTrainModel:
         assert "-feature" in call_args
         mock_file.assert_called()
 
-    @patch('ltr.ranklib.parse_training_log')
-    @patch('os.popen')
-    @patch('ltr.ranklib.write_training_set')
-    @patch('ltr.ranklib.check_for_rankymcrankface')
+    @patch("ltr.ranklib.parse_training_log")
+    @patch("os.popen")
+    @patch("ltr.ranklib.write_training_set")
+    @patch("ltr.ranklib.check_for_rankymcrankface")
     def test_train_model_with_kcv(self, mock_check, mock_write, mock_popen, mock_parse):
         """Test trainModel with kcv parameter."""
         # Arrange
@@ -131,7 +134,7 @@ class TestTrainModel:
 class TestSaveModel:
     """Test save_model function."""
 
-    @patch('builtins.open', new_callable=mock_open, read_data="model definition")
+    @patch("builtins.open", new_callable=mock_open, read_data="model definition")
     def test_save_model(self, mock_file):
         """Test save_model reads file and submits to client."""
         # Arrange
@@ -148,8 +151,8 @@ class TestSaveModel:
 class TestTrain:
     """Test train function."""
 
-    @patch('ltr.ranklib.save_model')
-    @patch('ltr.ranklib.trainModel')
+    @patch("ltr.ranklib.save_model")
+    @patch("ltr.ranklib.trainModel")
     def test_train_success(self, mock_train_model, mock_save_model):
         """Test train function with successful training."""
         # Arrange
@@ -165,7 +168,7 @@ class TestTrain:
         mock_save_model.assert_called_once()
         assert result == mock_result
 
-    @patch('ltr.ranklib.trainModel')
+    @patch("ltr.ranklib.trainModel")
     def test_train_fails_with_no_logs(self, mock_train_model):
         """Test train raises RuntimeError when no training logs."""
         # Arrange
@@ -178,8 +181,8 @@ class TestTrain:
         with pytest.raises(RuntimeError, match="Training failed"):
             train(mock_client, training_set, "model1", "featureset1", "index1")
 
-    @patch('ltr.ranklib.save_model')
-    @patch('ltr.ranklib.trainModel')
+    @patch("ltr.ranklib.save_model")
+    @patch("ltr.ranklib.trainModel")
     def test_train_with_kcv_skips_save(self, mock_train_model, mock_save_model):
         """Test train skips save_model when kcv is used."""
         # Arrange
@@ -189,7 +192,9 @@ class TestTrain:
         mock_result.trainingLogs = [Mock()]
         mock_train_model.return_value = mock_result
         # Act
-        result = train(mock_client, training_set, "model1", "featureset1", "index1", kcv=5)
+        result = train(
+            mock_client, training_set, "model1", "featureset1", "index1", kcv=5
+        )
         # Assert
         assert result is not None
         mock_save_model.assert_not_called()
@@ -198,7 +203,7 @@ class TestTrain:
 class TestFeatureSearch:
     """Test feature_search function."""
 
-    @patch('ltr.ranklib.trainModel')
+    @patch("ltr.ranklib.trainModel")
     def test_feature_search_finds_best_combo(self, mock_train_model):
         """Test feature_search finds best feature combination."""
         # Arrange
@@ -208,13 +213,22 @@ class TestFeatureSearch:
 
         # Mock results for different combinations
         def mock_train_side_effect(*args, **kwargs):
+            """Mock side effect that returns different metrics based on feature combination.
+
+            Args:
+                *args: Positional arguments (unused)
+                **kwargs: Keyword arguments, expects 'features' key
+
+            Returns:
+                Mock: Mock result object with kcvTestAvg attribute
+            """
             mock_result = Mock()
             # Return different metrics based on features
-            if kwargs.get('features') == (1,):
+            if kwargs.get("features") == (1,):
                 mock_result.kcvTestAvg = 0.5
-            elif kwargs.get('features') == (2,):
+            elif kwargs.get("features") == (2,):
                 mock_result.kcvTestAvg = 0.6
-            elif kwargs.get('features') == (1, 2):
+            elif kwargs.get("features") == (1, 2):
                 mock_result.kcvTestAvg = 0.7  # Best
             else:
                 mock_result.kcvTestAvg = 0.4
@@ -230,7 +244,7 @@ class TestFeatureSearch:
         assert best_combo.kcvTestAvg == 0.7
         assert isinstance(metric_per_feature, dict)
 
-    @patch('ltr.ranklib.trainModel')
+    @patch("ltr.ranklib.trainModel")
     def test_feature_search_handles_failed_training(self, mock_train_model):
         """Test feature_search handles failed training gracefully."""
         # Arrange
@@ -250,4 +264,3 @@ class TestFeatureSearch:
         assert best_combo is None or best_combo.kcvTestAvg is None
         # metric_per_feature should still be populated
         assert isinstance(metric_per_feature, dict)
-

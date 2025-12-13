@@ -95,7 +95,11 @@ def parse_training_log(rawResult):
             foldId = m.group(1)
             trainMetric = float(m.group(2))
             testMetric = float(m.group(3))
-            folds.append(FoldResult(foldId=foldId, testMetric=testMetric, trainMetric=trainMetric))
+            folds.append(
+                FoldResult(
+                    foldId=foldId, testMetric=testMetric, trainMetric=trainMetric
+                )
+            )
         m = re.match(avgRe, line)
         if m:
             kcvTrainAvg = float(m.group(1))
@@ -111,5 +115,8 @@ def parse_training_log(rawResult):
         logs.append(log)
 
     return RanklibResult(
-        trainingLogs=logs, foldResults=folds, kcvTrainAvg=kcvTrainAvg, kcvTestAvg=kcvTestAvg
+        trainingLogs=logs,
+        foldResults=folds,
+        kcvTrainAvg=kcvTrainAvg,
+        kcvTestAvg=kcvTestAvg,
     )

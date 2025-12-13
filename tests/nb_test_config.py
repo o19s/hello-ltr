@@ -4,6 +4,7 @@ Notebook test configuration loader.
 This module provides NotebookTestConfig class for discovering and organizing
 notebooks in test directories, with special handling for setup notebooks.
 """
+
 import os
 
 import nbformat
@@ -12,7 +13,7 @@ import nbformat
 class NotebookTestConfig:
     """Configuration for discovering notebooks in a test directory."""
 
-    SETUP_NB = 'setup.ipynb'
+    SETUP_NB = "setup.ipynb"
 
     def __init__(self, path):
         """
@@ -37,7 +38,7 @@ class NotebookTestConfig:
         try:
             for nb_path in os.listdir(path):
                 full_nb_path = os.path.join(path, nb_path)
-                if os.path.isfile(full_nb_path) and nb_path.endswith('.ipynb'):
+                if os.path.isfile(full_nb_path) and nb_path.endswith(".ipynb"):
                     if nb_path == NotebookTestConfig.SETUP_NB:
                         # Validate that setup notebook is actually a valid notebook
                         if self._is_valid_notebook(full_nb_path):
@@ -60,9 +61,8 @@ class NotebookTestConfig:
             bool: True if valid notebook, False otherwise
         """
         try:
-            with open(notebook_path, encoding='utf-8') as f:
+            with open(notebook_path, encoding="utf-8") as f:
                 nbformat.read(f, as_version=4)
             return True
         except (nbformat.reader.NotJSONError, OSError, ValueError):
             return False
-

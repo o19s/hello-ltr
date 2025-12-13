@@ -6,6 +6,7 @@ Tests cover:
 - Index existence checking
 - Force rebuild behavior
 """
+
 from unittest.mock import Mock
 
 from ltr.index import rebuild
@@ -35,15 +36,14 @@ class TestRebuild:
         # Act
         rebuild(mock_client, "test_index", doc_src, force=True)
         # Assert
-        assert mock_client.delete_index.called, \
-            f"Expected delete_index to be called when force=True and index exists. Calls: {mock_client.delete_index.call_args_list}"
+        assert mock_client.delete_index.called, f"Expected delete_index to be called when force=True and index exists. Calls: {mock_client.delete_index.call_args_list}"
         mock_client.delete_index.assert_called_once_with("test_index")
-        assert mock_client.create_index.called, \
-            f"Expected create_index to be called after delete. Calls: {mock_client.create_index.call_args_list}"
+        assert mock_client.create_index.called, f"Expected create_index to be called after delete. Calls: {mock_client.create_index.call_args_list}"
         mock_client.create_index.assert_called_once_with("test_index")
-        assert mock_client.index_documents.called, \
-            f"Expected index_documents to be called with doc_src. Calls: {mock_client.index_documents.call_args_list}"
-        mock_client.index_documents.assert_called_once_with("test_index", doc_src=doc_src)
+        assert mock_client.index_documents.called, f"Expected index_documents to be called with doc_src. Calls: {mock_client.index_documents.call_args_list}"
+        mock_client.index_documents.assert_called_once_with(
+            "test_index", doc_src=doc_src
+        )
 
     def test_rebuild_index_not_exists(self):
         """Test rebuild when index doesn't exist creates and indexes."""
@@ -56,7 +56,9 @@ class TestRebuild:
         # Assert
         mock_client.delete_index.assert_not_called()
         mock_client.create_index.assert_called_once_with("test_index")
-        mock_client.index_documents.assert_called_once_with("test_index", doc_src=doc_src)
+        mock_client.index_documents.assert_called_once_with(
+            "test_index", doc_src=doc_src
+        )
 
     def test_rebuild_calls_in_order(self):
         """Test rebuild calls methods in correct order."""
@@ -67,9 +69,28 @@ class TestRebuild:
         call_order = []
 
         def track_call(name):
+            """Create a wrapper function that tracks when a method is called.
+
+            Args:
+                name: Name to append to call_order when function is called
+
+            Returns:
+                function: Wrapper function that tracks calls and returns Mock
+            """
+
             def wrapper(*args, **kwargs):
+                """Wrapper function that tracks call order.
+
+                Args:
+                    *args: Positional arguments (unused)
+                    **kwargs: Keyword arguments (unused)
+
+                Returns:
+                    Mock: Mock object
+                """
                 call_order.append(name)
                 return Mock()
+
             return wrapper
 
         mock_client.create_index.side_effect = track_call("create")
@@ -78,4 +99,3 @@ class TestRebuild:
         rebuild(mock_client, "test_index", doc_src)
         # Assert
         assert call_order == ["create", "index"]
-

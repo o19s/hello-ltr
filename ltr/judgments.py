@@ -1,5 +1,7 @@
 import re
+from collections.abc import Iterator
 from contextlib import contextmanager
+from typing import Literal, Optional, overload
 
 
 class JudgmentsWriter:
@@ -36,22 +38,33 @@ class JudgmentsReader:
         return self.judgments
 
 
+@overload
 @contextmanager
-def judgments_open(path=None, mode="r"):
+def judgments_open(
+    path: Optional[str], mode: Literal["r", "rt", "rb"] = ...
+) -> Iterator[JudgmentsReader]: ...
+
+
+@overload
+@contextmanager
+def judgments_open(
+    path: Optional[str], mode: Literal["w", "wt", "wb"] = ...
+) -> Iterator[JudgmentsWriter]: ...
+
+
+@contextmanager
+def judgments_open(path: Optional[str] = None, mode: str = "r"):
     """Work with judgments from the filesystem,
     either in a read or write mode"""
-    f = None
-    try:
-        f = open(path, mode)
+    if path is None:
+        raise ValueError("path cannot be None")
+    with open(path, mode) as f:
         if mode[0] == "r":
             yield JudgmentsReader(f)
         elif mode[0] == "w":
             writer = JudgmentsWriter(f)
             yield writer
             writer.flush()
-    finally:
-        if f is not None:
-            f.close()
 
 
 @contextmanager
@@ -77,12 +90,14 @@ def judgments_reader(f):
 
 
 class Judgment:
-    def __init__(self, grade, qid, keywords, docId, features=[], weight=1):
+    def __init__(self, grade, qid, keywords, docId, features=None, weight=1):
         self.grade = grade
         self.qid = qid
         self.keywords = keywords
         self.docId = docId
-        self.features = features  # 0th feature is ranklib feature 1
+        self.features = (
+            features if features is not None else []
+        )  # 0th feature is ranklib feature 1
         self.weight = weight
 
     def sameQueryAndDoc(self, other):
@@ -100,9 +115,13 @@ class Judgment:
         )
 
     def toRanklibFormat(self):
-        featuresAsStrs = [f"{idx + 1}:{feature}" for idx, feature in enumerate(self.features)]
+        featuresAsStrs = [
+            f"{idx + 1}:{feature}" for idx, feature in enumerate(self.features)
+        ]
         comment = f"# {self.docId}\t{self.keywords}"
-        return "{}\tqid:{}\t{} {}".format(self.grade, self.qid, "\t".join(featuresAsStrs), comment)
+        return "{}\tqid:{}\t{} {}".format(
+            self.grade, self.qid, "\t".join(featuresAsStrs), comment
+        )
 
 
 def _queriesToHeader(qidToKwDict):
@@ -184,7 +203,9 @@ def _judgmentsFromBody(lines):
 
                 for featureVal in featuresList:
                     if featureVal is None:
-                        raise ValueError("Missing Features Detected When Parsing Training Set")
+                        raise ValueError(
+                            "Missing Features Detected When Parsing Training Set"
+                        )
 
                 yield grade, qid, docId, featuresList
 
@@ -245,6 +266,12 @@ def _judgments_by_qid(judgments):
     return rVal
 
 
+def judgments_by_qid(judgments):
+    """Create a dictionary of qid->judgments
+    Public wrapper for _judgments_by_qid"""
+    return _judgments_by_qid(judgments)
+
+
 def judgments_to_nparray(judgments):
     """Return
     - features - num samples x num features
@@ -254,7 +281,7 @@ def judgments_to_nparray(judgments):
 
     predictors = []
     features = []
-    for idx, judg in enumerate(judgments):
+    for judg in judgments:
         predictors.append([judg.grade, judg.qid])
         features.append(judg.features)
     features = np.array(features)
@@ -277,12 +304,16 @@ def judgments_to_dataframe(judgments, unnest=True):
                 "features": j.features,
             }
         )
-    dat = pd.DataFrame.from_dict(ret)
+    dat = pd.DataFrame(ret)
 
     # https://stackoverflow.com/questions/53218931/how-to-unnest-explode-a-column-in-a-pandas-dataframe
     def unnesting(df, explode):
         df1 = pd.concat(
-            [pd.DataFrame(df[x].tolist(), index=df.index).add_prefix(x) for x in explode], axis=1
+            [
+                pd.DataFrame(df[x].tolist(), index=df.index).add_prefix(x)
+                for x in explode
+            ],
+            axis=1,
         )
         return df1.join(df.drop(explode, axis=1), how="left")
 
@@ -295,7 +326,9 @@ def judgments_to_dataframe(judgments, unnest=True):
 def judgments_dataframe_to_long(judgments_df):
     import pandas as pd
 
-    return pd.wide_to_long(judgments_df, ["features"], i="uid", j="feature_id").reset_index()
+    return pd.wide_to_long(
+        judgments_df, ["features"], i="uid", j="feature_id"
+    ).reset_index()
 
 
 def duplicateJudgmentsByWeight(judgmentsByQid):
@@ -315,14 +348,14 @@ def duplicateJudgmentsByWeight(judgmentsByQid):
 
     rVal = {}
     maxQid = 0
-    for qid, judgments in judgmentsByQid.items():
+    for qid, _judgments in judgmentsByQid.items():
         maxQid = qid
     for qid, judgments in judgmentsByQid.items():
         rVal[qid] = judgments
         if qid % 100 == 0:
             print(f"Duping {qid}")
         if judgments[0].weight > 1:
-            for i in range(judgments[0].weight - 1):
+            for _i in range(judgments[0].weight - 1):
                 rVal[maxQid] = copyJudgments(judgments)
                 for judg in judgments:
                     judg.qid = maxQid

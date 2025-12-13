@@ -19,7 +19,10 @@ def convert(ensemble_xml_string, modelName, featureSet, featureMapping):
 
     trees = []
     for node in lambdaModel:
-        t = {"weight": str(node.attrib["weight"]), "root": parseSplits(node[0], featureMapping)}
+        t = {
+            "weight": str(node.attrib["weight"]),
+            "root": parseSplits(node[0], featureMapping),
+        }
         trees.append(t)
 
     # print(trees)

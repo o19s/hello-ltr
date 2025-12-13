@@ -2,7 +2,23 @@ services:
   elasticsearch:
     ports:
       - "${ELASTICSEARCH_PORT:-19200}:9200"
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4G
+        reservations:
+          cpus: '1.0'
+          memory: 2G
   kibana:
     ports:
       - "${KIBANA_PORT:-15601}:5601"
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
 

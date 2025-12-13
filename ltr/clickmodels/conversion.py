@@ -8,10 +8,10 @@ def conv_aug_attracts(attracts, sessions, costs):
 
     BUT we punish costly things less, and cheap things more
     """
-    satisfacts = Counter()
+    satisfacts: Counter[tuple[str, str]] = Counter()  # type: ignore[type-arg]
     counts = Counter()
     for session in sessions:
-        for rank, doc in enumerate(session.docs):
+        for _rank, doc in enumerate(session.docs):
             attract = attracts[(session.query, doc.doc_id)]
             if doc.click:
                 if doc.conversion:
@@ -24,12 +24,14 @@ def conv_aug_attracts(attracts, sessions, costs):
                     # If it costs little, and there wasn't a conversion,
                     #  thats generally not ok, why didn't they do (easy action)
                     counts[(session.query, doc.doc_id)] += 1
-                    satisfacts[(session.query, doc.doc_id)] += attract * costs[doc.doc_id]
+                    satisfacts[(session.query, doc.doc_id)] += (
+                        attract * costs[doc.doc_id]
+                    )
             else:
                 counts[(session.query, doc.doc_id)] += 1
                 satisfacts[(session.query, doc.doc_id)] += attract * costs[doc.doc_id]
 
     for (query_id, doc_id), count in counts.items():
-        satisfacts[(query_id, doc_id)] = satisfacts[(query_id, doc_id)] / count
+        satisfacts[(query_id, doc_id)] = satisfacts[(query_id, doc_id)] / count  # type: ignore[assignment]
 
     return satisfacts

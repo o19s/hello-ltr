@@ -1,10 +1,19 @@
 try:
     from helpers.butterfingers import butterfingers
-    from judgments import Judgment, judgments_by_qid, judgments_from_file, judgments_to_file
+    from judgments import (
+        Judgment,
+        judgments_by_qid,
+        judgments_from_file,
+        judgments_to_file,
+    )
 except ImportError:
     from .helpers.butterfingers import butterfingers
-    from .judgments import Judgment, judgments_by_qid, judgments_from_file, judgments_to_file
-
+    from .judgments import (
+        Judgment,
+        judgments_by_qid,
+        judgments_from_file,
+        judgments_to_file,
+    )
 
 
 def typoIt(judgmentInFile, judgmentOutFile, rounds=100):
@@ -15,30 +24,33 @@ def typoIt(judgmentInFile, judgmentOutFile, rounds=100):
 
     existingTypos = set()
 
-    for i in range(0, rounds):
-
-        for qid, judglist in judgDict.items():
+    for _ in range(rounds):
+        for judglist in judgDict.values():
             keywords = judglist[0].keywords
             keywordsWTypo = butterfingers(keywords)
 
             if keywordsWTypo != keywords and keywordsWTypo not in existingTypos:
-                newQid = lastQid+1
+                newQid = lastQid + 1
                 print(f"{keywords} => {keywordsWTypo}")
                 lastQid += 1
                 for judg in judglist:
-                    typoJudg = Judgment(grade=judg.grade,
-                                        qid=newQid,
-                                        keywords=keywordsWTypo,
-                                        docId=judg.docId)
+                    typoJudg = Judgment(
+                        grade=judg.grade,
+                        qid=newQid,
+                        keywords=keywordsWTypo,
+                        docId=judg.docId,
+                    )
                     currJudgments.append(typoJudg)
                 existingTypos.add(keywordsWTypo)
 
-    with open(judgmentOutFile, 'w') as f:
+    with open(judgmentOutFile, "w") as f:
         judgments_to_file(f, judgmentsList=currJudgments)
 
 
 if __name__ == "__main__":
-    typoIt(judgmentInFile='title_judgments.txt', judgmentOutFile='title_fuzzy_judgments.txt')
-
+    typoIt(
+        judgmentInFile="title_judgments.txt",
+        judgmentOutFile="title_fuzzy_judgments.txt",
+    )
 
     # Clone a judgment, inject random typos

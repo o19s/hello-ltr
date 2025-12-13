@@ -44,7 +44,7 @@ def butterfingers(text, prob=0.1, keyboard="qwerty"):
     buttertext = ""
     for letter in text:
         lcletter = letter.lower()
-        if lcletter not in keyApprox.keys():
+        if lcletter not in keyApprox:
             newletter = lcletter
         else:
             if random.choice(range(0, 100)) <= probOfTypo:
@@ -52,7 +52,7 @@ def butterfingers(text, prob=0.1, keyboard="qwerty"):
             else:
                 newletter = lcletter
         # go back to original case
-        if not lcletter == letter:
+        if lcletter != letter:
             newletter = newletter.upper()
         buttertext += newletter
 

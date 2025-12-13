@@ -4,12 +4,12 @@ services:
     expose:
       - "8983"
     ports:
-      - "8983:8983"
+      # Use environment variable instead of hard-coded port to allow multiple instances
+      # to run simultaneously without port conflicts, and to support different environments
+      - "${SOLR_PORT:-8983}:8983"
     volumes:
       - data:/var/solr
     environment:
       SERVER_HOST: "0.0.0.0"
-    mem_limit: 4096m
-    mem_reservation: 4096m
 volumes:
   data:

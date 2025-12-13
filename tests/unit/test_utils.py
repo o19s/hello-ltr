@@ -47,7 +47,7 @@ def assert_in_with_context(item, container, context_msg=None):
             error_msg += f"\nContext: {context_msg}"
         error_msg += f"\nItem: {item!r}"
         error_msg += f"\nContainer: {container!r}"
-        if hasattr(container, '__len__'):
+        if hasattr(container, "__len__"):
             error_msg += f"\nContainer length: {len(container)}"
         raise AssertionError(error_msg)
     return True
@@ -121,10 +121,12 @@ def assert_has_attr_with_context(obj, attr_name, context_msg=None):
         error_msg += f"\nObject: {obj!r}"
         error_msg += f"\nObject type: {type(obj).__name__}"
         error_msg += f"\nExpected attribute: {attr_name}"
-        if hasattr(obj, '__dict__'):
-            available_attrs = [k for k in dir(obj) if not k.startswith('_')]
+        if hasattr(obj, "__dict__"):
+            available_attrs = [k for k in dir(obj) if not k.startswith("_")]
             if available_attrs:
-                error_msg += f"\nAvailable attributes: {', '.join(available_attrs[:10])}"
+                error_msg += (
+                    f"\nAvailable attributes: {', '.join(available_attrs[:10])}"
+                )
         raise AssertionError(error_msg)
     return True
 
@@ -148,8 +150,9 @@ def format_call_args(call_args, call_kwargs):
     return ", ".join(parts) if parts else "no arguments"
 
 
-def assert_called_with_context(mock_obj, expected_args=None, expected_kwargs=None,
-                                context_msg=None, call_index=0):
+def assert_called_with_context(
+    mock_obj, expected_args=None, expected_kwargs=None, context_msg=None, call_index=0
+):
     """
     Assert that a mock was called with specific arguments, with context.
 
@@ -183,14 +186,18 @@ def assert_called_with_context(mock_obj, expected_args=None, expected_kwargs=Non
 
     errors = []
     if expected_args is not None and actual_args != expected_args:
-        errors.append(f"Positional args mismatch: expected {expected_args!r}, got {actual_args!r}")
+        errors.append(
+            f"Positional args mismatch: expected {expected_args!r}, got {actual_args!r}"
+        )
     if expected_kwargs is not None:
         # Check that all expected kwargs are present and match
         for key, expected_value in expected_kwargs.items():
             if key not in actual_kwargs:
                 errors.append(f"Missing keyword argument: {key}")
             elif actual_kwargs[key] != expected_value:
-                errors.append(f"Keyword arg '{key}' mismatch: expected {expected_value!r}, got {actual_kwargs[key]!r}")
+                errors.append(
+                    f"Keyword arg '{key}' mismatch: expected {expected_value!r}, got {actual_kwargs[key]!r}"
+                )
 
     if errors:
         error_msg = "\nAssertion failed: Mock call arguments do not match"
@@ -207,3 +214,74 @@ def assert_called_with_context(mock_obj, expected_args=None, expected_kwargs=Non
 
     return True
 
+
+def create_bulk_side_effect_for_missing_id():
+    """
+    Create a bulk side effect function that triggers ValueError for missing ID tests.
+
+    This helper is used in tests that verify error handling when documents
+    are indexed without an 'id' field. The side effect consumes the actions
+    generator to trigger the ValueError that occurs during iteration.
+
+    Returns:
+        function: A side effect function that can be used with mock_bulk.side_effect
+
+    Example:
+        ```python
+        mock_bulk.side_effect = create_bulk_side_effect_for_missing_id()
+        ```
+    """
+
+    def bulk_side_effect(client, actions, **kwargs):
+        """Side effect function that triggers ValueError by consuming actions generator.
+
+        Args:
+            client: Search client (unused)
+            actions: Generator of actions to index
+            **kwargs: Additional arguments (unused)
+
+        Returns:
+            tuple: (0, []) - success count and errors list
+        """
+        # Try to iterate to trigger the ValueError
+        list(actions)  # Consume generator to trigger ValueError
+        return (0, [])
+
+    return bulk_side_effect
+
+
+def create_safe_resp_msg_wrapper():
+    """
+    Create a safe resp_msg wrapper for BulkResp objects.
+
+    BulkResp objects from elasticsearch/opensearch helpers don't have a 'text'
+    attribute like regular response objects. This wrapper safely handles both
+    types of response objects.
+
+    Returns:
+        function: A wrapper function that can be used with mock_resp_msg.side_effect
+
+    Example:
+        ```python
+        mock_resp_msg.side_effect = create_safe_resp_msg_wrapper()
+        ```
+    """
+
+    def safe_resp_msg(msg, resp, throw=True, ignore=None):
+        """Safe wrapper for resp_msg that handles BulkResp objects without text attribute.
+
+        Args:
+            msg: Message to print
+            resp: Response object (BulkResp or similar)
+            throw: Whether to raise exception on error status
+            ignore: List of status codes to ignore
+        """
+        if ignore is None:
+            ignore = []
+        rsc = resp.status_code
+        print(f"{msg} [Status: {rsc}]")
+        if rsc >= 400 and rsc not in ignore and throw:
+            text = getattr(resp, "text", "")
+            raise RuntimeError(text)
+
+    return safe_resp_msg
