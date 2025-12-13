@@ -31,6 +31,9 @@ pytest -k solr tests/test_notebooks.py
 
 # Run in parallel (4x faster)
 pytest -n auto tests/test_notebooks.py
+
+# Retry flaky tests (retry failed tests 3 times with 2 second delay)
+pytest --reruns 3 --reruns-delay 2 tests/test_notebooks.py
 ```
 
 ### Code Quality Checks
@@ -1095,13 +1098,13 @@ stage('Test') {
 ### Package Compatibility Tests
 ```bash
 # Test that all packages work with current Python version
-python test_package_compatibility.py
+python tests/test_package_compatibility.py
 ```
 
 ### Notebook Pattern Tests
 ```bash
 # Test specific code patterns from notebooks
-python test_notebook_patterns.py
+python tests/test_notebook_patterns.py
 ```
 
 ### Unit Tests

@@ -81,6 +81,7 @@ dependencies = [
     "pytest-timeout>=2.2.0",
     "pytest-html>=4.1.0",
     "pytest-cov>=4.0.0",
+    "pytest-rerunfailures>=14.0",
     # Code quality
     "ruff>=0.14.9",
 ]

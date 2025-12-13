@@ -10,10 +10,16 @@ This script tests:
    - pandas (DataFrames)
    - numpy (array operations)
    - matplotlib (plotting)
+
+Can be run as:
+- Standalone script: python tests/test_package_compatibility.py
+- pytest: pytest tests/test_package_compatibility.py --cov=ltr --cov-report=term-missing
 """
 
 import sys
 import traceback
+
+import pytest
 
 
 def test_imports():
@@ -22,41 +28,47 @@ def test_imports():
     errors = []
 
     try:
-        import numpy as np
+        import numpy as np  # noqa: F401
         print(f"  ✓ numpy {np.__version__}")
     except Exception as e:
         errors.append(f"numpy import failed: {e}")
         print("  ✗ numpy import failed")
+        raise
 
     try:
-        import scipy
+        import scipy  # noqa: F401
         print(f"  ✓ scipy {scipy.__version__}")
     except Exception as e:
         errors.append(f"scipy import failed: {e}")
         print("  ✗ scipy import failed")
+        raise
 
     try:
-        import sklearn
+        import sklearn  # noqa: F401
         print(f"  ✓ scikit-learn {sklearn.__version__}")
     except Exception as e:
         errors.append(f"scikit-learn import failed: {e}")
         print("  ✗ scikit-learn import failed")
+        raise
 
     try:
-        import pandas as pd
+        import pandas as pd  # noqa: F401
         print(f"  ✓ pandas {pd.__version__}")
     except Exception as e:
         errors.append(f"pandas import failed: {e}")
         print("  ✗ pandas import failed")
+        raise
 
     try:
-        import matplotlib
+        import matplotlib  # noqa: F401
         print(f"  ✓ matplotlib {matplotlib.__version__}")
     except Exception as e:
         errors.append(f"matplotlib import failed: {e}")
         print("  ✗ matplotlib import failed")
+        raise
 
-    return errors
+    if errors:
+        pytest.fail(f"Import errors: {errors}")
 
 def test_numpy_operations():
     """Test numpy operations used in codebase."""
@@ -83,8 +95,10 @@ def test_numpy_operations():
         errors.append(f"numpy operations failed: {e}")
         print(f"  ✗ numpy operations failed: {e}")
         traceback.print_exc()
+        raise
 
-    return errors
+    if errors:
+        pytest.fail(f"Numpy operation errors: {errors}")
 
 def test_scipy_operations():
     """Test scipy operations used in Bayesian optimization notebooks."""
@@ -108,8 +122,10 @@ def test_scipy_operations():
         errors.append(f"scipy operations failed: {e}")
         print(f"  ✗ scipy operations failed: {e}")
         traceback.print_exc()
+        raise
 
-    return errors
+    if errors:
+        pytest.fail(f"Scipy operation errors: {errors}")
 
 def test_sklearn_operations():
     """Test scikit-learn operations used in Lambda-MART notebooks."""
@@ -123,25 +139,25 @@ def test_sklearn_operations():
         from sklearn.tree import DecisionTreeRegressor
 
         # Test StandardScaler (used in svmrank notebooks)
-        X = np.array([[1, 2], [3, 4], [5, 6]])
+        x_data = np.array([[1, 2], [3, 4], [5, 6]])
         scaler = StandardScaler()
-        scaler.fit(X)
-        X_scaled = scaler.transform(X)
+        scaler.fit(x_data)
+        x_scaled = scaler.transform(x_data)
 
-        assert X_scaled.shape == X.shape
+        assert x_scaled.shape == x_data.shape
 
         # Test DecisionTreeRegressor (used in lambda-mart notebooks)
         y = np.array([1, 2, 3])
         tree = DecisionTreeRegressor(max_leaf_nodes=8)
-        tree.fit(X, y)
-        predictions = tree.predict(X)
+        tree.fit(x_data, y)
+        predictions = tree.predict(x_data)
 
         assert len(predictions) == len(y)
 
         # Test LinearSVC (used in svmrank notebooks)
         y_binary = np.array([0, 1, 0])
         model = svm.LinearSVC(max_iter=1000)
-        model.fit(X, y_binary)
+        model.fit(x_data, y_binary)
 
         assert hasattr(model, 'coef_')
 
@@ -150,8 +166,10 @@ def test_sklearn_operations():
         errors.append(f"scikit-learn operations failed: {e}")
         print(f"  ✗ scikit-learn operations failed: {e}")
         traceback.print_exc()
+        raise
 
-    return errors
+    if errors:
+        pytest.fail(f"Scikit-learn operation errors: {errors}")
 
 def test_pandas_operations():
     """Test pandas DataFrame operations used in notebooks."""
@@ -192,8 +210,10 @@ def test_pandas_operations():
         errors.append(f"pandas operations failed: {e}")
         print(f"  ✗ pandas operations failed: {e}")
         traceback.print_exc()
+        raise
 
-    return errors
+    if errors:
+        pytest.fail(f"Pandas operation errors: {errors}")
 
 def test_matplotlib_operations():
     """Test matplotlib operations used in notebooks."""
@@ -223,8 +243,10 @@ def test_matplotlib_operations():
         errors.append(f"matplotlib operations failed: {e}")
         print(f"  ✗ matplotlib operations failed: {e}")
         traceback.print_exc()
+        raise
 
-    return errors
+    if errors:
+        pytest.fail(f"Matplotlib operation errors: {errors}")
 
 def test_integration():
     """Test integration of packages together (as used in notebooks)."""
@@ -263,40 +285,28 @@ def test_integration():
         errors.append(f"Integration test failed: {e}")
         print(f"  ✗ Integration test failed: {e}")
         traceback.print_exc()
+        raise
 
-    return errors
+    if errors:
+        pytest.fail(f"Integration test errors: {errors}")
 
 def main():
-    """Run all compatibility tests."""
+    """Run all compatibility tests (standalone mode)."""
     print("=" * 60)
     print("Package Compatibility Test Suite")
     print("Testing Python 3.12 compatibility after package updates")
     print("=" * 60)
+    print("\nNote: For coverage reporting, run with pytest:")
+    print("  pytest tests/test_package_compatibility.py --cov=ltr --cov-report=term-missing")
+    print("=" * 60 + "\n")
 
-    all_errors = []
-
-    # Run all tests
-    all_errors.extend(test_imports())
-    all_errors.extend(test_numpy_operations())
-    all_errors.extend(test_scipy_operations())
-    all_errors.extend(test_sklearn_operations())
-    all_errors.extend(test_pandas_operations())
-    all_errors.extend(test_matplotlib_operations())
-    all_errors.extend(test_integration())
-
-    # Summary
-    print("\n" + "=" * 60)
-    if all_errors:
-        print(f"❌ TESTS FAILED: {len(all_errors)} error(s) found")
-        print("\nErrors:")
-        for i, error in enumerate(all_errors, 1):
-            print(f"  {i}. {error}")
-        return 1
-    else:
-        print("✅ ALL TESTS PASSED")
-        print("\nAll updated packages are compatible with Python 3.12")
-        print("and work correctly with the codebase patterns.")
-        return 0
+    # Run pytest programmatically
+    exit_code = pytest.main([
+        __file__,
+        "-v",
+        "--tb=short"
+    ])
+    return exit_code
 
 if __name__ == '__main__':
     sys.exit(main())

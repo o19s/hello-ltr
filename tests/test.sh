@@ -133,7 +133,6 @@ fi
 echo "✓ Test file found: $TESTS"
 
 # Confirm needed Requirements are present here
-# TODO: may need to check version in future
 COMMANDS=( 'docker' 'python3')
 
 for COMMAND in "${COMMANDS[@]}"
@@ -158,6 +157,19 @@ do
                     echo "> docker-compose Missing - Please Install!"
                     exit 1
                 fi
+            fi
+        fi
+        
+        if [[ "$COMMAND" == "python3" ]]; then
+            PYTHON_VERSION=$(python3 --version 2>&1 | awk '{print $2}' | cut -d '.' -f1-2)
+            MINIMUM_PYTHON_VERSION="3.8"
+            if [[ $(echo -e "$PYTHON_VERSION\n$MINIMUM_PYTHON_VERSION" | sort -V | head -n1) == "$MINIMUM_PYTHON_VERSION" ]]; then
+                echo "Python version $PYTHON_VERSION meets minimum requirement ($MINIMUM_PYTHON_VERSION)."
+            else
+                echo "================================================"
+                echo "> POOP!   Fix Yer Environment ⚙️  For:"
+                echo "> Python version $PYTHON_VERSION is below minimum requirement ($MINIMUM_PYTHON_VERSION)"
+                exit 1
             fi
         fi
 

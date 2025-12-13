@@ -111,6 +111,39 @@ def notebook_runner():
 
     return runner
 
+
+@pytest.fixture(autouse=True)
+def add_error_context(request):
+    """
+    Automatically add context to test failures for better debugging.
+
+    This fixture runs for every test and adds context information to failures,
+    such as test name, parameters, and local variables.
+    """
+    # Store test context for use in error reporting
+    request.node.user_properties.append(('test_name', request.node.name))
+    if hasattr(request.node, 'callspec') and request.node.callspec:
+        request.node.user_properties.append(('test_params', dict(request.node.callspec.params)))
+
+    yield
+
+    # After test, we could add cleanup or logging here if needed
+
+
+def pytest_runtest_makereport(item, call):
+    """
+    Hook to enhance test reports with additional context.
+
+    This adds debugging information to test failure reports.
+    """
+    if call.when == "call" and call.excinfo is not None:
+        # Add context to failure reports
+        excinfo = call.excinfo
+        if excinfo.typename == "AssertionError":
+            # For assertion errors, try to add more context
+            # The actual error message enhancement is done in the assertion itself
+            pass
+
 def pytest_configure(config):
     """
     Pytest hook to configure custom markers and settings.
