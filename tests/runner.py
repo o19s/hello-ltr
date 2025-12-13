@@ -48,7 +48,7 @@ def run_notebook(notebook_path, timeout=None, save_nb_path=None):
     # Get timeout from environment variable or use default of 6 hours
     if timeout is None:
         timeout_hours = float(os.environ.get('NOTEBOOK_TIMEOUT_HOURS', '6'))
-        timeout = hours(timeout_hours)
+        timeout = int(hours(timeout_hours))
     
     nb_name, _ = os.path.splitext(os.path.basename(notebook_path))
     dirname = os.path.dirname(notebook_path)
