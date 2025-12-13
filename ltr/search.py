@@ -7,53 +7,52 @@ baseEsQuery = {
             "params": {
                 "keywords": "",
             },
-            "model": ""
+            "model": "",
         }
-      }
+    },
 }
+
 
 def esLtrQuery(keywords, modelName):
     import json
-    baseEsQuery['query']['sltr']['params']['keywords'] = keywords
-    baseEsQuery['query']['sltr']['params']['keywordsList'] = [keywords]  # Needed by TSQ for now
-    baseEsQuery['query']['sltr']['model'] = modelName
-    print("%s" % json.dumps(baseEsQuery))
+
+    baseEsQuery["query"]["sltr"]["params"]["keywords"] = keywords
+    baseEsQuery["query"]["sltr"]["params"]["keywordsList"] = [keywords]  # Needed by TSQ for now
+    baseEsQuery["query"]["sltr"]["model"] = modelName
+    print(f"{json.dumps(baseEsQuery)}")
     return baseEsQuery
+
 
 # TODO: Parse params and add efi dynamically instead of adding manually to query below
 def solrLtrQuery(keywords, modelName):
-    keywords = re.sub('([^\s\w]|_)+', '', keywords)
-    fuzzy_keywords = ' '.join([x + '~' for x in keywords.split(' ')])
+    keywords = re.sub(r"([^\s\w]|_)+", "", keywords)
+    fuzzy_keywords = " ".join([x + "~" for x in keywords.split(" ")])
 
     return {
-        'fl': '*,score',
-        'rows': 5,
-        'q': '{{!ltr reRankDocs=30000 model={} efi.keywords="{}" efi.fuzzy_keywords="{}"}}'.format(modelName, keywords, fuzzy_keywords)
+        "fl": "*,score",
+        "rows": 5,
+        "q": f'{{!ltr reRankDocs=30000 model={modelName} efi.keywords="{keywords}" efi.fuzzy_keywords="{fuzzy_keywords}"}}',
     }
 
 
-tmdbFields = {
-    'title': 'title',
-    'display_fields': ['release_year', 'genres', 'overview']
-}
+tmdbFields = {"title": "title", "display_fields": ["release_year", "genres", "overview"]}
 
 
-
-def search(client, keywords, modelName, index='tmdb', fields=tmdbFields):
-    if client.name() == 'elastic' or client.name() == 'opensearch':
+def search(client, keywords, modelName, index="tmdb", fields=tmdbFields):
+    if client.name() == "elastic" or client.name() == "opensearch":
         results = client.query(index, esLtrQuery(keywords, modelName))
     else:
         q = solrLtrQuery(keywords, modelName)
         print(q)
         results = client.query(index, q)
 
-    ti = fields['title']
+    ti = fields["title"]
 
     for result in results:
-         print("%s " % (result[ti] if ti in result else 'N/A'))
-         print("%s " % (result['_score']))
+        print("%s " % (result[ti] if ti in result else "N/A"))
+        print(f"{result['_score']} ")
 
-         for df in fields['display_fields']:
-            print("%s " % (result[df] if df in result else 'N/A'))
+        for df in fields["display_fields"]:
+            print("%s " % (result[df] if df in result else "N/A"))
 
-         print("---------------------------------------")
+        print("---------------------------------------")

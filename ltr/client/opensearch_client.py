@@ -1,14 +1,15 @@
+import json
 import os
-import requests
 
-from .base_client import BaseClient
+import requests
+from opensearchpy import OpenSearch, helpers
+
 from ltr.helpers.handle_resp import resp_msg
 
-import json
-from opensearchpy import OpenSearch
-from opensearchpy import helpers
+from .base_client import BaseClient
 
-class OpenSearchResp():
+
+class OpenSearchResp:
     def __init__(self, resp):
         self.status_code = 400
         if 'acknowledged' in resp and resp['acknowledged']:
@@ -17,13 +18,13 @@ class OpenSearchResp():
             self.status_code = resp['status']
             self.text = json.dumps(resp, indent=2)
 
-class BulkResp():
+class BulkResp:
     def __init__(self, resp):
         self.status_code = 400
         if resp[0] > 0:
             self.status_code = 201
 
-class SearchResp():
+class SearchResp:
     def __init__(self, resp):
         self.status_code = 400
         if 'hits' in resp:
@@ -50,8 +51,8 @@ class OpenSearchClient(BaseClient):
         else:
             self.host = 'localhost'
 
-        self.opensearch_ep = 'http://{}:9201/_ltr'.format(self.host)
-        self.opensearch = OpenSearch('http://{}:9201'.format(self.host))
+        self.opensearch_ep = f'http://{self.host}:9201/_ltr'
+        self.opensearch = OpenSearch(f'http://{self.host}:9201')
         print(f"{self.opensearch_ep}; {self.opensearch}")
 
     def get_host(self):
@@ -65,16 +66,16 @@ class OpenSearchClient(BaseClient):
 
     def delete_index(self, index):
         resp = self.opensearch.indices.delete(index=index, ignore=[400, 404])
-        resp_msg(msg="Deleted index {}".format(index),
+        resp_msg(msg=f"Deleted index {index}",
                  resp=OpenSearchResp(resp), throw=False, ignore=[400, 404])
 
     def create_index(self, index):
         """ Take the local config files for OpenSearch for index, reload them into OpenSearch"""
-        cfg_json_path = os.path.join(self.configs_dir, "%s_settings.json" % index)
+        cfg_json_path = os.path.join(self.configs_dir, f"{index}_settings.json")
         with open(cfg_json_path) as src:
             settings = json.load(src)
             resp = self.opensearch.indices.create(index=index, body=settings)
-            resp_msg(msg="Created index {}".format(index), resp=OpenSearchResp(resp))
+            resp_msg(msg=f"Created index {index}", resp=OpenSearchResp(resp))
 
     def index_documents(self, index, doc_src):
 
@@ -89,7 +90,7 @@ class OpenSearchClient(BaseClient):
 
         resp = helpers.bulk(self.opensearch, bulkDocs(doc_src), chunk_size=100)
         self.opensearch.indices.refresh(index=index)
-        resp_msg(msg="Streaming Bulk index DONE {}".format(index), resp=BulkResp(resp))
+        resp_msg(msg=f"Streaming Bulk index DONE {index}", resp=BulkResp(resp))
 
     def reset_ltr(self, index):
         resp = requests.delete(self.opensearch_ep)
@@ -98,8 +99,8 @@ class OpenSearchClient(BaseClient):
         resp_msg(msg="Initialize Default LTR feature store".format(), resp=resp)
 
     def create_featureset(self, index, name, ftr_config):
-        resp = requests.post('{}/_featureset/{}'.format(self.opensearch_ep, name), json=ftr_config)
-        resp_msg(msg="Create {} feature set".format(name), resp=resp)
+        resp = requests.post(f'{self.opensearch_ep}/_featureset/{name}', json=ftr_config)
+        resp_msg(msg=f"Create {name} feature set", resp=resp)
 
     def get_feature_name(self, config, ftr_idx):
         return config["featureset"]["features"][int(ftr_idx) - 1]["name"]
@@ -161,14 +162,14 @@ class OpenSearchClient(BaseClient):
         return matches
 
     def submit_model(self, featureset, index, model_name, model_payload):
-        model_ep = "{}/_model/".format(self.opensearch_ep)
-        create_ep = "{}/_featureset/{}/_createmodel".format(self.opensearch_ep, featureset)
+        model_ep = f"{self.opensearch_ep}/_model/"
+        create_ep = f"{self.opensearch_ep}/_featureset/{featureset}/_createmodel"
 
-        resp = requests.delete('{}{}'.format(model_ep, model_name))
-        print('Delete model {}: {}'.format(model_name, resp.status_code))
+        resp = requests.delete(f'{model_ep}{model_name}')
+        print(f'Delete model {model_name}: {resp.status_code}')
 
         resp = requests.post(create_ep, json=model_payload)
-        resp_msg(msg="Created Model {}".format(model_name), resp=resp)
+        resp_msg(msg=f"Created Model {model_name}", resp=resp)
 
     def submit_ranklib_model(self, featureset, index, model_name, model_payload):
         params = {
@@ -181,8 +182,8 @@ class OpenSearchClient(BaseClient):
             }
         }
         self.submit_model(featureset, index, model_name, params)
-    
-    
+
+
     def submit_xgboost_model(self, featureset, index, model_name, model_payload):
         params = {
             'model': {
@@ -194,7 +195,7 @@ class OpenSearchClient(BaseClient):
             }
         }
         self.submit_model(featureset, index, model_name, params)
-    
+
 
     def model_query(self, index, model, model_params, query):
         params = {
@@ -239,14 +240,13 @@ class OpenSearchClient(BaseClient):
         return matches
 
     def feature_set(self, index, name):
-        resp = requests.get('{}/_featureset/{}'.format(self.opensearch_ep,
-                                                       name))
+        resp = requests.get(f'{self.opensearch_ep}/_featureset/{name}')
 
         jsonResp = resp.json()
         if not jsonResp['found']:
-            raise RuntimeError("Unable to find {}".format(name))
+            raise RuntimeError(f"Unable to find {name}")
 
-        resp_msg(msg="Fetched FeatureSet {}".format(name), resp=resp)
+        resp_msg(msg=f"Fetched FeatureSet {name}", resp=resp)
 
         rawFeatureSet = jsonResp['_source']['featureset']['features']
 

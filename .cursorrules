@@ -1,1 +1,4 @@
-Always use the venv when running python commands.
+- Always use the venv when running python commands.
+- Always use uv.
+- Always use pyproject.toml, not requirements.txt.
+- Instead of creating separate documents recording fixes, update the original code issue docs.

@@ -1,11 +1,12 @@
 from collections import Counter
 
+
 def conv_aug_attracts(attracts, sessions, costs):
-    """ Rescan sessions, using click-derrived attractiveness.
+    """Rescan sessions, using click-derrived attractiveness.
 
-        If theres no conversion, punish the attractiveness derrived judgment
+    If theres no conversion, punish the attractiveness derrived judgment
 
-        BUT we punish costly things less, and cheap things more
+    BUT we punish costly things less, and cheap things more
     """
     satisfacts = Counter()
     counts = Counter()
@@ -29,8 +30,6 @@ def conv_aug_attracts(attracts, sessions, costs):
                 satisfacts[(session.query, doc.doc_id)] += attract * costs[doc.doc_id]
 
     for (query_id, doc_id), count in counts.items():
-        satisfacts[(query_id, doc_id)] = satisfacts[(query_id,doc_id)] / count
+        satisfacts[(query_id, doc_id)] = satisfacts[(query_id, doc_id)] / count
 
     return satisfacts
-
-

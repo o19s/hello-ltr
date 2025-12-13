@@ -1,15 +1,15 @@
 try:
-    from judgments import Judgment, judgments_from_file, judgments_to_file, judgments_by_qid
     from helpers.butterfingers import butterfingers
+    from judgments import Judgment, judgments_by_qid, judgments_from_file, judgments_to_file
 except ImportError:
-    from .judgments import Judgment, judgments_from_file, judgments_to_file, judgments_by_qid
     from .helpers.butterfingers import butterfingers
+    from .judgments import Judgment, judgments_by_qid, judgments_from_file, judgments_to_file
 
 
 
 def typoIt(judgmentInFile, judgmentOutFile, rounds=100):
     with open(judgmentInFile) as f:
-        currJudgments = [judg for judg in judgments_from_file(f)]
+        currJudgments = list(judgments_from_file(f))
     lastQid = currJudgments[-1].qid
     judgDict = judgments_by_qid(currJudgments)
 
@@ -23,7 +23,7 @@ def typoIt(judgmentInFile, judgmentOutFile, rounds=100):
 
             if keywordsWTypo != keywords and keywordsWTypo not in existingTypos:
                 newQid = lastQid+1
-                print("%s => %s" % (keywords, keywordsWTypo))
+                print(f"{keywords} => {keywordsWTypo}")
                 lastQid += 1
                 for judg in judglist:
                     typoJudg = Judgment(grade=judg.grade,

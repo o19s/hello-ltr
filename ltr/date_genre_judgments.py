@@ -1,5 +1,7 @@
-from .judgments import Judgment, judgments_to_file
 from tqdm import tqdm
+
+from .judgments import Judgment, judgments_to_file
+
 
 def genreQid(genre):
     if genre == "Science Fiction":
@@ -11,18 +13,18 @@ def genreQid(genre):
 
 
 def genreGrade(movie):
-    """ Create a simple training set, as if we were
-        searching for a genre.
+    """Create a simple training set, as if we were
+    searching for a genre.
 
-        Newer science fiction is considered better
-        Older drama is considered better
+    Newer science fiction is considered better
+    Older drama is considered better
 
-        """
-    if 'release_year' in movie and movie['release_year'] is not None:
-        releaseYear = int(movie['release_year'])
+    """
+    if "release_year" in movie and movie["release_year"] is not None:
+        releaseYear = int(movie["release_year"])
     else:
         return 0
-    if movie['genres'][0] == "Science Fiction":
+    if movie["genres"][0] == "Science Fiction":
         if releaseYear > 2015:
             return 4
         elif releaseYear > 2010:
@@ -34,7 +36,7 @@ def genreGrade(movie):
         else:
             return 0
 
-    if movie['genres'][0] == "Drama":
+    if movie["genres"][0] == "Drama":
         if releaseYear > 1990:
             return 0
         elif releaseYear > 1970:
@@ -48,39 +50,25 @@ def genreGrade(movie):
     return 0
 
 
-def synthesize(client, judgmentsOutFile='genre_by_date_judgments.txt', autoNegate=False):
-    print('Generating judgments for scifi & drama movies')
+def synthesize(client, judgmentsOutFile="genre_by_date_judgments.txt", autoNegate=False):
+    print("Generating judgments for scifi & drama movies")
 
-    if client.name() in ['elastic', 'opensearch']:
-        params = {
-            "query": {
-                "match_all": {}
-            },
-            "size": 10000,
-            "sort": [{"_id": "asc"}]
-        }
+    if client.name() in ["elastic", "opensearch"]:
+        params = {"query": {"match_all": {}}, "size": 10000, "sort": [{"_id": "asc"}]}
     else:
-        params = {
-            "q": "*:*",
-            "rows": 10000,
-            "sort": "id ASC",
-            "wt": 'json'
-        }
+        params = {"q": "*:*", "rows": 10000, "sort": "id ASC", "wt": "json"}
 
-    resp = client.query('tmdb', params)
+    resp = client.query("tmdb", params)
 
     # Build judgments for each film
     judgments = []
     for movie in tqdm(resp):
-        if 'genres' in movie and len(movie['genres']) > 0:
-            genre=movie['genres'][0]
+        if "genres" in movie and len(movie["genres"]) > 0:
+            genre = movie["genres"][0]
             qid = genreQid(genre)
             if qid == 0:
                 continue
-            judgment = Judgment(qid=qid,
-                                grade=genreGrade(movie),
-                                docId=movie['id'],
-                                keywords=genre)
+            judgment = Judgment(qid=qid, grade=genreGrade(movie), docId=movie["id"], keywords=genre)
             judgments.append(judgment)
 
             # This movie is good for its genre, but
@@ -92,14 +80,11 @@ def synthesize(client, judgmentsOutFile='genre_by_date_judgments.txt', autoNegat
                 negGenre = "Science Fiction"
 
             if autoNegate and negGenre is not None:
-                negQid=genreQid(negGenre)
-                judgment = Judgment(qid=negQid,
-                                    grade=0,
-                                    docId=movie['id'],
-                                    keywords=negGenre)
+                negQid = genreQid(negGenre)
+                judgment = Judgment(qid=negQid, grade=0, docId=movie["id"], keywords=negGenre)
                 judgments.append(judgment)
-                
-    with open(judgmentsOutFile, 'w') as f:
+
+    with open(judgmentsOutFile, "w") as f:
         judgments_to_file(f, judgmentsList=judgments)
 
     return judgments

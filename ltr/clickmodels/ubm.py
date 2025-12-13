@@ -1,7 +1,9 @@
-from ltr.clickmodels.session import build
 from collections import Counter, defaultdict
 
-class Model():
+from ltr.clickmodels.session import build
+
+
+class Model:
     def __init__(self):
         # Examine prob per-rank
         # Rank 0 is first displayed on page
@@ -9,33 +11,32 @@ class Model():
         self.ranks = defaultdict(lambda: 0.4)
 
         # Attractiveness per query-doc
-        self.attracts = defaultdict(lambda : 0.5)
+        self.attracts = defaultdict(lambda: 0.5)
 
 
 def update_attractiveness(sessions, model):
-    """ Run through the step of updating attractiveness
-        based on session information and the current rank
-        examine probabilities
+    """Run through the step of updating attractiveness
+    based on session information and the current rank
+    examine probabilities
 
-        Algorithm based on Expectation Maximization derived in
-        chapter 4 of "Click Models for Web Search" by
-        Chulkin, Markov, de Rijke
+    Algorithm based on Expectation Maximization derived in
+    chapter 4 of "Click Models for Web Search" by
+    Chulkin, Markov, de Rijke
 
     """
-    attractions = Counter() #Track query-doc attractiveness in this round
-    num_sessions = Counter() #Track num sessions where query-doc appears
+    attractions = Counter()  # Track query-doc attractiveness in this round
+    num_sessions = Counter()  # Track num sessions where query-doc appears
     for session in sessions:
         last_click = -1
         for rank, doc in enumerate(session.docs):
             query_doc_key = (session.query, doc.doc_id)
             att = 0
             if doc.click:
-
                 last_click = rank
 
                 att = 1
             else:
-                exam = model.ranks[(last_click,rank)]
+                exam = model.ranks[(last_click, rank)]
                 assert exam <= 1.0
                 doc_a = model.attracts[query_doc_key]
                 # Not examined, but attractive /
@@ -47,7 +48,7 @@ def update_attractiveness(sessions, model):
                 # OR if the doc IS examined a lot AND its not
                 #  attractive, then we do the opposite, add
                 #  close to 0
-                att = (((1 - exam) * doc_a) / (1 - (exam * doc_a)))
+                att = ((1 - exam) * doc_a) / (1 - (exam * doc_a))
 
             # Store away a_sum and
             assert att <= 1.0
@@ -64,12 +65,12 @@ def update_attractiveness(sessions, model):
 
 
 def update_examines(sessions, model):
-    """ Run through the step of updating position examine
-        probabilities given current query-doc attractiveness
+    """Run through the step of updating position examine
+    probabilities given current query-doc attractiveness
 
-        Algorithm based on Expectation Maximization derived in
-        chapter 4 of "Click Models for Web Search" by
-        Chulkin, Markov, de Rijke
+    Algorithm based on Expectation Maximization derived in
+    chapter 4 of "Click Models for Web Search" by
+    Chulkin, Markov, de Rijke
 
     """
     new_rank_probs = defaultdict(lambda: 0)
@@ -82,7 +83,7 @@ def update_examines(sessions, model):
                 new_rank_probs[(last_click, rank)] += 1
                 counts[(last_click, rank)] += 1
                 if last_click == -1 and rank == 3:
-                    print(counts[(last_click,rank)])
+                    print(counts[(last_click, rank)])
 
                 last_click = rank
             else:
@@ -103,7 +104,7 @@ def update_examines(sessions, model):
                 new_rank_probs[(last_click, rank)] += numerator / denominator
                 counts[(last_click, rank)] += 1
                 if last_click == -1 and rank == 3:
-                    print(counts[(last_click,rank)])
+                    print(counts[(last_click, rank)])
 
     for (last_click, click), count in counts.items():
         model.ranks[(last_click, click)] = new_rank_probs[(last_click, click)] / count
@@ -111,29 +112,31 @@ def update_examines(sessions, model):
 
 def user_browse_model(sessions, rounds=20):
     """
-        Algorithm based on Expectation Maximization derived in
-        chapter 4 (table 4.1) of "Click Models for Web Search" by
-        Chulkin, Markov, de Rijke
+    Algorithm based on Expectation Maximization derived in
+    chapter 4 (table 4.1) of "Click Models for Web Search" by
+    Chulkin, Markov, de Rijke
 
     """
-    model=Model()
-    for i in range(0,rounds):
+    model = Model()
+    for i in range(0, rounds):
         update_attractiveness(sessions, model)
         update_examines(sessions, model)
     return model
 
 
 if __name__ == "__main__":
-    sessions = build([
-      ('A', ((1, True), (2, False), (3, True), (0, False))),
-      ('B', ((5, False), (2, True), (3, True), (0, False))),
-      ('A', ((1, False), (2, False), (3, True), (0, False))),
-      ('B', ((1, False), (2, False), (3, False), (9, True))),
-      ('A', ((9, False), (2, False), (1, True), (0, True))),
-      ('B', ((6, True), (2, False), (3, True), (1, False))),
-      ('A', ((7, False), (4, True), (1, False), (3, False))),
-      ('B', ((8, True), (2, False), (3, True), (1, False))),
-      ('A', ((1, False), (4, True), (2, False), (3, False))),
-      ('B', ((7, True), (4, False), (5, True), (1, True))),
-    ])
+    sessions = build(
+        [
+            ("A", ((1, True), (2, False), (3, True), (0, False))),
+            ("B", ((5, False), (2, True), (3, True), (0, False))),
+            ("A", ((1, False), (2, False), (3, True), (0, False))),
+            ("B", ((1, False), (2, False), (3, False), (9, True))),
+            ("A", ((9, False), (2, False), (1, True), (0, True))),
+            ("B", ((6, True), (2, False), (3, True), (1, False))),
+            ("A", ((7, False), (4, True), (1, False), (3, False))),
+            ("B", ((8, True), (2, False), (3, True), (1, False))),
+            ("A", ((1, False), (4, True), (2, False), (3, False))),
+            ("B", ((7, True), (4, False), (5, True), (1, True))),
+        ]
+    )
     user_browse_model(sessions, rounds=100)

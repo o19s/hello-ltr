@@ -110,6 +110,6 @@ For more informal development:
 - Startup the Solr, OS, and ES Docker containers
 - Do your development
 - Run the command as needed:
-`python tests/run_most_nbs.py`
+`./tests/test.sh` or `pytest tests/test_notebooks.py`
 - Tests fail if notebooks return any errors
   - The failing notebook will be stored at `tests/last_run.ipynb`

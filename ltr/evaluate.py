@@ -4,6 +4,7 @@ import os
 import plotly.graph_objs as go
 from plotly.offline import init_notebook_mode, iplot
 
+
 def log_run(cmd):
     resp = os.popen(cmd).read()
     print(resp)
@@ -58,13 +59,13 @@ def rre_table():
         errs.append(metrics['ERR@30']['versions'][exp]['value'])
 
     trace = go.Table(
-            header=dict(values=['', 'Precision', 'Recall', 'ERR'], fill = dict(color='#AAAAAA')),
-            cells=dict(values=[
+            header={'values': ['', 'Precision', 'Recall', 'ERR'], 'fill': {'color': '#AAAAAA'}},
+            cells={'values': [
                     experiments,
                     precisions,
                     recalls,
                     errs
-                ])
+                ]}
     )
 
     data = [trace]

@@ -1,6 +1,7 @@
-from ltr.judgments import judgments_from_file
-from ltr.client import ElasticClient
 import csv
+
+from ltr.client import ElasticClient
+from ltr.judgments import judgments_from_file
 
 
 def train_to_csv(client, feature_set, in_filename, out_filename):

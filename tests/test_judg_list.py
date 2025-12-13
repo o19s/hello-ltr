@@ -111,7 +111,3 @@ class JudgmentsTestCase(unittest.TestCase):
                         else:
                             self.fail("DocID:{} should not be present in qid:{}".format(j.docId, qid))
         self.assertEqual(read_judgments,3)
-
-
-if __name__ == "__main__":
-    unittest.main()

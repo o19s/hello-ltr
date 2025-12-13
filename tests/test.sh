@@ -8,7 +8,6 @@
 # Options:
 #   --rebuild-containers      Rebuild Docker containers before testing
 #   --engines=ENGINE_LIST     Comma-separated list of engines to test (solr,elasticsearch,opensearch)
-#   --test-command=COMMAND    Custom test command to run (default: tests/run_most_nbs.py)
 #   --non-interactive         Skip all prompts and auto-cleanup conflicts (useful for CI)
 #
 # Environment Variables:
@@ -18,6 +17,15 @@
 #   OPENSEARCH_PORT           Custom OpenSearch test port (default: 19201)
 #   SERVICE_WAIT_TIMEOUT      Seconds to wait for services to be ready (default: 300)
 #   NOTEBOOK_TIMEOUT_HOURS    Hours to allow per notebook execution (default: 6)
+#
+# Pytest Test Options:
+#   PYTEST_ARGS               Additional pytest arguments (e.g., "--lf", "-k opensearch", "-n auto")
+#
+# Pytest Usage Examples:
+#   PYTEST_ARGS="--lf" ./tests/test.sh                     # Re-run last failed tests
+#   PYTEST_ARGS="-k opensearch" ./tests/test.sh            # Run only opensearch notebooks
+#   PYTEST_ARGS="-n auto" ./tests/test.sh                  # Parallel execution (faster)
+#   PYTEST_ARGS="--sw" ./tests/test.sh                     # Stepwise: stop at first failure
 #
 # Features:
 #   - Automatic cleanup on exit (success, failure, or interruption via Ctrl+C)
@@ -30,9 +38,13 @@
 #   ./tests/test.sh --non-interactive                  # Run in CI mode (no prompts)
 #   ./tests/test.sh --engines=solr                     # Test only Solr
 #   ./tests/test.sh --rebuild-containers               # Rebuild before testing
+#   PYTEST_ARGS="--lf" ./tests/test.sh                 # Re-run last failed notebooks
+#   PYTEST_ARGS="-k elasticsearch" ./tests/test.sh     # Run only elasticsearch notebooks
+#   PYTEST_ARGS="-n auto" ./tests/test.sh              # Parallel execution (4x faster)
 #
 
-TESTS="tests/run_most_nbs.py"
+TESTS="pytest tests/test_notebooks.py"
+PYTEST_ARGS="${PYTEST_ARGS:-}"  # Additional pytest arguments from environment
 REBUILD_CONTAINERS=false
 DOCKER_COMPOSE_CMD="docker compose"
 NON_INTERACTIVE=false
@@ -80,9 +92,6 @@ do
     if [ "$KEY" == "--rebuild-containers" ]; then
         REBUILD_CONTAINERS=true
     fi
-    if [ "$KEY" == "--test-command" ]; then
-        TESTS=`echo $ARGUMENT | cut -d '=' -f 2`
-    fi
 
     if [ "$KEY" == "--engines" ]; then
         ENGINE_ARG=$(echo "$ARGUMENT" | cut -d '=' -f 2)
@@ -94,34 +103,29 @@ do
 
 done
 
-echo $ENGINE_ARG
 if [ -z "${ENGINE_ARG}" ]; then
   ENGINE_ARG="solr,elasticsearch,opensearch"
-  echo $ENGINE_ARG
 fi
 ENGINES=$(awk -F',' '{ for( i=1; i<=NF; i++ ) print $i }' <<< "$ENGINE_ARG")
 
-# Validate test file path
-if [ -z "$TESTS" ]; then
+# Validate test command (pytest command expected)
+if [[ "$TESTS" == *" "* ]]; then
+    # Extract the test file path to validate it exists
+    TEST_FILE=$(echo "$TESTS" | awk '{print $NF}')
+    if [ ! -f "$TEST_FILE" ]; then
+        echo "================================================"
+        echo "> ERROR: Test file not found 😾"
+        echo "> Path: $TEST_FILE"
+        echo "> Command: $TESTS"
+        echo "> Current directory: $(pwd)"
+        echo "================================================"
+        exit 1
+    fi
+else
     echo "================================================"
-    echo "> ERROR: Test command path is empty"
-    echo "================================================"
-    exit 1
-fi
-
-if [ ! -f "$TESTS" ]; then
-    echo "================================================"
-    echo "> ERROR: Test file not found 😾"
-    echo "> Path: $TESTS"
-    echo "> Current directory: $(pwd)"
-    echo "================================================"
-    exit 1
-fi
-
-if [ ! -r "$TESTS" ]; then
-    echo "================================================"
-    echo "> ERROR: Test file is not readable"
-    echo "> Path: $TESTS"
+    echo "> ERROR: Test command must be a pytest command"
+    echo "> Expected format: pytest tests/test_notebooks.py"
+    echo "> Got: $TESTS"
     echo "================================================"
     exit 1
 fi
@@ -130,7 +134,7 @@ echo "✓ Test file found: $TESTS"
 
 # Confirm needed Requirements are present here
 # TODO: may need to check version in future
-COMMANDS=( 'docker' 'python3' 'pip3')
+COMMANDS=( 'docker' 'python3')
 
 for COMMAND in "${COMMANDS[@]}"
 do
@@ -185,24 +189,6 @@ function launch_containers() {
   
   # Track that we launched this engine so cleanup can handle it
   LAUNCHED_ENGINES+=("$engine")
-}
-
-function down_containers() {
-
-  engine="$1"
-  rebuild="$2"
-  echo "Launch $engine"
-
-  cd notebooks/$engine
-  if "$rebuild" = true; then
-      echo "Rebuild $engine Containers, as requested"
-      $DOCKER_COMPOSE_CMD down -v
-      $DOCKER_COMPOSE_CMD build
-  else
-      echo "Skip $engine Container Rebuild"
-  fi
-  $DOCKER_COMPOSE_CMD up -d
-  cd ../..
 }
 
 function wait_for_port_release() {
@@ -402,11 +388,26 @@ echo "[$(date +%H:%M:%S)] Syncing dependencies with uv..."
 uv sync
 echo "[$(date +%H:%M:%S)] ✓ Dependencies synced"
 
+# Check if parallel execution is requested
+if echo "$PYTEST_ARGS" | grep -qE '\s-n\s+[0-9]+|\s-n\s+auto|\s--numprocesses'; then
+    echo "================================================"
+    echo "⚠️  PARALLEL EXECUTION DETECTED"
+    echo "================================================"
+    echo "Note: Docker containers are started once with base ports."
+    echo "Each pytest worker will use worker-specific ports automatically."
+    echo ""
+    echo "For best results with parallel execution:"
+    echo "  - Use --dist loadgroup to group tests by engine"
+    echo "  - Or run sequential tests if all engines needed per worker"
+    echo "================================================"
+    echo ""
+fi
+
 echo "================================================"
 echo "== RUN TESTS: "
-echo "== $TESTS "
+echo "== $TESTS $PYTEST_ARGS"
 # Tests & save result...!
-python3 $TESTS
+$TESTS $PYTEST_ARGS
 TESTS_CODE="$?"
 
 # Note: Container teardown will be handled automatically by the EXIT trap

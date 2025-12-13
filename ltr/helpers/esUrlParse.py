@@ -1,9 +1,10 @@
 def parseUrl(fullEsUrl):
-    from urllib.parse import urlsplit, urlunsplit
     import os.path
+    from urllib.parse import urlsplit, urlunsplit
+
     o = urlsplit(fullEsUrl)
 
-    esUrl = urlunsplit([o.scheme, o.netloc, '','',''])
+    esUrl = urlunsplit([o.scheme, o.netloc, "", "", ""])
 
     indexAndSearchType = os.path.split(o.path)
 
@@ -12,4 +13,5 @@ def parseUrl(fullEsUrl):
 
 if __name__ == "__main__":
     from sys import argv
+
     print(parseUrl(argv[1]))

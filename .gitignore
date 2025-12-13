@@ -16,3 +16,14 @@ notify.sh
 *.iml
 tests_venv/*
 *.egg-info
+
+# Coverage reports
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+*.cover
+.pytest_cache/
+
+# Tests
+test_run.log

@@ -1,6 +1,7 @@
 from collections import Counter
 
-class Model():
+
+class Model:
     def __init__(self):
         # COEC statistic
         self.coecs = Counter()

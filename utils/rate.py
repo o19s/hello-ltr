@@ -1,7 +1,10 @@
-from ltr.helpers.esUrlParse import parseUrl
-from ltr.judgments import Judgment, judgments_from_file, judgments_to_file, judgments_by_qid
-from elasticsearch import Elasticsearch, TransportError
 import json
+
+from elasticsearch import Elasticsearch, TransportError
+
+from ltr.helpers.esUrlParse import parseUrl
+from ltr.judgments import Judgment, judgments_by_qid, judgments_from_file, judgments_to_file
+
 
 def format_search(keywords):
     from jinja2 import Template
@@ -24,13 +27,13 @@ def get_potential_results(es_url, keywords, fuzzy):
     else:
         query = format_search(keywords)
     try:
-        print("Query %s" % json.dumps(query))
+        print(f"Query {json.dumps(query)}")
         results = es.search(index=index, body=query)
         return results['hits']['hits']
     except TransportError as e:
-        print("Query %s" % json.dumps(query))
-        print("Query Error: %s " % e.error)
-        print("More Info  : %s " % e.info)
+        print(f"Query {json.dumps(query)}")
+        print(f"Query Error: {e.error} ")
+        print(f"More Info  : {e.info} ")
         raise e
 
 
@@ -41,7 +44,7 @@ def grade_results(results, keywords, qid):
     release_date = 'release_year'
     vote_count = 'vote_count'
     ratings = []
-    print("Rating %s results" % len(results))
+    print(f"Rating {len(results)} results")
     for result in results:
         grade = None
         if 'fields' not in result:
@@ -50,13 +53,13 @@ def grade_results(results, keywords, qid):
         if 'fields' in result:
             print("")
             print("")
-            print("## %s %s " % (result['fields'][title_field], result['_id']))
+            print(f"## {result['fields'][title_field]} {result['_id']} ")
             print("")
-            print(" Release Year  %s " % result['fields'][release_date])
+            print(f" Release Year  {result['fields'][release_date]} ")
             print("")
-            print(" Votes  %s " % result['fields'][vote_count])
+            print(f" Votes  {result['fields'][vote_count]} ")
             print("")
-            print("   %s " % result['fields'][overview_field])
+            print(f"   {result['fields'][overview_field]} ")
             print("")
             #print("     %s " % (" ".join([cast['name'] for cast in result['fields']['cast']])))
             while grade not in ["0", "1", "2", "3", "4"]:
@@ -81,7 +84,7 @@ def load_judgments(judg_file):
                 judgProfile.append((judglist[0], len(judglist)))
             judgProfile.sort(key=lambda j: j[1], reverse=True)
             for prof in judgProfile:
-                print("%s has %s judgments" % (prof[0].keywords, prof[1]))
+                print(f"{prof[0].keywords} has {prof[1]} judgments")
 
             last_qid = currJudgments[-1].qid
     except FileNotFoundError:
@@ -129,7 +132,7 @@ def handleKeywords(inputKws, existing_kws, currJudgments):
         keywords = keywordsWithCopy[0]
         copy_src_keywords = keywordsWithCopy[1]
     if (len(keywordsWithExpansion) > 1):
-        searchWith += " %s" % keywordsWithExpansion[1]
+        searchWith += f" {keywordsWithExpansion[1]}"
     if (len(keywordsWithSearchInstead) > 1):
         searchWith = keywordsWithSearchInstead[1]
     if (len(keywordsWithButterfingers) > 1):
@@ -179,16 +182,16 @@ def rate_results():
         curr_qid = 0
         if existing_qid > 0:
             curr_qid = existing_qid
-            print("Updating judgments for qid:%s" % curr_qid)
+            print(f"Updating judgments for qid:{curr_qid}")
         else:
             existing_kws.add(keywords)
             curr_qid = new_qid
-            print("New Keywords %s qid:%s" % (keywords, curr_qid))
+            print(f"New Keywords {keywords} qid:{curr_qid}")
             new_qid += 1
 
         new_query_judgments = []
         if copy_src_kws is not None:
-            print("Copying from %s <- %s" % (keywords, copy_src_kws))
+            print(f"Copying from {keywords} <- {copy_src_kws}")
             for judg in orig_query_judgments:
                 judgment = Judgment(int(judg.grade), qid=new_qid, keywords=keywords, docId=judg.docId)
                 new_query_judgments.append(judgment)

@@ -106,8 +106,3 @@ def run_notebook(notebook_path, timeout=None, save_nb_path=None):
                     errors.append(error_with_context)
 
     return nb, errors, execution_time
-
-if __name__ == '__main__':
-    nb, errors, exec_time = run_notebook('Testing.ipynb')
-    print(f"Errors: {errors}")
-    print(f"Execution time: {exec_time:.1f}s")

@@ -1,20 +1,23 @@
-from ltr.clickmodels.session import build
 from collections import Counter, defaultdict
 
-class Model():
+from ltr.clickmodels.session import build
+
+
+class Model:
     def __init__(self):
         # Attractiveness per query-doc
-        self.attracts = defaultdict(lambda : 0.5)
+        self.attracts = defaultdict(lambda: 0.5)
+
 
 def cascade_model(sessions):
-    """ Cascading model can be solved directly:
-         - sessions with skips count against a doc
-         - sessions with clicks count for
-         - stop at first click
-        """
+    """Cascading model can be solved directly:
+    - sessions with skips count against a doc
+    - sessions with clicks count for
+    - stop at first click
+    """
     session_counts = Counter()
     click_counts = Counter()
-    model=Model()
+    model = Model()
 
     for session in sessions:
         for rank, doc in enumerate(session.docs):
@@ -34,23 +37,19 @@ def cascade_model(sessions):
     return model
 
 
-
 if __name__ == "__main__":
-    sessions = build([
-      ('A', ((1, True), (2, False), (3, True), (0, False))),
-      ('B', ((5, False), (2, True), (3, True), (0, False))),
-      ('A', ((1, False), (2, False), (3, True), (0, False))),
-      ('B', ((1, False), (2, False), (3, False), (9, True))),
-      ('A', ((9, False), (2, False), (1, True), (0, True))),
-      ('B', ((6, True), (2, False), (3, True), (1, False))),
-      ('A', ((7, False), (4, True), (1, False), (3, False))),
-      ('B', ((8, True), (2, False), (3, True), (1, False))),
-      ('A', ((1, False), (4, True), (2, False), (3, False))),
-      ('B', ((7, True), (4, False), (5, True), (1, True))),
-    ])
+    sessions = build(
+        [
+            ("A", ((1, True), (2, False), (3, True), (0, False))),
+            ("B", ((5, False), (2, True), (3, True), (0, False))),
+            ("A", ((1, False), (2, False), (3, True), (0, False))),
+            ("B", ((1, False), (2, False), (3, False), (9, True))),
+            ("A", ((9, False), (2, False), (1, True), (0, True))),
+            ("B", ((6, True), (2, False), (3, True), (1, False))),
+            ("A", ((7, False), (4, True), (1, False), (3, False))),
+            ("B", ((8, True), (2, False), (3, True), (1, False))),
+            ("A", ((1, False), (4, True), (2, False), (3, False))),
+            ("B", ((7, True), (4, False), (5, True), (1, True))),
+        ]
+    )
     cascade_model(sessions)
-
-
-
-
-
