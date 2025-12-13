@@ -1,7 +1,28 @@
 """
-Test helper to patch client classes and requests library to use test ports 
-without modifying production code. This module should be imported before any 
-notebooks are executed.
+Test Port Patching for hello-ltr
+
+This module patches client classes and the requests library to use test ports
+instead of default ports, enabling integration tests to run without conflicts
+with production services.
+
+Port Mapping:
+- Solr: 8983 → 18983 (if SOLR_PORT env var set)
+- Elasticsearch: 9200 → 19200 (if ELASTICSEARCH_PORT env var set)
+- OpenSearch: 9201 → 19201 (if OPENSEARCH_PORT env var set)
+
+Usage:
+    from tests.patch_clients_for_tests import patch_clients_for_test_ports, patch_requests_for_test_ports
+    patch_clients_for_test_ports()
+    patch_requests_for_test_ports()
+
+Note: This module does NOT auto-patch on import. Functions must be called explicitly.
+The test runner (tests/runner.py) automatically injects these calls as the first
+cell in notebooks during test execution.
+
+Implementation:
+- Uses monkey patching to modify __init__ methods of client classes
+- Patches are applied via importlib.reload to ensure changes take effect
+- Only patches clients when corresponding environment variables are set
 """
 import os
 import sys
@@ -65,6 +86,33 @@ def patch_requests_for_test_ports():
     requests.put = patched_put
     requests.delete = patched_delete
 
+def _reload_or_import_module(module_path):
+    """
+    Reload a module if it's already imported, otherwise import it.
+    
+    This helper function ensures we're working with the latest version of a module,
+    which is important when patching classes that may have been imported before
+    the patch is applied.
+    
+    Args:
+        module_path: Full module path as string (e.g., 'ltr.client.solr_client')
+    
+    Returns:
+        The module object (reloaded or newly imported)
+    
+    Example:
+        >>> solr_module = _reload_or_import_module('ltr.client.solr_client')
+        >>> # Module is reloaded if already imported, or imported if not
+    """
+    import importlib
+    if module_path in sys.modules:
+        module = sys.modules[module_path]
+        importlib.reload(module)
+        return module
+    else:
+        # Import the module dynamically using importlib
+        return importlib.import_module(module_path)
+
 def patch_clients_for_test_ports():
     """Patch client classes to use test ports from environment variables."""
     # Only patch if test ports are set (indicating we're running tests)
@@ -81,26 +129,10 @@ def patch_clients_for_test_ports():
     
     # Import here to avoid circular imports and ensure clients are loaded
     # Force reload to ensure we're patching the right modules
-    if 'ltr.client.solr_client' in sys.modules:
-        import importlib
-        import ltr.client.solr_client as solr_client_module
-        importlib.reload(solr_client_module)
-    else:
-        import ltr.client.solr_client as solr_client_module
-    
-    if 'ltr.client.elastic_client' in sys.modules:
-        import importlib
-        import ltr.client.elastic_client as elastic_client_module
-        importlib.reload(elastic_client_module)
-    else:
-        import ltr.client.elastic_client as elastic_client_module
-    
-    if 'ltr.client.opensearch_client' in sys.modules:
-        import importlib
-        import ltr.client.opensearch_client as opensearch_client_module
-        importlib.reload(opensearch_client_module)
-    else:
-        import ltr.client.opensearch_client as opensearch_client_module
+    # Use helper function to eliminate code duplication
+    solr_client_module = _reload_or_import_module('ltr.client.solr_client')
+    elastic_client_module = _reload_or_import_module('ltr.client.elastic_client')
+    opensearch_client_module = _reload_or_import_module('ltr.client.opensearch_client')
     
     # Patch SolrClient
     if solr_port:
@@ -133,6 +165,7 @@ def patch_clients_for_test_ports():
                 self.opensearch = OpenSearch(f'http://{self.host}:{opensearch_port}')
         opensearch_client_module.OpenSearchClient.__init__ = patched_opensearch_init
 
-# Auto-patch when module is imported (for notebooks that import this directly)
-patch_clients_for_test_ports()
+# Note: Patching is NOT done automatically on import to avoid surprising side effects.
+# Call patch_clients_for_test_ports() explicitly when needed.
+# The test runner (tests/runner.py) injects this as the first cell in notebooks.
 

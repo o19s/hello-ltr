@@ -16,6 +16,14 @@
 #   SOLR_PORT                 Custom Solr test port (default: 18983)
 #   ELASTICSEARCH_PORT        Custom Elasticsearch test port (default: 19200)
 #   OPENSEARCH_PORT           Custom OpenSearch test port (default: 19201)
+#   SERVICE_WAIT_TIMEOUT      Seconds to wait for services to be ready (default: 300)
+#   NOTEBOOK_TIMEOUT_HOURS    Hours to allow per notebook execution (default: 6)
+#
+# Features:
+#   - Automatic cleanup on exit (success, failure, or interruption via Ctrl+C)
+#   - Port conflict detection and resolution with port release verification
+#   - Service health checking with detailed progress indicators
+#   - Multi-engine parallel testing support
 #
 # Examples:
 #   ./tests/test.sh                                    # Run all tests interactively
@@ -39,6 +47,31 @@ export OPENSEARCH_DASHBOARDS_PORT="${OPENSEARCH_DASHBOARDS_PORT:-15602}"
 
 # Option to auto-cleanup conflicting containers (useful for CI)
 AUTO_CLEANUP_CONFLICTS="${AUTO_CLEANUP_CONFLICTS:-false}"
+
+# Track which engines we've launched so cleanup can handle them
+LAUNCHED_ENGINES=()
+
+# Cleanup function to run on exit (success, failure, or interruption)
+cleanup_containers() {
+    local exit_code=$?
+    if [ ${#LAUNCHED_ENGINES[@]} -gt 0 ]; then
+        echo ""
+        echo "================================================"
+        echo "== CLEANUP: Stopping containers"
+        echo "================================================"
+        for ENGINE in "${LAUNCHED_ENGINES[@]}"; do
+            echo "[$(date +%H:%M:%S)] Stopping $ENGINE containers..."
+            cd notebooks/$ENGINE 2>/dev/null || continue
+            $DOCKER_COMPOSE_CMD -f docker-compose.yml -f docker-compose.test.yml down -v 2>/dev/null || true
+            cd ../..
+        done
+        echo "[$(date +%H:%M:%S)] Cleanup complete"
+    fi
+    exit $exit_code
+}
+
+# Register cleanup to run on script exit (normal, error, or interrupt)
+trap cleanup_containers EXIT INT TERM
 
 # Parse any args...
 for ARGUMENT in "$@"
@@ -68,15 +101,32 @@ if [ -z "${ENGINE_ARG}" ]; then
 fi
 ENGINES=$(awk -F',' '{ for( i=1; i<=NF; i++ ) print $i }' <<< "$ENGINE_ARG")
 
-# 
-if test -f $TESTS; then
-    echo "Running Tests: $TESTS - FOUND!"
-else
+# Validate test file path
+if [ -z "$TESTS" ]; then
     echo "================================================"
-    echo "> POOP!   Bad Argument for --test-command 😾:"
-    echo "> File $TESTS Missing  "
+    echo "> ERROR: Test command path is empty"
+    echo "================================================"
     exit 1
 fi
+
+if [ ! -f "$TESTS" ]; then
+    echo "================================================"
+    echo "> ERROR: Test file not found 😾"
+    echo "> Path: $TESTS"
+    echo "> Current directory: $(pwd)"
+    echo "================================================"
+    exit 1
+fi
+
+if [ ! -r "$TESTS" ]; then
+    echo "================================================"
+    echo "> ERROR: Test file is not readable"
+    echo "> Path: $TESTS"
+    echo "================================================"
+    exit 1
+fi
+
+echo "✓ Test file found: $TESTS"
 
 # Confirm needed Requirements are present here
 # TODO: may need to check version in future
@@ -132,6 +182,9 @@ function launch_containers() {
   $DOCKER_COMPOSE_CMD -f docker-compose.yml -f docker-compose.test.yml up -d
   echo "[$(date +%H:%M:%S)]   $engine containers started"
   cd ../..
+  
+  # Track that we launched this engine so cleanup can handle it
+  LAUNCHED_ENGINES+=("$engine")
 }
 
 function down_containers() {
@@ -152,9 +205,43 @@ function down_containers() {
   cd ../..
 }
 
+function wait_for_port_release() {
+    local port=$1
+    local max_wait=10
+    local waited=0
+    
+    # Check if netstat or ss is available
+    local check_cmd=""
+    if command -v ss >/dev/null 2>&1; then
+        check_cmd="ss -tuln"
+    elif command -v netstat >/dev/null 2>&1; then
+        check_cmd="netstat -tuln"
+    else
+        # If neither is available, just do a simple sleep
+        echo "  Warning: netstat/ss not available, waiting 3 seconds for port $port..."
+        sleep 3
+        return 0
+    fi
+    
+    while $check_cmd 2>/dev/null | grep -q ":$port "; do
+        sleep 1
+        ((waited++))
+        if [ $waited -ge $max_wait ]; then
+            echo "  ⚠️  Warning: Port $port still in use after $max_wait seconds"
+            return 1
+        fi
+    done
+    
+    if [ $waited -gt 0 ]; then
+        echo "  ✓ Port $port released (took ${waited}s)"
+    fi
+    return 0
+}
+
 function check_port_conflicts() {
     echo "Checking for containers using test ports..."
     CONFLICTS=()
+    CONFLICT_PORTS=()
     
     # Get all running containers with their port mappings
     while IFS= read -r line; do
@@ -168,6 +255,7 @@ function check_port_conflicts() {
         for port in $SOLR_PORT $ELASTICSEARCH_PORT $KIBANA_PORT $OPENSEARCH_PORT $OPENSEARCH_PA_PORT $OPENSEARCH_DASHBOARDS_PORT; do
             if echo "$ports" | grep -q ":$port->"; then
                 CONFLICTS+=("$container_name (port $port)")
+                CONFLICT_PORTS+=("$port")
                 break
             fi
         done
@@ -201,6 +289,23 @@ function check_port_conflicts() {
                 docker rm "$container" 2>/dev/null || true
             done
             echo "Cleanup complete."
+            
+            # Wait for ports to be released
+            echo "Waiting for ports to be released..."
+            local all_released=true
+            for port in "${CONFLICT_PORTS[@]}"; do
+                if ! wait_for_port_release "$port"; then
+                    all_released=false
+                fi
+            done
+            
+            if [ "$all_released" = false ]; then
+                echo ""
+                echo "⚠️  WARNING: Some ports may still be in use. Tests may fail."
+                echo "   You may need to wait a moment or manually check: sudo ss -tuln | grep -E ':(${CONFLICT_PORTS[*]// /|})'"
+            else
+                echo "✓ All ports successfully released."
+            fi
         else
             echo "Keeping existing containers. Tests may fail if ports are in use."
         fi
@@ -232,7 +337,8 @@ function test_http_service () {
     local health_endpoint=${3:-"/"}
     local i=0
     local sleep_for=2
-    local wait_up_to=300
+    # Allow configuration of service wait timeout via environment variable (default: 5 minutes)
+    local wait_up_to=${SERVICE_WAIT_TIMEOUT:-300}
     local max_dots=50
     local dots=0
     
@@ -256,13 +362,7 @@ function test_http_service () {
         if [[ "$waited" -ge "$wait_up_to" ]]; then
             printf "]\n"
             echo "[$(date +%H:%M:%S)] ERROR - $service_name did not start after $wait_up_to seconds"
-            echo "[$(date +%H:%M:%S)] TEARDOWN CONTAINERS"
-            for ENGINE in $ENGINES
-              do
-                cd notebooks/$ENGINE
-                $DOCKER_COMPOSE_CMD -f docker-compose.yml -f docker-compose.test.yml down -v
-                cd ../..
-              done
+            echo "[$(date +%H:%M:%S)] Service health check failed. Cleanup will be handled automatically."
             exit 1
         fi
         ((i++))
@@ -308,15 +408,8 @@ echo "== $TESTS "
 # Tests & save result...!
 python3 $TESTS
 TESTS_CODE="$?"
-echo "================================================"
-echo "== TEARDOWN "
 
-for ENGINE in ${ENGINES}
-do
-  cd notebooks/$ENGINE
-  $DOCKER_COMPOSE_CMD -f docker-compose.yml -f docker-compose.test.yml down -v
-  cd ../..
-done
+# Note: Container teardown will be handled automatically by the EXIT trap
 
 echo "=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*=*"
 if [ "$TESTS_CODE" == "0" ]
@@ -327,10 +420,13 @@ else
    echo "================================================"
    echo "> POOP!    Tests Failed 💩 For:"
 fi
-git log -n 1
+git log -n 1 2>/dev/null || echo "(Not in git repository)"
 echo "================================================"
 echo " ==============================================="
 echo " HELLO-LTR TEST DETAILS"
 echo " Containers Rebuilt? $REBUILD_CONTAINERS"
 echo " Test Command: $TESTS"
 echo "================================================"
+
+# Exit with the test result code (trap will handle cleanup)
+exit $TESTS_CODE
