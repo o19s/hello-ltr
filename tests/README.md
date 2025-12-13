@@ -300,8 +300,11 @@ pytest -m solr tests/test_notebooks.py
 # Run only setup notebooks
 pytest -m setup tests/test_notebooks.py
 
-# Skip slow tests
+# Skip slow tests (recommended for development)
 pytest -m "not slow" tests/test_notebooks.py
+
+# Run only slow tests (for validation)
+pytest -m slow tests/test_notebooks.py
 
 # Combine markers
 pytest -m "opensearch and not slow" tests/test_notebooks.py
@@ -434,8 +437,9 @@ markers =
     solr: Solr-specific tests
     elasticsearch: Elasticsearch tests
     opensearch: OpenSearch tests
-    slow: Slow-running tests
+    slow: Slow-running tests (detected by patterns or execution time > 60s)
     setup: Setup notebooks
+    fast: Fast-running tests (< 1 minute)
 ```
 
 ### Test Paths ([conftest.py](conftest.py))
@@ -1018,6 +1022,37 @@ cat tests/last_run.ipynb
 # Show 10 slowest tests
 pytest --durations=10 tests/test_notebooks.py
 ```
+
+### Managing Slow Tests
+
+Slow tests are automatically identified and marked based on:
+- **Pattern matching**: Notebooks matching known slow patterns (netfix, bayesian-optimization, bigger bot, lambda-mart, feature_search, evaluation)
+- **Execution history**: Tests that took > 60 seconds in previous runs (tracked in pytest cache)
+
+Slow tests are automatically reordered to run **after** fast tests, providing quicker feedback during development.
+
+**Skip slow tests during development:**
+```bash
+# Run only fast tests (skip slow ones)
+pytest -m "not slow" tests/test_notebooks.py
+```
+
+**Run only slow tests:**
+```bash
+# Run only slow tests (for validation)
+pytest -m slow tests/test_notebooks.py
+```
+
+**Identify slow tests:**
+```bash
+# See which tests are marked as slow
+pytest --collect-only -m slow tests/test_notebooks.py
+
+# See slowest tests by execution time
+pytest --durations=10 tests/test_notebooks.py
+```
+
+**Note**: After running tests, execution times are cached. Tests that exceed 60 seconds will be automatically marked as slow in future runs.
 
 ## Test Results
 

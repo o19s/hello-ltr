@@ -5,6 +5,7 @@ This module provides:
 - Fixtures for notebook execution
 - Custom pytest hooks for test reporting and collection
 - Port conflict handling for parallel execution
+- Slow test detection and ordering
 """
 import os
 import sys
@@ -12,6 +13,19 @@ from datetime import datetime
 from pathlib import Path
 
 import pytest
+
+# Known slow notebook patterns (notebooks that typically take > 60 seconds)
+SLOW_PATTERNS = [
+    'netfix',
+    'bayesian-optimization',
+    'bigger bot',
+    'lambda-mart',
+    'feature_search',
+    'evaluation'
+]
+
+# Threshold for marking tests as slow based on execution time (seconds)
+SLOW_TEST_THRESHOLD = 60.0
 
 
 def get_worker_ports():
@@ -144,6 +158,38 @@ def pytest_runtest_makereport(item, call):
             # The actual error message enhancement is done in the assertion itself
             pass
 
+
+def pytest_runtest_logfinish(nodeid, location):
+    """
+    Hook called when a test finishes execution.
+
+    Records test execution time in pytest cache for future slow test detection.
+    """
+    # This hook is called after test execution, but we need the actual duration
+    # We'll record it in pytest_runtest_logreport instead
+    pass
+
+
+def pytest_runtest_logreport(report):
+    """
+    Hook called for each test reporting event.
+
+    Records execution time when test completes successfully.
+    """
+    if report.when == "call" and report.outcome == "passed":
+        # Record execution time for successful tests
+        duration = getattr(report, 'duration', None)
+        if duration is not None and duration > 0:
+            # Store in cache for future runs
+            config = getattr(report, 'config', None)
+            if config is not None:
+                cache = getattr(config, 'cache', None)
+                if cache is not None:
+                    execution_times = cache.get('test_execution_times', {})
+                    if not isinstance(execution_times, dict):
+                        execution_times = {}
+                    execution_times[report.nodeid] = duration
+                    cache.set('test_execution_times', execution_times)
 def pytest_configure(config):
     """
     Pytest hook to configure custom markers and settings.
@@ -242,12 +288,66 @@ def pytest_configure(config):
         "fast: Fast-running tests (< 1 minute)"
     )
 
+def _load_test_execution_times(config):
+    """
+    Load test execution times from pytest cache.
+
+    Returns:
+        dict: Mapping of test nodeid to execution time in seconds
+    """
+    cache = getattr(config, 'cache', None)
+    if cache is None:
+        return {}
+
+    # Get execution times from cache
+    execution_times = cache.get('test_execution_times', {})
+    return execution_times if isinstance(execution_times, dict) else {}
+
+
+def _is_slow_test(notebook_path, execution_times, nodeid):
+    """
+    Determine if a test should be marked as slow.
+
+    Checks both pattern-based detection and execution time from previous runs.
+
+    Args:
+        notebook_path: Path to the notebook file
+        execution_times: Dict mapping nodeid to execution time
+        nodeid: Test nodeid for looking up execution time
+
+    Returns:
+        bool: True if test should be marked as slow
+    """
+    if not notebook_path:
+        return False
+
+    notebook_path_lower = notebook_path.lower()
+
+    # Check against known slow patterns
+    for pattern in SLOW_PATTERNS:
+        if pattern.lower() in notebook_path_lower:
+            return True
+
+    # Check execution time from previous runs
+    if nodeid in execution_times:
+        exec_time = execution_times[nodeid]
+        if isinstance(exec_time, (int, float)) and exec_time >= SLOW_TEST_THRESHOLD:
+            return True
+
+    return False
+
+
 def pytest_collection_modifyitems(config, items):
     """
     Pytest hook to modify test items after collection.
 
-    Applies markers dynamically based on test parameters.
+    Applies markers dynamically based on test parameters and reorders tests
+    so slow tests run last.
     """
+    # Load execution times from cache
+    execution_times = _load_test_execution_times(config)
+
+    # First pass: apply markers
     for item in items:
         # Only process parametrized tests (from test_notebooks.py)
         if not hasattr(item, 'callspec') or not item.callspec:
@@ -274,9 +374,26 @@ def pytest_collection_modifyitems(config, items):
         if notebook_type == 'setup':
             item.add_marker(pytest.mark.setup)
 
-        # Mark slow tests
-        if notebook_path and 'evaluation' in notebook_path.lower():
+        # Mark slow tests based on patterns and execution history
+        if _is_slow_test(notebook_path, execution_times, item.nodeid):
             item.add_marker(pytest.mark.slow)
+
+    # Second pass: reorder tests - fast tests first, slow tests last
+    # Maintain relative order within each group
+    fast_tests = []
+    slow_tests = []
+
+    for item in items:
+        # Check if test has slow marker
+        has_slow_marker = any(marker.name == 'slow' for marker in item.iter_markers())
+
+        if has_slow_marker:
+            slow_tests.append(item)
+        else:
+            fast_tests.append(item)
+
+    # Reorder: fast tests first, slow tests last
+    items[:] = fast_tests + slow_tests
 
 def pytest_collection_finish(session):
     """
@@ -302,16 +419,41 @@ def pytest_terminal_summary(terminalreporter, exitstatus, config):
     """
     Hook called at the end of test session to generate custom summary report.
 
-    Provides detailed summary report with passed/failed/skipped counts.
+    Provides detailed summary report with passed/failed/skipped counts and
+    slow test statistics.
     """
-    # Collect test results
-    passed_items = terminalreporter.stats.get('passed', [])
-    failed_items = terminalreporter.stats.get('failed', [])
-    skipped_items = terminalreporter.stats.get('skipped', [])
+    # Collect test results (these are TestReport objects, not test items)
+    passed_reports = terminalreporter.stats.get('passed', [])
+    failed_reports = terminalreporter.stats.get('failed', [])
+    skipped_reports = terminalreporter.stats.get('skipped', [])
 
-    passed = len(passed_items)
-    failed = len(failed_items)
-    skipped = len(skipped_items)
+    # Get session to access actual test items
+    session = getattr(terminalreporter, '_session', None)
+    if session:
+        # Build a mapping of nodeid to test item for marker checking
+        nodeid_to_item = {item.nodeid: item for item in session.items}
+
+        # Separate slow tests from fast tests by checking markers on actual items
+        slow_passed = [
+            report for report in passed_reports
+            if report.nodeid in nodeid_to_item and
+            any(m.name == 'slow' for m in nodeid_to_item[report.nodeid].iter_markers())
+        ]
+        slow_failed = [
+            report for report in failed_reports
+            if report.nodeid in nodeid_to_item and
+            any(m.name == 'slow' for m in nodeid_to_item[report.nodeid].iter_markers())
+        ]
+    else:
+        # Fallback: can't check markers without session
+        slow_passed = []
+        slow_failed = []
+
+    slow_total = len(slow_passed) + len(slow_failed)
+
+    passed = len(passed_reports)
+    failed = len(failed_reports)
+    skipped = len(skipped_reports)
     total = passed + failed + skipped
 
     # Get total execution time from session
@@ -331,6 +473,13 @@ def pytest_terminal_summary(terminalreporter, exitstatus, config):
     if total_time > 0:
         print(f"\nTotal execution time: {total_time:.1f}s ({total_time/60:.1f} minutes)", file=sys.stderr)
 
+    # Show slow test statistics
+    if slow_total > 0:
+        print(f"\nSlow tests: {slow_total} ({len(slow_passed)} passed, {len(slow_failed)} failed)", file=sys.stderr)
+        print("  Tip: Skip slow tests with: pytest -m 'not slow'", file=sys.stderr)
+        print("  Tip: Run only slow tests with: pytest -m slow", file=sys.stderr)
+        print("  Tip: See slowest tests with: pytest --durations=10", file=sys.stderr)
+
     # Note: For slowest tests, use pytest --durations=10
     # Pytest's built-in duration reporting is more reliable than trying to extract
     # durations from internal structures which vary by pytest version
@@ -338,8 +487,8 @@ def pytest_terminal_summary(terminalreporter, exitstatus, config):
     # Show failed notebooks
     if failed > 0:
         print("\nFailed notebooks:", file=sys.stderr)
-        for item in failed_items:
-            name = _extract_notebook_name(item)
+        for report in failed_reports:
+            name = _extract_notebook_name_from_report(report, session)
             print(f"  ✗ {name}", file=sys.stderr)
 
     print(f"{'='*80}\n", file=sys.stderr)
@@ -375,3 +524,28 @@ def _extract_notebook_name(item):
             return parts[0]
 
     return name
+
+
+def _extract_notebook_name_from_report(report, session):
+    """
+    Extract notebook path from test report.
+
+    First tries to get the actual test item from session, then falls back
+    to parsing the nodeid.
+    """
+    # Try to get the actual test item from session
+    if session:
+        for item in session.items:
+            if item.nodeid == report.nodeid:
+                return _extract_notebook_name(item)
+
+    # Fallback: parse from nodeid
+    nodeid = getattr(report, 'nodeid', '')
+    if '[' in nodeid and ']' in nodeid:
+        # Parametrized test name format: test_name[param1-param2-param3]
+        notebook_part = nodeid.split('[')[1].split(']')[0]
+        parts = notebook_part.split('-')
+        if parts:
+            return parts[0]
+
+    return nodeid
