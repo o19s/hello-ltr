@@ -1,7 +1,33 @@
+"""Index management and rebuilding functionality.
+
+This module provides functions for rebuilding search engine indices
+with configuration reloading and document reindexing.
+"""
+
+
 def rebuild(client, index, doc_src, force=False):
-    """Reload a configuration on disk for each search engine
-    (Solr a configset, Elasticsearch a json file)
-    and reindex
+    """Rebuild a search index with configuration reloading and reindexing.
+
+    Reloads the configuration from disk (configset for Solr, JSON file for Elasticsearch)
+    and reindexes all documents. If the index already exists, it will only be
+    rebuilt if force=True.
+
+    Args:
+        client: Search client instance (ElasticClient, OpenSearchClient, or SolrClient).
+        index: Name of the index to rebuild.
+        doc_src: Source of documents to index. Can be a file path, iterable of documents,
+            or a callable that returns documents.
+        force: If True and index exists, delete and recreate it. If False and index exists,
+            print a message and return None (default: False).
+
+    Returns:
+        None: Returns None if index exists and force=False, otherwise returns None
+        after successful rebuild.
+
+    Example:
+        >>> from ltr.client.elastic_client import ElasticClient
+        >>> client = ElasticClient()
+        >>> rebuild(client, "tmdb", "data/tmdb.json", force=True)
     """
 
     if client.check_index_exists(index):

@@ -1,3 +1,11 @@
+"""PBM (Position-Based Model) click model implementation.
+
+This module implements the Position-Based Model, a click model that considers
+both document attractiveness and position-based examination probability.
+Based on Expectation Maximization algorithm from "Click Models for Web Search"
+by Chuklin, Markov, de Rijke.
+"""
+
 from collections import Counter, defaultdict
 
 from ltr.clickmodels.session import build
@@ -5,7 +13,19 @@ from ltr.helpers.defaultlist import defaultlist
 
 
 class Model:
+    """PBM model storing examination probabilities and document attractiveness.
+
+    Attributes:
+        ranks: DefaultList storing examination probability for each rank position.
+        attracts: Dictionary mapping (query, doc_id) tuples to attractiveness values.
+    """
+
     def __init__(self):
+        """Initialize a PBM model with default values.
+
+        Initializes examination probabilities to 0.4 for all ranks and
+        attractiveness values to 0.5 for all query-document pairs.
+        """
         # Examine prob per-rank
         self.ranks = defaultlist(lambda: 0.4)
 
@@ -14,14 +34,19 @@ class Model:
 
 
 def update_attractiveness(sessions, model):
-    """Run through the step of updating attractiveness
-    based on session information and the current rank
-    examine probabilities
+    """Update document attractiveness based on session clicks and examination probabilities.
 
-    Algorithm based on Expectation Maximization derived in
-    chapter 4 of "Click Models for Web Search" by
-    Chulkin, Markov, de Rijke
+    Runs one step of the Expectation Maximization algorithm to update attractiveness
+    values for query-document pairs based on observed clicks and current rank-based
+    examination probabilities.
 
+    Args:
+        sessions: List of search session objects containing queries and clicked documents.
+        model: PBM Model object to update. The model.attracts dictionary will be modified.
+
+    Note:
+        Algorithm based on Expectation Maximization derived in chapter 4 of
+        "Click Models for Web Search" by Chuklin, Markov, de Rijke.
     """
     attractions = Counter()  # Track query-doc attractiveness in this round
     num_sessions = Counter()  # Track num sessions where query-doc appears
@@ -63,13 +88,19 @@ def update_attractiveness(sessions, model):
 
 
 def update_examines(sessions, model):
-    """Run through the step of updating position examine
-    probabilities given current query-doc attractiveness
+    """Update position-based examination probabilities.
 
-    Algorithm based on Expectation Maximization derived in
-    chapter 4 of "Click Models for Web Search" by
-    Chulkin, Markov, de Rijke
+    Runs one step of the Expectation Maximization algorithm to update
+    examination probabilities for each rank position based on observed
+    clicks and current query-document attractiveness values.
 
+    Args:
+        sessions: List of search session objects containing queries and clicked documents.
+        model: PBM Model object to update. The model.ranks dictionary will be modified.
+
+    Note:
+        Algorithm based on Expectation Maximization derived in chapter 4 of
+        "Click Models for Web Search" by Chuklin, Markov, de Rijke.
     """
     new_rank_probs = defaultlist(lambda: 0)
 
@@ -98,21 +129,28 @@ def update_examines(sessions, model):
 
 
 def position_based_model(sessions, rounds=20):
-    """
-    Algorithm based on Expectation Maximization derived in
-    chapter 4 (table 4.1) of "Click Models for Web Search" by
-    Chulkin, Markov, de Rijke
+    """Train a Position-Based Model using Expectation Maximization.
 
-    Given the observed sessions
-    Initialized:
-      - prob a ranks is examined (`ranks`)
-      - randomly initialized query/doc attractiveness
+    Iteratively updates examination probabilities and document attractiveness
+    values until convergence or the specified number of rounds is reached.
 
-    Compute:
-      - Probability a doc is attractive for a query
+    Args:
+        sessions: List of search session objects containing queries and clicked documents.
+        rounds: Number of EM iterations to perform (default: 20).
+
+    Returns:
+        Model: Trained PBM model with updated examination probabilities and
+            attractiveness values.
+
+    Note:
+        Algorithm based on Expectation Maximization derived in chapter 4
+        (table 4.1) of "Click Models for Web Search" by Chuklin, Markov, de Rijke.
+        The model is initialized with:
+        - Examination probability of 0.4 for each rank position
+        - Attractiveness of 0.5 for each query-document pair
     """
     model = Model()
-    for i in range(0, rounds):
+    for _ in range(rounds):
         update_attractiveness(sessions, model)
         update_examines(sessions, model)
     return model

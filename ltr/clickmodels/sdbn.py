@@ -1,10 +1,29 @@
+"""S-DBN (Simplified Dynamic Bayesian Network) click model.
+
+This module implements the Simplified Dynamic Bayesian Network, a simplified
+version of the Dynamic Bayesian Network that achieves similar accuracy but
+can be solved directly without iterative Expectation Maximization.
+"""
+
 from collections import Counter, defaultdict
 
 from ltr.clickmodels.session import build
 
 
 class Model:
+    """S-DBN model storing satisfaction and attractiveness values.
+
+    Attributes:
+        satisfacts: Dictionary mapping (query, doc_id) tuples to satisfaction values.
+        attracts: Dictionary mapping (query, doc_id) tuples to attractiveness values.
+    """
+
     def __init__(self):
+        """Initialize an S-DBN model with default values.
+
+        Initializes satisfaction and attractiveness values to 0.1 for all
+        query-document pairs.
+        """
         # Satisfaction per query-doc
         self.satisfacts = defaultdict(lambda: 0.1)
 
@@ -13,23 +32,34 @@ class Model:
 
 
 def reverse_enumerate(lst):
+    """Enumerate a list in reverse order.
+
+    Args:
+        lst: List to enumerate.
+
+    Yields:
+        tuple: (index, value) tuples where index counts down from len(lst)-1 to 0.
+    """
     return zip(range(len(lst) - 1, -1, -1), reversed(lst))
 
 
 def sdbn(sessions):
-    """Simplified Dynamic Bayesian Network is a simpler
-    version of the much more complex Dynamic Bayesian Network
-    that the authors say comes close to the accuracy of DBN
+    """Train an Simplified Dynamic Bayesian Network click model from search sessions.
 
-    Most importantly, it can be solved directly and simply without
-    an EM learning process
+    The Simplified Dynamic Bayesian Network (S-DBN) can be solved directly without
+    an EM learning process, making it computationally efficient while
+    maintaining accuracy close to the full DBN model.
 
-    Features of sdbn:
-    - Attractiveness is any click out of sessions where that document
-      appears before the last click of the session
-    - Satisfaction occurs when a doc is the last document clicked
-      out of all sessions where that document is clicked
+    Key features:
+    - Attractiveness: Any click in sessions where the document appears before
+      the last click of the session
+    - Satisfaction: Occurs when a document is the last document clicked in a session
 
+    Args:
+        sessions: List of search session objects containing queries and clicked documents.
+
+    Returns:
+        Model: Trained S-DBN model with satisfaction and attractiveness values.
     """
     model = Model()
     NO_CLICK = -1

@@ -88,63 +88,19 @@ This will automatically run linting and formatting checks before commits. See th
 
 ## Tests
 
-### Automatically run everything...
+The project includes a comprehensive test suite for validating notebook execution and core functionality. For detailed testing documentation, see [`tests/README.md`](tests/README.md).
 
-NB: It may be necessary to increase the number of open files on MacOS to a
-higher value than the default 256 for the tests to complete successfully. Use:
+### Quick Start
 
-$ ulimit -n 4096
-
-to increase the value to a sensible amount.
-
-To run a full suite of tests, such as to verify a PR, you can simply run
+To run the full test suite:
 
 ```bash
 ./tests/test.sh
 ```
 
-This will automatically:
-- Sync dependencies with `uv`
-- Start Docker containers per pytest worker (isolated containers for parallel execution)
-- Run all notebook tests via pytest
-- Clean up containers after tests complete
+This automatically syncs dependencies, starts Docker containers, runs all tests, and cleans up containers.
 
-Failing tests will have their output in `tests/last_run.ipynb`
-
-**Note:** Containers are automatically managed by pytest fixtures. Each worker gets isolated containers with unique ports to prevent conflicts. See `tests/README.md` for advanced usage.
-
-### While developing...
-
-For more informal development:
-
-- Run tests directly:
-  ```bash
-  ./tests/test.sh
-  # or
-  pytest tests/notebooks/test_notebooks.py
-  ```
-
-- Filter tests by engine:
-  ```bash
-  pytest -k solr tests/notebooks/test_notebooks.py
-  pytest -k opensearch tests/notebooks/test_notebooks.py
-  pytest -k elasticsearch tests/notebooks/test_notebooks.py
-  ```
-
-- Run specific notebooks:
-  ```bash
-  pytest tests/notebooks/test_notebooks.py::test_notebook_executes_without_errors[./notebooks/solr/tmdb/sandbox.ipynb]
-  ```
-
-- Re-run only failed tests:
-  ```bash
-  pytest --lf tests/notebooks/test_notebooks.py
-  ```
-
-- Tests fail if notebooks return any errors
-  - The failing notebook will be stored at `tests/last_run.ipynb`
-
-**Note:** Pre-commit hooks will run automatically on `git commit`. To skip hooks, use `git commit -m "message [skip lint]"` (after setting up the git alias) or `git commit --no-verify`. See [Pre-commit Hooks](#pre-commit-hooks) section for details.
+For more testing options, examples, and troubleshooting, see the [Test Suite Documentation](tests/README.md).
 
 ## Development Setup
 

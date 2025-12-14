@@ -295,6 +295,12 @@ def print_report(
 
 
 def main():
+    """Main entry point for investigating fast-failing tests.
+
+    Parses command-line arguments and analyzes test execution times to identify
+    tests that complete suspiciously quickly, which may indicate they're not
+    actually running or are being skipped.
+    """
     parser = argparse.ArgumentParser(
         description="Investigate tests that complete very quickly (<0.005s)"
     )

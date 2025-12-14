@@ -45,6 +45,7 @@ def test_bayesian_optimization_patterns():
     """Test patterns from bayesian-optimization notebooks."""
 
     def _test():
+        """Test scipy.stats.norm operations used in Bayesian optimization."""
         import numpy as np
         from scipy.stats import norm
 
@@ -71,6 +72,7 @@ def test_lambda_mart_patterns():
     """Test patterns from lambda-mart-in-python notebooks."""
 
     def _test():
+        """Test Lambda-MART DataFrame and DecisionTree patterns."""
         import pandas as pd
         from sklearn.tree import DecisionTreeRegressor
 
@@ -115,6 +117,7 @@ def test_svmrank_patterns():
     """Test patterns from svmrank notebooks."""
 
     def _test():
+        """Test SVM-Rank StandardScaler and LinearSVC patterns."""
         import numpy as np
         from sklearn import svm
         from sklearn.preprocessing import StandardScaler
@@ -129,7 +132,7 @@ def test_svmrank_patterns():
         # Pattern: StandardScaler
         scaler = StandardScaler()
         scaler.fit(features)
-        features_scaled = scaler.transform(features)
+        features_scaled = np.asarray(scaler.transform(features))
 
         # Pattern: Pairwise transform (simplified)
         GRADE = 0
@@ -153,7 +156,7 @@ def test_svmrank_patterns():
 
         # Pattern: LinearSVC
         if len(transformed_predictors) > 0:
-            model = svm.LinearSVC(max_iter=1000, dual=False)
+            model = svm.LinearSVC(max_iter=1000)
             model.fit(transformed_features, transformed_predictors.ravel())
             assert hasattr(model, "coef_")
 
@@ -170,6 +173,7 @@ def test_dataframe_patterns():
     """Test patterns from Dataframes notebooks."""
 
     def _test():
+        """Test DataFrame creation and groupby patterns."""
         import pandas as pd
 
         # Pattern from Dataframes.ipynb - judgments_to_dataframe
@@ -232,6 +236,7 @@ def test_judgments_module_patterns():
     """Test patterns from ltr/judgments.py module."""
 
     def _test():
+        """Test judgments module patterns including numpy array conversion."""
         import numpy as np
         import pandas as pd
 

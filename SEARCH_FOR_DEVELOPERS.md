@@ -6,7 +6,7 @@ This document attempts to provide an introduction to various concepts and method
 
 ## Corpus
 
-A corpus, for our purposes, is a collection of entities. For example, a corpus might include a large portion of the internet including documents, videos, audio clips, and applications. Another corpus might consist of documents related to various legal entities (e.g. corporations).
+A corpus, for our purposes, is a collection of entities. For example, a corpus might include a large portion of the internet including documents, videos, audio clips, and applications. Another corpus might consist of documents related to various legal entities (e.g., corporations).
 
 The corpus is the sum total of the material we will be searching against.
 

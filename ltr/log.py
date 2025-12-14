@@ -1,13 +1,36 @@
+"""Feature logging for building training sets.
+
+This module provides functionality for logging LTR features from search
+engines and building training sets from judgments.
+"""
+
 import re
 
 
 class FeatureLogger:
-    """Logs LTR Features, one query at a time
+    """Logs LTR features from search engine queries, building up a training set.
 
-    ...Building up a training set...
+    This class facilitates the collection of feature vectors from a search engine
+    for documents associated with query-judgment pairs. Features are fetched in
+    batches and attached to judgment objects.
+
+    Attributes:
+        client: Search client instance.
+        index: Name of the search index.
+        feature_set: Name of the feature set to use.
+        drop_missing: If True, discard judgments for missing documents (default: True).
+        logged: List of judgments that have been successfully logged with features.
     """
 
     def __init__(self, client, index, feature_set, drop_missing=True):
+        """Initialize a FeatureLogger.
+
+        Args:
+            client: Search client instance.
+            index: Name of the search index.
+            feature_set: Name of the feature set to use.
+            drop_missing: If True, discard judgments for missing documents (default: True).
+        """
         self.client = client
         self.index = index
         self.feature_set = feature_set
@@ -15,18 +38,41 @@ class FeatureLogger:
         self.logged = []
 
     def clear(self):
+        """Clear all logged judgments.
+
+        Resets the logged list to empty, allowing reuse of the logger
+        for a new training set.
+        """
         self.logged = []
 
     def log_for_qid(self, qid, judgments, keywords):
-        """Log a set of judgments associated with a single qid
-        judgments will be modified, a training set also returned, discarding
-        any judgments we could not log features for (because the doc was missing)
+        """Log features for a set of judgments associated with a query ID.
+
+        Fetches LTR features from the search engine for all documents in the
+        judgments list and attaches them to the judgment objects. Documents
+        are fetched in batches of 500.
+
+        Args:
+            qid: Query ID associated with these judgments.
+            judgments: List of Judgment objects to log features for.
+            keywords: Search keywords used for the query (sanitized automatically).
+
+        Returns:
+            tuple: A tuple containing:
+                - training_set: List of judgments with successfully logged features.
+                - discarded: List of judgments that were discarded (if drop_missing=True)
+                  or empty list (if drop_missing=False).
+
+        Note:
+            The judgments list will be modified in-place with features attached.
+            Keywords are sanitized to remove special characters for Solr compatibility.
+            Missing documents are handled according to the drop_missing setting.
         """
         featuresPerDoc = {}
         judgments = list(judgments)
         docIds = [judgment.docId for judgment in judgments]
 
-        # Check for dups of documents
+        # Check for dupes of documents
         for docId in docIds:
             indices = [i for i, x in enumerate(docIds) if x == docId]
             if len(indices) > 1:

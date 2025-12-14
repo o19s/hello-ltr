@@ -2,7 +2,7 @@ import json
 
 from elasticsearch import Elasticsearch, TransportError
 
-from ltr.helpers.esUrlParse import parseUrl
+from ltr.helpers.es_url_parse import parseUrl
 from ltr.judgments import (
     Judgment,
     judgments_by_qid,
@@ -12,6 +12,14 @@ from ltr.judgments import (
 
 
 def format_search(keywords):
+    """Format a search query using the rateSearch.json.jinja template.
+
+    Args:
+        keywords: Search keywords string.
+
+    Returns:
+        dict: Elasticsearch query dictionary parsed from rendered template.
+    """
     from jinja2 import Template
 
     with open("rateSearch.json.jinja") as f:
@@ -21,6 +29,14 @@ def format_search(keywords):
 
 
 def format_fuzzy(keywords):
+    """Format a fuzzy search query using the rateFuzzySearch.json.jinja template.
+
+    Args:
+        keywords: Search keywords string.
+
+    Returns:
+        dict: Elasticsearch fuzzy query dictionary parsed from rendered template.
+    """
     from jinja2 import Template
 
     with open("rateFuzzySearch.json.jinja") as f:
@@ -30,6 +46,19 @@ def format_fuzzy(keywords):
 
 
 def get_potential_results(es_url, keywords, fuzzy):
+    """Execute a search query against Elasticsearch and return results.
+
+    Args:
+        es_url: Elasticsearch URL in format "http://host:port/index/".
+        keywords: Search keywords string.
+        fuzzy: If True, use fuzzy search format; otherwise use regular search format.
+
+    Returns:
+        list: List of search result hits from Elasticsearch.
+
+    Raises:
+        TransportError: If the Elasticsearch query fails.
+    """
     (es_url, index, _search_type) = parseUrl(es_url)
     es = Elasticsearch(es_url)
 
@@ -46,6 +75,19 @@ def get_potential_results(es_url, keywords, fuzzy):
 
 
 def grade_results(results, keywords, qid):
+    """Interactively grade search results by prompting user for relevance ratings.
+
+    Displays each result's title, release year, vote count, and overview,
+    then prompts the user to rate it on a scale of 0-4.
+
+    Args:
+        results: List of Elasticsearch search result hits.
+        keywords: Search keywords string (used for creating Judgment objects).
+        qid: Query ID for the judgments.
+
+    Returns:
+        list: List of Judgment objects with user-provided grades.
+    """
     title_field = "title"
     overview_field = "overview"
     release_date = "release_year"
@@ -79,6 +121,17 @@ def grade_results(results, keywords, qid):
 
 
 def load_judgments(judg_file):
+    """Load judgments from a file and return statistics.
+
+    Args:
+        judg_file: Path to the judgments file.
+
+    Returns:
+        tuple: A tuple containing:
+            - currJudgments: List of Judgment objects loaded from file.
+            - existingKws: Set of keyword strings already in the file.
+            - last_qid: Highest query ID found in the file (0 if file doesn't exist).
+    """
     currJudgments = []
     existingKws = set()
     last_qid = 0
@@ -102,6 +155,18 @@ def load_judgments(judg_file):
 
 
 def seeded_judgments_from(currJudgments, existing_kws, keywords):
+    """Find existing judgments for given keywords.
+
+    Args:
+        currJudgments: List of current Judgment objects.
+        existing_kws: Set of keyword strings that already have judgments.
+        keywords: Keywords to search for.
+
+    Returns:
+        tuple: A tuple containing:
+            - seeded_judgments: List of Judgment objects matching the keywords.
+            - existingQid: Query ID if found, otherwise -1.
+    """
     existingQid = -1
     seeded_judgments = []
     if keywords in existing_kws:
@@ -168,6 +233,16 @@ def handleKeywords(inputKws, existing_kws, currJudgments):
 
 
 def foldInNewRatings(fullJudgments, origJudgments, newJudgs):
+    """Merge new judgments into existing judgments, updating grades for matching pairs.
+
+    For each new judgment, if a matching judgment exists (same query and document),
+    update its grade. Otherwise, append the new judgment to the full list.
+
+    Args:
+        fullJudgments: List of all Judgment objects (will be modified).
+        origJudgments: List of original Judgment objects for the query.
+        newJudgs: List of new Judgment objects to merge in.
+    """
     for newJudg in newJudgs:
         wasAnUpdate = False
         for origJudg in origJudgments:
@@ -179,6 +254,15 @@ def foldInNewRatings(fullJudgments, origJudgments, newJudgs):
 
 
 def rate_results():
+    """Main interactive function for rating search results and building judgments.
+
+    Prompts the user for keywords, searches Elasticsearch, displays results,
+    collects relevance ratings, and saves judgments to a file. Supports various
+    input formats for query expansion, fuzzy search, and copying judgments.
+
+    The function runs in a loop until the user enters "GTFO" or empty input.
+    All judgments are saved to the file specified in sys.argv[1].
+    """
     from sys import argv
 
     esUrl = "http://localhost:9200/tmdb/"

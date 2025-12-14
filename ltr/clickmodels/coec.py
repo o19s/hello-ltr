@@ -1,8 +1,27 @@
+"""COEC (Clicks Over Expected Clicks) click model.
+
+This module implements the COEC metric for analyzing click behavior in search
+sessions. COEC compares actual clicks to expected clicks based on position-based
+CTR to identify query-document pairs that perform above or below average.
+"""
+
 from collections import Counter
 
 
 class Model:
+    """COEC model storing statistics for query-document pairs.
+
+    Attributes:
+        coecs: Dictionary mapping (query_id, doc_id) tuples to COEC values.
+        ctrs: Dictionary mapping query-doc pairs to CTR values (currently unused).
+    """
+
     def __init__(self):
+        """Initialize a COEC model with empty statistics.
+
+        Initializes empty dictionaries for COEC values and CTR values.
+        These will be populated by the coec() function.
+        """
         # COEC statistic
         self.coecs: dict[tuple[str, str], float] = {}
 
@@ -11,22 +30,26 @@ class Model:
 
 
 def coec(ctr_by_rank, sessions):
-    """Clicks over expected clicks is a metric
-    used for seeing what items get above or
-    below average CTR for their rank. From paper
+    """Calculate COEC (Clicks Over Expected Clicks) for query-document pairs.
 
-    > Personalized Click Prediction in Sponsored Search
-    by Cheng, Cantu Paz
+    COEC is a metric used to identify items that perform above or below average
+    CTR for their rank position. Based on the paper:
+    "Personalized Click Prediction in Sponsored Search" by Cheng, Cantu Paz.
 
-    A COEC > 1 means above average CTR for it's position
-    A COEC < 1 means below average
+    Args:
+        ctr_by_rank: Dictionary mapping rank position (0-based) to global CTR value.
+        sessions: List of search session objects, each containing:
+            - query: Query string or ID
+            - docs: List of document objects with doc_id and click attributes
 
-    -ctr_by_rank is the global CTR at each rank position
-    -sessions are an array of search session objects
+    Returns:
+        Model: Model object containing coecs dictionary mapping (query_id, doc_id)
+            tuples to COEC values.
 
-    returned:
-    each query-doc pair in provided sessions COEC
-
+    Note:
+        - COEC > 1 means above average CTR for that position
+        - COEC < 1 means below average CTR for that position
+        - COEC = 1 means average CTR for that position
     """
     clicks = Counter()
     weighted_impressions = Counter()

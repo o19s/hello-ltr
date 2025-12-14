@@ -12,16 +12,18 @@ The test suite validates that all Jupyter notebooks execute successfully without
 
 ## Quick Start
 
+The test suite can be run in several ways depending on your needs. For a full test run that automatically handles dependencies and containers, use the test wrapper script. For more control, use pytest directly.
+
 ### Run All Tests
 ```bash
 # Recommended: Use test.sh wrapper (handles environment setup)
 ./tests/test.sh
 
 # Direct pytest (per-worker containers enabled by default)
-pytest tests/test_notebooks.py
+pytest tests/notebooks/test_notebooks.py
 
 # Parallel execution with isolated containers per worker
-pytest -n auto tests/test_notebooks.py
+pytest -n auto tests/notebooks/test_notebooks.py
 # or
 PYTEST_ARGS="-n auto" ./tests/test.sh
 ```
@@ -29,16 +31,16 @@ PYTEST_ARGS="-n auto" ./tests/test.sh
 ### Run Specific Tests
 ```bash
 # Re-run only failed tests from last run
-pytest --lf tests/test_notebooks.py
+pytest --lf tests/notebooks/test_notebooks.py
 
 # Run only Solr notebooks
-pytest -k solr tests/test_notebooks.py
+pytest -k solr tests/notebooks/test_notebooks.py
 
 # Run in parallel (4x faster)
-pytest -n auto tests/test_notebooks.py
+pytest -n auto tests/notebooks/test_notebooks.py
 
 # Retry flaky tests (retry failed tests 3 times with 2 second delay)
-pytest --reruns 3 --reruns-delay 2 tests/test_notebooks.py
+pytest --reruns 3 --reruns-delay 2 tests/notebooks/test_notebooks.py
 ```
 
 ### Code Quality Checks
@@ -100,36 +102,28 @@ Using `uv` (recommended, as per project standards):
 ```bash
 # Install uv if not already installed
 curl -LsSf https://astral.sh/uv/install.sh | sh
+```
 
-# Create virtual environment
-uv venv
+**3. Install Dependencies**
 
-# Activate virtual environment
+Using `uv sync` (recommended):
+```bash
+uv sync
+```
+
+This will automatically:
+- Create a virtual environment (`.venv`) if it doesn't exist
+- Install Python if needed
+- Install all dependencies from `pyproject.toml`
+
+After running `uv sync`, activate the virtual environment:
+```bash
 source .venv/bin/activate  # On Linux/Mac
 # or
 .venv\Scripts\activate     # On Windows
 ```
 
-Using standard Python venv:
-```bash
-python3 -m venv venv
-source venv/bin/activate  # On Linux/Mac
-# or
-venv\Scripts\activate     # On Windows
-```
-
-**3. Install Dependencies**
-
-Using `uv` (recommended):
-```bash
-uv pip install -e .
-```
-
-Using pip:
-```bash
-pip install --upgrade pip wheel setuptools
-pip install -e .
-```
+**Note:** `uv sync` handles virtual environment creation automatically, so you don't need to run `uv venv` separately.
 
 **4. Verify Installation**
 
@@ -174,7 +168,7 @@ netstat -an | grep 19201  # OpenSearch test port
 **Run Quick Validation Test:**
 ```bash
 # Run a single fast test to verify setup
-pytest -k "sandbox" tests/test_notebooks.py -v
+pytest -k "sandbox" tests/notebooks/test_notebooks.py -v
 ```
 
 ### Common Setup Issues
@@ -250,7 +244,7 @@ NOTEBOOK_TIMEOUT_MINUTES=10      # Extended timeout for CI (default: 5 minutes)
 set -e
 
 # Install dependencies
-uv pip install -e .
+uv sync
 
 # Verify Docker
 docker compose version
@@ -264,10 +258,10 @@ docker compose version
 ### Re-run Failed Tests
 ```bash
 # Run only tests that failed in the last run
-pytest --lf tests/test_notebooks.py
+pytest --lf tests/notebooks/test_notebooks.py
 
 # Run failed tests first, then continue with the rest
-pytest --ff tests/test_notebooks.py
+pytest --ff tests/notebooks/test_notebooks.py
 
 # With Docker wrapper
 PYTEST_ARGS="--lf" ./tests/test.sh
@@ -276,10 +270,10 @@ PYTEST_ARGS="--lf" ./tests/test.sh
 ### Resume After Failure
 ```bash
 # Stepwise: stop at first failure, resume from there on next run
-pytest --sw tests/test_notebooks.py
+pytest --sw tests/notebooks/test_notebooks.py
 
 # Stop at first failure (useful for debugging)
-pytest -x tests/test_notebooks.py
+pytest -x tests/notebooks/test_notebooks.py
 
 # With Docker wrapper
 PYTEST_ARGS="--sw" ./tests/test.sh
@@ -288,15 +282,15 @@ PYTEST_ARGS="--sw" ./tests/test.sh
 ### Filter Tests by Pattern
 ```bash
 # Run tests matching a pattern (by path, engine, etc.)
-pytest -k "opensearch" tests/test_notebooks.py
-pytest -k "solr or elasticsearch" tests/test_notebooks.py
-pytest -k "not evaluation" tests/test_notebooks.py
+pytest -k "opensearch" tests/notebooks/test_notebooks.py
+pytest -k "solr or elasticsearch" tests/notebooks/test_notebooks.py
+pytest -k "not evaluation" tests/notebooks/test_notebooks.py
 
 # Run only Solr notebooks
-pytest -k "solr" tests/test_notebooks.py
+pytest -k "solr" tests/notebooks/test_notebooks.py
 
 # Run only notebooks with "lambda-mart" in the name
-pytest -k "lambda-mart" tests/test_notebooks.py
+pytest -k "lambda-mart" tests/notebooks/test_notebooks.py
 
 # With Docker wrapper
 PYTEST_ARGS="-k opensearch" ./tests/test.sh
@@ -305,44 +299,44 @@ PYTEST_ARGS="-k opensearch" ./tests/test.sh
 ### Run Specific Notebook
 ```bash
 # Run a specific notebook test
-pytest "tests/test_notebooks.py::test_notebook_executes_without_errors[./notebooks/solr/tmdb/sandbox.ipynb-test-solr]"
+pytest "tests/notebooks/test_notebooks.py::test_notebook_executes_without_errors[./notebooks/solr/tmdb/sandbox.ipynb-test-solr]"
 
 # Easier: use -k with a unique part of the path
-pytest -k "sandbox" tests/test_notebooks.py
+pytest -k "sandbox" tests/notebooks/test_notebooks.py
 ```
 
 ### Run by Test Markers
 ```bash
 # Run only Solr tests (using markers)
-pytest -m solr tests/test_notebooks.py
+pytest -m solr tests/notebooks/test_notebooks.py
 
 # Run only setup notebooks
-pytest -m setup tests/test_notebooks.py
+pytest -m setup tests/notebooks/test_notebooks.py
 
 # Skip slow tests (recommended for development)
-pytest -m "not slow" tests/test_notebooks.py
+pytest -m "not slow" tests/notebooks/test_notebooks.py
 
 # Run only slow tests (for validation)
-pytest -m slow tests/test_notebooks.py
+pytest -m slow tests/notebooks/test_notebooks.py
 
 # Combine markers
-pytest -m "opensearch and not slow" tests/test_notebooks.py
+pytest -m "opensearch and not slow" tests/notebooks/test_notebooks.py
 ```
 
 ### Parallel Execution (Faster Tests)
 ```bash
 # Run on all available CPU cores
-pytest -n auto tests/test_notebooks.py
+pytest -n auto tests/notebooks/test_notebooks.py
 
 # Run on specific number of workers
-pytest -n 4 tests/test_notebooks.py
+pytest -n 4 tests/notebooks/test_notebooks.py
 
 # With Docker wrapper
 PYTEST_ARGS="-n auto" ./tests/test.sh
 
 # Group tests by engine (recommended for Docker)
 # Each engine gets its own worker, avoiding port conflicts
-pytest -n auto --dist loadgroup tests/test_notebooks.py
+pytest -n auto --dist loadgroup tests/notebooks/test_notebooks.py
 ```
 
 **Port Conflict Handling:**
@@ -361,37 +355,37 @@ pytest -n auto --dist loadgroup tests/test_notebooks.py
 ### Verbose Output
 ```bash
 # Verbose output (show test names)
-pytest -v tests/test_notebooks.py
+pytest -v tests/notebooks/test_notebooks.py
 
 # Very verbose (show more details)
-pytest -vv tests/test_notebooks.py
+pytest -vv tests/notebooks/test_notebooks.py
 
 # Show print statements (useful for debugging)
-pytest -s tests/test_notebooks.py
+pytest -s tests/notebooks/test_notebooks.py
 
 # Show local variables on failure
-pytest -l tests/test_notebooks.py
+pytest -l tests/notebooks/test_notebooks.py
 ```
 
 ### Generate Reports
 ```bash
 # Generate HTML report
-pytest --html=report.html --self-contained-html tests/test_notebooks.py
+pytest --html=report.html --self-contained-html tests/notebooks/test_notebooks.py
 
 # Generate JUnit XML (for CI/CD)
-pytest --junitxml=results.xml tests/test_notebooks.py
+pytest --junitxml=results.xml tests/notebooks/test_notebooks.py
 
 # Show slowest 10 tests
-pytest --durations=10 tests/test_notebooks.py
+pytest --durations=10 tests/notebooks/test_notebooks.py
 ```
 
 ### Tips & Tricks
 ```bash
 # List all tests without running
-pytest --collect-only tests/test_notebooks.py
+pytest --collect-only tests/notebooks/test_notebooks.py
 
 # Count tests matching a pattern
-pytest --collect-only -q -k "opensearch" tests/test_notebooks.py
+pytest --collect-only -q -k "opensearch" tests/notebooks/test_notebooks.py
 
 # Clear pytest cache (including last-failed data)
 pytest --cache-clear
@@ -400,10 +394,10 @@ pytest --cache-clear
 pytest --cache-show
 
 # Combining options: Run failed tests first, then only opensearch tests, in parallel
-pytest --ff -k opensearch -n 4 tests/test_notebooks.py
+pytest --ff -k opensearch -n 4 tests/notebooks/test_notebooks.py
 
 # Verbose, show prints, stop at first failure
-pytest -vv -s -x tests/test_notebooks.py
+pytest -vv -s -x tests/notebooks/test_notebooks.py
 ```
 
 ## Test Infrastructure
@@ -418,7 +412,8 @@ tests/
 │                            # - Health checks and timing
 ├── test_notebooks.py        # Main test suite (parametrized)
 ├── runner.py                # Notebook execution engine
-├── nb_test_config.py        # Test path configuration
+├── nb_test_config.py        # NotebookTestConfig class for discovering notebooks
+├── test_config.py           # Test configuration (paths and ignored notebooks)
 ├── patch_clients_for_tests.py  # Port patching for isolation
 ├── test.sh                  # Test runner wrapper (simplified)
 └── README.md               # This file
@@ -482,7 +477,8 @@ The test suite is organized into three main categories:
 **Test Files:**
 - `test_notebooks.py` - Parametrized test suite that executes all notebooks
 - `runner.py` - Notebook execution engine with error capture and port patching
-- `nb_test_config.py` - Configuration for notebook test paths and ignored notebooks
+- `nb_test_config.py` - NotebookTestConfig class for discovering notebooks in directories
+- `test_config.py` - Configuration constants (TEST_PATHS and IGNORED_NOTEBOOKS)
 
 **Coverage:**
 - 36+ notebooks across Solr, Elasticsearch, and OpenSearch
@@ -914,7 +910,7 @@ The test suite will automatically pick it up.
 
 ### Excluding a Notebook
 
-Add it to `IGNORED_NOTEBOOKS` in [conftest.py](conftest.py):
+Add it to `IGNORED_NOTEBOOKS` in [test_config.py](test_config.py):
 
 ```python
 IGNORED_NOTEBOOKS = [
@@ -1050,7 +1046,7 @@ This section covers common issues and their solutions.
 
 3. **Run specific slow notebook with extended timeout**:
    ```bash
-   NOTEBOOK_TIMEOUT_MINUTES=15 pytest -k "specific-notebook" tests/test_notebooks.py
+   NOTEBOOK_TIMEOUT_MINUTES=15 pytest -k "specific-notebook" tests/notebooks/test_notebooks.py
    ```
 
 4. **Check system resources**:
@@ -1075,13 +1071,13 @@ This section covers common issues and their solutions.
 
 1. **Reduce parallel workers**:
    ```bash
-   pytest -n 2 tests/test_notebooks.py  # Limit to 2 workers
-   pytest -n 1 tests/test_notebooks.py  # Single worker
+   pytest -n 2 tests/notebooks/test_notebooks.py  # Limit to 2 workers
+   pytest -n 1 tests/notebooks/test_notebooks.py  # Single worker
    ```
 
 2. **Run sequentially** (no parallel execution):
    ```bash
-   pytest tests/test_notebooks.py  # No -n flag
+   pytest tests/notebooks/test_notebooks.py  # No -n flag
    ```
 
 3. **Increase Docker memory limits**:
@@ -1124,13 +1120,13 @@ This section covers common issues and their solutions.
 
 2. **Use loadgroup distribution** (recommended for Docker):
    ```bash
-   pytest -n auto --dist loadgroup tests/test_notebooks.py
+   pytest -n auto --dist loadgroup tests/notebooks/test_notebooks.py
    ```
    This groups tests by engine, reducing port conflicts.
 
 3. **Run sequential tests** (if parallel causes issues):
    ```bash
-   pytest tests/test_notebooks.py  # No -n flag
+   pytest tests/notebooks/test_notebooks.py  # No -n flag
    ```
 
 4. **Check worker port assignments**:
@@ -1167,7 +1163,7 @@ This section covers common issues and their solutions.
 
 3. **Force re-run all tests**:
    ```bash
-   pytest --cache-clear tests/test_notebooks.py
+   pytest --cache-clear tests/notebooks/test_notebooks.py
    ```
 
 4. **Check cache location**:
@@ -1307,7 +1303,7 @@ This section covers common issues and their solutions.
 3. **Check for missing dependencies**:
    ```bash
    # Verify all packages are installed
-   pip list | grep -E "(elasticsearch|opensearch|pysolr)"
+   uv pip list | grep -E "(elasticsearch|opensearch|pysolr)"
    ```
 
 4. **Verify port patching**:
@@ -1327,9 +1323,7 @@ This section covers common issues and their solutions.
 
 1. **Install package in development mode**:
    ```bash
-   pip install -e .
-   # or
-   uv pip install -e .
+   uv sync
    ```
 
 2. **Verify virtual environment is activated**:
@@ -1345,7 +1339,7 @@ This section covers common issues and their solutions.
 
 4. **Reinstall dependencies**:
    ```bash
-   pip install --force-reinstall -e .
+   uv sync --reinstall
    ```
 
 ### Environment Validation Errors
@@ -1362,7 +1356,7 @@ This section covers common issues and their solutions.
 1. **Check validation output**:
    ```bash
    # Run with verbose output to see details
-   pytest tests/test_notebooks.py -v
+   pytest tests/notebooks/test_notebooks.py -v
    ```
 
 2. **Manual validation**:
@@ -1372,19 +1366,19 @@ This section covers common issues and their solutions.
 
 3. **Fix missing dependencies**:
    ```bash
-   # Install missing packages
-   uv pip install -e .
-   # Or specific packages
+   # Install all dependencies (recommended)
+   uv sync
+   # Or install specific packages if needed
    uv pip install pytest pytest-xdist pytest-timeout pytest-html pytest-cov
    ```
 
 4. **Skip specific checks** (if handled elsewhere):
    ```bash
    # Skip Docker check (if test.sh handles it)
-   SKIP_DOCKER_CHECK=true pytest tests/test_notebooks.py
+   SKIP_DOCKER_CHECK=true pytest tests/notebooks/test_notebooks.py
    
    # Skip port check (if test.sh handles conflicts)
-   SKIP_PORT_CHECK=true pytest tests/test_notebooks.py
+   SKIP_PORT_CHECK=true pytest tests/notebooks/test_notebooks.py
    ```
 
 5. **Fix Docker issues**:
@@ -1467,12 +1461,12 @@ This section covers common issues and their solutions.
 
 1. **Use parallel execution**:
    ```bash
-   pytest -n auto tests/test_notebooks.py  # 4x faster
+   pytest -n auto tests/notebooks/test_notebooks.py  # 4x faster
    ```
 
 2. **Run only fast tests**:
    ```bash
-   pytest -m "not slow" tests/test_notebooks.py
+   pytest -m "not slow" tests/notebooks/test_notebooks.py
    ```
 
 3. **Run specific engines**:
@@ -1497,44 +1491,44 @@ This section covers common issues and their solutions.
 ### Development: Quick Iteration
 ```bash
 # Run tests, stop at first failure, easily re-run failed tests
-pytest --sw tests/test_notebooks.py
+pytest --sw tests/notebooks/test_notebooks.py
 
 # After fixing, re-run only the failed test
-pytest --lf tests/test_notebooks.py
+pytest --lf tests/notebooks/test_notebooks.py
 ```
 
 ### Development Cycle
 ```bash
 # 1. Make changes to a notebook
 # 2. Run just that notebook
-pytest -k "my-notebook" tests/test_notebooks.py
+pytest -k "my-notebook" tests/notebooks/test_notebooks.py
 
 # 3. If it fails, fix and re-run
-pytest --lf tests/test_notebooks.py
+pytest --lf tests/notebooks/test_notebooks.py
 ```
 
 ### Pre-Commit Testing
 ```bash
 # Run fast tests only (skip slow evaluation notebooks)
-pytest -m "not slow" tests/test_notebooks.py
+pytest -m "not slow" tests/notebooks/test_notebooks.py
 ```
 
 ### CI/CD: Full Test Suite
 ```bash
 # Run all tests in parallel with JUnit report
-pytest -n auto --junitxml=results.xml tests/test_notebooks.py
+pytest -n auto --junitxml=results.xml tests/notebooks/test_notebooks.py
 
 # Or with HTML report
-pytest -n auto --html=report.html --self-contained-html tests/test_notebooks.py
+pytest -n auto --html=report.html --self-contained-html tests/notebooks/test_notebooks.py
 ```
 
 ### Debugging: Single Notebook
 ```bash
 # Run one notebook with full output
-pytest -s -vv -k "sandbox" tests/test_notebooks.py
+pytest -s -vv -k "sandbox" tests/notebooks/test_notebooks.py
 
 # Run with full output and stop at first failure
-pytest -s -vv -x -k "failing-notebook" tests/test_notebooks.py
+pytest -s -vv -x -k "failing-notebook" tests/notebooks/test_notebooks.py
 
 # Check the last executed notebook
 cat tests/last_run.ipynb
@@ -1543,7 +1537,7 @@ cat tests/last_run.ipynb
 ### Performance: Find Slow Tests
 ```bash
 # Show 10 slowest tests
-pytest --durations=10 tests/test_notebooks.py
+pytest --durations=10 tests/notebooks/test_notebooks.py
 ```
 
 ### Managing Slow Tests
@@ -1557,22 +1551,22 @@ Slow tests are automatically reordered to run **after** fast tests, providing qu
 **Skip slow tests during development:**
 ```bash
 # Run only fast tests (skip slow ones)
-pytest -m "not slow" tests/test_notebooks.py
+pytest -m "not slow" tests/notebooks/test_notebooks.py
 ```
 
 **Run only slow tests:**
 ```bash
 # Run only slow tests (for validation)
-pytest -m slow tests/test_notebooks.py
+pytest -m slow tests/notebooks/test_notebooks.py
 ```
 
 **Identify slow tests:**
 ```bash
 # See which tests are marked as slow
-pytest --collect-only -m slow tests/test_notebooks.py
+pytest --collect-only -m slow tests/notebooks/test_notebooks.py
 
 # See slowest tests by execution time
-pytest --durations=10 tests/test_notebooks.py
+pytest --durations=10 tests/notebooks/test_notebooks.py
 ```
 
 **Note**: After running tests, execution times are cached. Tests that exceed 60 seconds will be automatically marked as slow in future runs.
@@ -1583,12 +1577,12 @@ pytest --durations=10 tests/test_notebooks.py
 
 **Successful test:**
 ```
-tests/test_notebooks.py::test_notebook[./notebooks/solr/tmdb/sandbox.ipynb] PASSED [10%]
+tests/notebooks/test_notebooks.py::test_notebook[./notebooks/solr/tmdb/sandbox.ipynb] PASSED [10%]
 ```
 
 **Failed test:**
 ```
-tests/test_notebooks.py::test_notebook[./notebooks/solr/tmdb/sandbox.ipynb] FAILED [10%]
+tests/notebooks/test_notebooks.py::test_notebook[./notebooks/solr/tmdb/sandbox.ipynb] FAILED [10%]
 ...
 ============================== ERRORS ==============================
 Errors in ./notebooks/solr/tmdb/sandbox.ipynb: 1 error(s)
@@ -1610,7 +1604,7 @@ The last executed notebook is saved to `tests/last_run.ipynb` for debugging.
 
 Generate HTML report for easier viewing:
 ```bash
-pytest --html=report.html --self-contained-html tests/test_notebooks.py
+pytest --html=report.html --self-contained-html tests/notebooks/test_notebooks.py
 ```
 
 ## Performance
@@ -1682,7 +1676,7 @@ The script generates a detailed report including:
 
 See slowest notebook tests:
 ```bash
-pytest --durations=10 tests/test_notebooks.py
+pytest --durations=10 tests/notebooks/test_notebooks.py
 ```
 
 See slowest unit/integration tests:
@@ -1757,13 +1751,13 @@ This section provides guidelines for contributing to the test suite.
 4. **Test your notebook**:
    ```bash
    # Run just your new notebook
-   pytest -k "your-notebook-name" tests/test_notebooks.py -v
+   pytest -k "your-notebook-name" tests/notebooks/test_notebooks.py -v
    ```
 
 5. **Verify it's discovered**:
    ```bash
    # List all collected tests
-   pytest --collect-only tests/test_notebooks.py | grep your-notebook
+   pytest --collect-only tests/notebooks/test_notebooks.py | grep your-notebook
    ```
 
 ### Excluding Notebooks from Testing
@@ -1895,7 +1889,7 @@ When reporting test failures or issues:
 
 1. **Include test output**:
    ```bash
-   pytest tests/test_notebooks.py -vv > test_output.txt
+   pytest tests/notebooks/test_notebooks.py -vv > test_output.txt
    ```
 
 2. **Include environment info**:
@@ -1950,7 +1944,7 @@ If you need help with tests:
 
 2. **Review existing tests**:
    - `tests/test_judg_list.py` - Example unit test
-   - `tests/test_notebooks.py` - Example integration test
+   - `tests/notebooks/test_notebooks.py` - Example integration test
    - `tests/conftest.py` - Example fixtures
 
 3. **Ask questions**:
@@ -1980,10 +1974,10 @@ If you're used to the old `run_most_nbs.py` commands, here are the pytest equiva
 
 | Old Command | New Pytest Command |
 |-------------|-------------------|
-| `python tests/run_most_nbs.py` | `pytest tests/test_notebooks.py` |
-| `SKIP_TO_NB=24 python tests/run_most_nbs.py` | `pytest --lf tests/test_notebooks.py` |
-| `--skip-to-path opensearch/tmdb` | `pytest -k "opensearch/tmdb" tests/test_notebooks.py` |
-| `--only-path solr` | `pytest -k solr tests/test_notebooks.py` |
+| `python tests/run_most_nbs.py` | `pytest tests/notebooks/test_notebooks.py` |
+| `SKIP_TO_NB=24 python tests/run_most_nbs.py` | `pytest --lf tests/notebooks/test_notebooks.py` |
+| `--skip-to-path opensearch/tmdb` | `pytest -k "opensearch/tmdb" tests/notebooks/test_notebooks.py` |
+| `--only-path solr` | `pytest -k solr tests/notebooks/test_notebooks.py` |
 | `ONLY_PATH="elasticsearch" python tests/run_most_nbs.py` | `PYTEST_ARGS="-k elasticsearch" ./tests/test.sh` |
 
 ## Further Reading

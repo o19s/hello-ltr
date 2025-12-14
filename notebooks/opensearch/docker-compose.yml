@@ -38,7 +38,7 @@ services:
     container_name: opensearch-dashboards
     ports:
       # Use environment variable instead of hard-coded port to allow multiple instances
-      # to run simultaneously without port conflicts, and to support different environments
+      # to run simultaneously without port conflicts and to support different environments
       - "${OPENSEARCH_DASHBOARDS_PORT:-5602}:5602"
     environment:
       - 'OPENSEARCH_HOSTS=["http://opensearch-node1:9201"]'

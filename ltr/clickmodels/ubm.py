@@ -1,13 +1,35 @@
+"""UBM (User Browsing Model) click model implementation.
+
+This module implements the User Browsing Model, which considers both document
+attractiveness and position-based examination probability, accounting for the
+user's browsing behavior including the last clicked position.
+"""
+
 from collections import Counter, defaultdict
 
 from ltr.clickmodels.session import build
 
 
 class Model:
+    """UBM model storing examination probabilities and document attractiveness.
+
+    Attributes:
+        ranks: Dictionary mapping rank positions to examination probabilities.
+            Rank 0 is the first result displayed.
+        attracts: Dictionary mapping (query, doc_id) tuples to attractiveness values.
+    """
+
     def __init__(self):
+        """Initialize a UBM model with default values.
+
+        Initializes examination probabilities to 0.4 for all (last_click, rank)
+        position pairs and attractiveness values to 0.5 for all query-document pairs.
+        Rank 0 is the first result displayed on the page. Rank -1 indicates
+        no previous click in the session.
+        """
         # Examine prob per-rank
         # Rank 0 is first displayed on page
-        # Rank -1 i
+        # Rank -1 indicates no previous click
         self.ranks = defaultdict(lambda: 0.4)
 
         # Attractiveness per query-doc
@@ -15,14 +37,19 @@ class Model:
 
 
 def update_attractiveness(sessions, model):
-    """Run through the step of updating attractiveness
-    based on session information and the current rank
-    examine probabilities
+    """Update document attractiveness using UBM Expectation Maximization.
 
-    Algorithm based on Expectation Maximization derived in
-    chapter 4 of "Click Models for Web Search" by
-    Chulkin, Markov, de Rijke
+    Runs one step of the EM algorithm to update attractiveness values based on
+    observed clicks, current rank-based examination probabilities, and the
+    position of the last click in each session.
 
+    Args:
+        sessions: List of search session objects containing queries and clicked documents.
+        model: UBM Model object to update. The model.attracts dictionary will be modified.
+
+    Note:
+        Algorithm based on Expectation Maximization derived in chapter 4 of
+        "Click Models for Web Search" by Chuklin, Markov, de Rijke.
     """
     attractions = Counter()  # Track query-doc attractiveness in this round
     num_sessions = Counter()  # Track num sessions where query-doc appears
@@ -65,13 +92,21 @@ def update_attractiveness(sessions, model):
 
 
 def update_examines(sessions, model):
-    """Run through the step of updating position examine
-    probabilities given current query-doc attractiveness
+    """Update position-based examination probabilities using UBM.
 
-    Algorithm based on Expectation Maximization derived in
-    chapter 4 of "Click Models for Web Search" by
-    Chulkin, Markov, de Rijke
+    Runs one step of the Expectation Maximization algorithm to update
+    examination probabilities for (last_click, rank) position pairs based on
+    observed clicks and current query-document attractiveness values.
 
+    Args:
+        sessions: List of search session objects containing queries and clicked documents.
+        model: UBM Model object to update. The model.ranks dictionary will be modified.
+
+    Note:
+        Algorithm based on Expectation Maximization derived in chapter 4 of
+        "Click Models for Web Search" by Chuklin, Markov, de Rijke.
+        Unlike PBM, UBM considers the last clicked position when computing
+        examination probabilities.
     """
     new_rank_probs = defaultdict(lambda: 0)
     counts = defaultdict(lambda: 0)
@@ -111,14 +146,30 @@ def update_examines(sessions, model):
 
 
 def user_browse_model(sessions, rounds=20):
-    """
-    Algorithm based on Expectation Maximization derived in
-    chapter 4 (table 4.1) of "Click Models for Web Search" by
-    Chulkin, Markov, de Rijke
+    """Train a User Browsing Model using Expectation Maximization.
 
+    Iteratively updates examination probabilities and document attractiveness
+    values until convergence or the specified number of rounds is reached.
+    Unlike PBM, UBM accounts for the last clicked position when computing
+    examination probabilities.
+
+    Args:
+        sessions: List of search session objects containing queries and clicked documents.
+        rounds: Number of EM iterations to perform (default: 20).
+
+    Returns:
+        Model: Trained UBM model with updated examination probabilities and
+            attractiveness values.
+
+    Note:
+        Algorithm based on Expectation Maximization derived in chapter 4
+        (table 4.1) of "Click Models for Web Search" by Chuklin, Markov, de Rijke.
+        The model is initialized with:
+        - Examination probability of 0.4 for each (last_click, rank) pair
+        - Attractiveness of 0.5 for each query-document pair
     """
     model = Model()
-    for i in range(0, rounds):
+    for _ in range(rounds):
         update_attractiveness(sessions, model)
         update_examines(sessions, model)
     return model

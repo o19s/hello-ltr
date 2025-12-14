@@ -166,5 +166,5 @@ def test_shared_function_handles_all_engines():
         for check in config["health_checks"]:
             assert isinstance(check, tuple)
             assert len(check) == 3
-            port_key, service_name, endpoint = check
+            port_key, _service_name, _endpoint = check
             assert port_key in config["port_config"]

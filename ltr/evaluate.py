@@ -1,20 +1,75 @@
+"""RRE (Ranking Relevance Evaluation) integration.
+
+This module provides functions for running RRE evaluations using Docker
+and displaying evaluation results in Jupyter notebooks.
+"""
+
 import json
-import os
+import shlex
+import subprocess
 
 import plotly.graph_objs as go
 from plotly.offline import init_notebook_mode, iplot
 
 
 def log_run(cmd):
-    resp = os.popen(cmd).read()
-    print(resp)
+    """Run a shell command and print its output.
+
+    Args:
+        cmd: Command string to execute.
+
+    Returns:
+        None: Output is printed to stdout/stderr.
+    """
+    result = subprocess.run(
+        shlex.split(cmd),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    print(result.stdout)
+    if result.stderr:
+        print(result.stderr)
 
 
 def quiet_run(cmd):
-    os.popen(cmd).read()
+    """Run a shell command silently without printing output.
+
+    Args:
+        cmd: Command string to execute.
+
+    Returns:
+        None: Command output is captured but not displayed.
+    """
+    subprocess.run(
+        shlex.split(cmd),
+        capture_output=True,
+        text=True,
+        check=False,
+    )
 
 
 def evaluate(mode):
+    """Run RRE (Ranking Relevance Evaluation) using Docker.
+
+    Builds a Docker image, runs the evaluation, and copies results to the
+    data directory.
+
+    Args:
+        mode: Search engine mode, one of: "elastic", "solr", "opensearch".
+
+    Returns:
+        None: Results are written to:
+            - data/rre-evaluation.json
+            - data/rre-report.xlsx
+
+    Raises:
+        ValueError: If mode is not one of the supported values.
+
+    Note:
+        This function requires Docker to be installed and running.
+        The evaluation process can take a significant amount of time.
+    """
     # Build the docker image
     acceptable_modes = ["elastic", "solr", "opensearch"]
     if mode not in acceptable_modes:
@@ -46,6 +101,23 @@ def evaluate(mode):
 
 
 def rre_table():
+    """Display RRE evaluation results as an interactive table in Jupyter.
+
+    Loads evaluation results from data/rre-evaluation.json and displays
+    precision, recall, and ERR@30 metrics for baseline, classic, and latest
+    experiments in a Plotly table.
+
+    Returns:
+        None: Table is displayed in the notebook output.
+
+    Raises:
+        FileNotFoundError: If data/rre-evaluation.json doesn't exist.
+        KeyError: If expected metrics are missing from the evaluation file.
+
+    Note:
+        This function is designed for use in Jupyter notebooks and requires
+        plotly to be installed.
+    """
     init_notebook_mode(connected=True)
 
     with open("data/rre-evaluation.json") as src:

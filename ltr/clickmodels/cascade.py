@@ -1,19 +1,45 @@
+"""Cascade click model implementation.
+
+This module implements the Cascade model, which assumes users examine results
+sequentially and stop at the first click. Documents appearing before a click
+are considered examined but not clicked (negative signal), while the clicked
+document receives positive signal.
+"""
+
 from collections import Counter, defaultdict
 
 from ltr.clickmodels.session import build
 
 
 class Model:
+    """Cascade model storing document attractiveness values.
+
+    Attributes:
+        attracts: Dictionary mapping (query, doc_id) tuples to attractiveness values.
+    """
+
     def __init__(self):
+        """Initialize a Cascade model with default values.
+
+        Initializes attractiveness values to 0.5 for all query-document pairs.
+        """
         # Attractiveness per query-doc
         self.attracts = defaultdict(lambda: 0.5)
 
 
 def cascade_model(sessions):
-    """Cascading model can be solved directly:
-    - sessions with skips count against a doc
-    - sessions with clicks count for
-    - stop at first click
+    """Train a Cascade click model from search sessions.
+
+    The Cascade model can be solved directly without iterative optimization:
+    - Sessions with skips (documents examined but not clicked) count against a doc
+    - Sessions with clicks count for the clicked document
+    - Model stops at first click (assumes user satisfaction)
+
+    Args:
+        sessions: List of search session objects containing queries and clicked documents.
+
+    Returns:
+        Model: Trained Cascade model with attractiveness values for query-document pairs.
     """
     session_counts = Counter()
     click_counts = Counter()

@@ -1,8 +1,31 @@
-def butterfingers(text, prob=0.1, keyboard="qwerty"):
-    import random
+"""Typo generation using keyboard proximity.
 
-    """ taken from
-        https://github.com/Decagon/butter-fingers/blob/master/butterfingers/butterfingers.py """
+This module provides functionality for generating realistic typos by simulating
+keyboard proximity errors, where characters are replaced with nearby keys on
+a QWERTY keyboard.
+"""
+
+
+def butterfingers(text, prob=0.1, keyboard="qwerty"):
+    """Generate typos in text by simulating keyboard proximity errors.
+
+    Randomly replaces characters with nearby keys on a QWERTY keyboard to
+    simulate realistic typing mistakes. Original case is preserved.
+
+    Args:
+        text: Input text string to add typos to.
+        prob: Probability of introducing a typo for each character (default: 0.1).
+        keyboard: Keyboard layout to use (default: "qwerty"). Other layouts
+            are not currently supported.
+
+    Returns:
+        str: Text string with typos introduced based on keyboard proximity.
+
+    Note:
+        Implementation adapted from:
+        https://github.com/Decagon/butter-fingers/blob/master/butterfingers/butterfingers.py
+    """
+    import random
 
     keyApprox = {}
 

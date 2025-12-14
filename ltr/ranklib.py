@@ -1,11 +1,30 @@
+"""RankLib model training and management.
+
+This module provides functionality for training Learn-to-Rank models using
+RankLib (via RankyMcRankFace.jar), saving models to search engines, and
+performing feature selection.
+"""
+
 import os
+import shlex
+import subprocess
 
 from ltr import download
 from ltr.helpers.ranklib_result import parse_training_log
 
 
 def check_for_rankymcrankface():
-    """Ensure ranky jar is in a temp dir somewhere..."""
+    """Ensure RankyMcRankFace.jar is available in the system temp directory.
+
+    Downloads the RankyMcRankFace.jar file if it doesn't already exist.
+
+    Returns:
+        str: Path to the RankyMcRankFace.jar file.
+
+    Note:
+        The jar file is downloaded from a remote URL and cached in the
+        system temp directory.
+    """
     ranky_url = "http://es-learn-to-rank.labs.o19s.com/RankyMcRankFace.jar"
     import tempfile
 
@@ -15,6 +34,18 @@ def check_for_rankymcrankface():
 
 
 def write_training_set(training_set):
+    """Write training set judgments to a temporary file in RankLib format.
+
+    Args:
+        training_set: List of Judgment objects to write to file.
+
+    Returns:
+        str: Path to the temporary training file.
+
+    Note:
+        The file is created in the system temp directory and will be
+        cleaned up automatically by the OS.
+    """
     import tempfile
 
     from .judgments import judgments_to_file
@@ -40,14 +71,36 @@ def trainModel(
     bag=1,
     metric2t="DCG@10",
 ):
-    """
-    ranker
-    - 6 for LambdaMART
-    - 8 for RandomForest
+    """Train a RankLib model using the provided training set.
 
-    RandomForest params
-        frate - what proportion of features are candidates at each split
-        srate - what proportion of the queries should be examined for each ensemble
+    Args:
+        training_set: List of Judgment objects for training.
+        out: Output file path where the trained model will be saved.
+        features: Optional list of feature indices to use. If None, all features are used.
+        kcv: Optional integer for k-fold cross-validation. If provided and > 0,
+            cross-validation is performed instead of saving a model.
+        ranker: Ranker algorithm to use:
+            - 6: LambdaMART (default)
+            - 8: RandomForest
+        leafs: Number of leaves per tree (default: 10).
+        trees: Number of trees in the ensemble (default: 50).
+        frate: Feature rate - proportion of features considered at each split
+            (default: 1.0, only used for RandomForest).
+        shrinkage: Learning rate/shrinkage parameter (default: 0.1).
+        srate: Sample rate - proportion of queries examined for each ensemble
+            (default: 1.0, only used for RandomForest).
+        bag: Bagging fraction (default: 1).
+        metric2t: Metric to optimize during training (default: "DCG@10").
+
+    Returns:
+        RanklibResult: Object containing training logs and metrics.
+
+    Raises:
+        RuntimeError: If RankLib execution fails or produces no training logs.
+
+    Note:
+        RandomForest-specific parameters (frate, srate) are only used when
+        ranker=8. For LambdaMART (ranker=6), these parameters are ignored.
     """
 
     ranky_loc = check_for_rankymcrankface()
@@ -66,11 +119,25 @@ def trainModel(
         cmd += f" -kcv {kcv} "
 
     print(f"Running {cmd}")
-    result = os.popen(cmd).read()
+    result = subprocess.run(
+        shlex.split(cmd),
+        capture_output=True,
+        text=True,
+        check=False,
+    ).stdout
     return parse_training_log(result)
 
 
 def save_model(client, modelName, modelFile, index, featureSet):
+    """Save a trained RankLib model to the search engine.
+
+    Args:
+        client: Search client instance (ElasticClient, OpenSearchClient, or SolrClient).
+        modelName: Name to assign to the model in the search engine.
+        modelFile: Path to the file containing the trained model definition.
+        index: Name of the search index where the model will be stored.
+        featureSet: Name of the feature set associated with this model.
+    """
     with open(modelFile) as src:
         definition = src.read()
         client.submit_ranklib_model(featureSet, index, modelName, definition)
@@ -93,8 +160,35 @@ def train(
     ranker=6,
     shrinkage=0.1,
 ):
-    """Train and store a model into the search engine
-    with the provided parameters"""
+    """Train a RankLib model and store it in the search engine.
+
+    This function trains a model using RankLib, validates the training results,
+    and saves the model to the specified search engine index.
+
+    Args:
+        client: Search client instance (ElasticClient, OpenSearchClient, or SolrClient).
+        training_set: List of Judgment objects for training.
+        modelName: Name to assign to the trained model.
+        featureSet: Name of the feature set to use with this model.
+        index: Name of the search index where the model will be stored.
+        features: Optional list of feature indices to use. If None, all features are used.
+        kcv: Optional integer for k-fold cross-validation. If provided, cross-validation
+            is performed and no model is saved (RankLib doesn't save models when using KCV).
+        metric2t: Metric to optimize during training (default: "DCG@10").
+        leafs: Number of leaves per tree (default: 10).
+        trees: Number of trees in the ensemble (default: 50).
+        frate: Feature rate for RandomForest (default: 1.0).
+        srate: Sample rate for RandomForest (default: 1.0).
+        bag: Bagging fraction (default: 1).
+        ranker: Ranker algorithm to use, 6 for LambdaMART or 8 for RandomForest (default: 6).
+        shrinkage: Learning rate/shrinkage parameter (default: 0.1).
+
+    Returns:
+        RanklibResult: Object containing training logs and metrics.
+
+    Raises:
+        RuntimeError: If training fails or produces no training logs.
+    """
     modelFile = f"data/{modelName}_model.txt"
     ranklibResult = trainModel(
         training_set,
@@ -140,6 +234,44 @@ def feature_search(
     ranker=6,
     shrinkage=0.1,
 ):
+    """Perform feature selection by testing all combinations of features.
+
+    This function exhaustively tests all combinations of features to find
+    the best performing feature set. It uses k-fold cross-validation to
+    evaluate each combination.
+
+    Args:
+        client: Search client instance (ElasticClient, OpenSearchClient, or SolrClient).
+        training_set: List of Judgment objects for training.
+        featureSet: Name of the feature set to use.
+        features: List of feature indices to test combinations from. Required.
+        featureCost: Cost penalty for using more features (0.0 = no penalty, default: 0.0).
+            Higher values penalize larger feature sets.
+        metric2t: Metric to optimize during training (default: "DCG@10").
+        kcv: Number of folds for k-fold cross-validation (default: 5).
+        leafs: Number of leaves per tree (default: 10).
+        trees: Number of trees in the ensemble (default: 10).
+        frate: Feature rate for RandomForest (default: 1.0).
+        srate: Sample rate for RandomForest (default: 1.0).
+        bag: Bagging fraction (default: 1).
+        ranker: Ranker algorithm to use, 6 for LambdaMART or 8 for RandomForest (default: 6).
+        shrinkage: Learning rate/shrinkage parameter (default: 0.1).
+
+    Returns:
+        tuple: A tuple containing:
+            - bestCombo: RanklibResult object for the best performing feature combination,
+              or None if no valid combination was found.
+            - metricPerFeature: Dictionary mapping feature index to average metric value
+              when that feature is included. Features not tested have value -1.
+
+    Raises:
+        ValueError: If features parameter is None or empty.
+
+    Note:
+        This function tests all combinations from size 1 to len(features),
+        which can be computationally expensive for large feature sets.
+        Failed training attempts for specific combinations are skipped with a warning.
+    """
     from itertools import combinations
 
     if features is None:

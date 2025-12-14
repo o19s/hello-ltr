@@ -1,18 +1,50 @@
+"""MS MARCO dataset evaluation utilities.
+
+This module provides classes and functions for working with MS MARCO
+(Microsoft Machine Reading Comprehension) dataset query relevance judgments
+and evaluating rankings using metrics like Reciprocal Rank.
+"""
+
 import csv
 import gzip
 
 
 class QRel:
+    """Represents a query relevance judgment from MS MARCO dataset.
+
+    A QRel (query relevance) object represents a single relevant document
+    for a query, used for evaluation purposes.
+
+    Attributes:
+        qid: Query ID.
+        docid: Relevant document ID.
+        keywords: Query keywords/text.
+    """
+
     def __init__(self, qid, docid, keywords):
+        """Initialize a QRel object.
+
+        Args:
+            qid: Query ID.
+            docid: Relevant document ID.
+            keywords: Query keywords/text.
+        """
         self.qid = qid
         self.docid = docid
         self.keywords = keywords
 
     def eval_rr(self, doc_ranking):
-        """Evaluate the provided doc ranking using reciprical rank
-        (1/rank of the expected doc)
+        """Evaluate document ranking using Reciprocal Rank metric.
 
-        returns 0 if this qrels doc id is missing
+        Calculates 1/rank where rank is the position of the relevant document
+        in the provided ranking.
+
+        Args:
+            doc_ranking: List of document IDs in rank order.
+
+        Returns:
+            float: Reciprocal rank (1/rank) if relevant document is found,
+                0.0 if the relevant document is not in the ranking.
         """
 
         for rank, docid in enumerate(doc_ranking, start=1):
@@ -25,6 +57,19 @@ class QRel:
         qrels_fname="data/msmarco-doctrain-qrels.tsv.gz",
         queries_fname="data/msmarco-doctrain-queries.tsv.gz",
     ):
+        """Read QRel objects from MS MARCO qrels and queries files.
+
+        Args:
+            qrels_fname: Path to gzipped TSV file containing qrels (query-doc pairs).
+            queries_fname: Path to gzipped TSV file containing query ID to keywords mapping.
+
+        Yields:
+            QRel: QRel objects for each query-document relevance pair.
+
+        Note:
+            Files are expected to be gzipped TSV format. Missing keywords
+            for queries will result in None keywords and a warning message.
+        """
         qids_to_keywords = QRel.get_keyword_lookup(queries_fname)
 
         with gzip.open(qrels_fname, "rt") as f:
@@ -40,6 +85,14 @@ class QRel:
 
     @staticmethod
     def get_keyword_lookup(fname="data/msmarco-doctrain-queries.tsv.gz"):
+        """Build a dictionary mapping query IDs to keywords.
+
+        Args:
+            fname: Path to gzipped TSV file containing query ID and keyword pairs.
+
+        Returns:
+            dict: Dictionary mapping query ID strings to keyword strings.
+        """
         qids_to_keywords = {}
         with gzip.open(fname, "rt") as f:
             reader = csv.reader(f, delimiter="\t")
@@ -48,6 +101,11 @@ class QRel:
         return qids_to_keywords
 
     def __str__(self):
+        """Generate string representation of the QRel.
+
+        Returns:
+            str: Human-readable string showing query ID, keywords, and document ID.
+        """
         return f"qid:{self.qid}({self.keywords}) => doc:{self.docid}"
 
 

@@ -5,6 +5,20 @@ from ltr.judgments import judgments_from_file
 
 
 def train_to_csv(client, feature_set, in_filename, out_filename):
+    """Convert a RankLib training file to CSV format.
+
+    Reads judgments from a RankLib-format file and writes them to a CSV file
+    with columns for keywords, qid, grade, and all feature values.
+
+    Args:
+        client: Search client instance (used to fetch feature set metadata).
+        feature_set: Name of the feature set to use for column names.
+        in_filename: Path to input RankLib-format judgments file.
+        out_filename: Path to output CSV file.
+
+    Raises:
+        AssertionError: If the number of features doesn't match the feature set.
+    """
     features = client.feature_set(name=feature_set, index="tmdb")[0]
     fieldnames = ["keywords", "qid", "grade"]
     fieldnames.extend([feature["name"] for feature in features])

@@ -2,7 +2,7 @@ rre
 
 This folder contains some basic RRE demonstrations for running evaluations against your LTR models.
 
-Navigate to `solr` or `elastic` depending on which you are using and do the following:
+Navigate to `solr`, `elastic`, or `opensearch` depending on which search engine you are using and do the following:
 
 ## Getting Started
 - Build the docker image: `docker build -t ltr-rre .`

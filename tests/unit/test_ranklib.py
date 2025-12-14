@@ -65,70 +65,97 @@ class TestTrainModel:
     """Test trainModel function."""
 
     @patch("ltr.ranklib.parse_training_log")
-    @patch("os.popen")
+    @patch("subprocess.run")
     @patch("ltr.ranklib.write_training_set")
     @patch("ltr.ranklib.check_for_rankymcrankface")
-    def test_train_model_basic(self, mock_check, mock_write, mock_popen, mock_parse):
+    def test_train_model_basic(
+        self, mock_check, mock_write, mock_subprocess, mock_parse
+    ):
         """Test trainModel with basic parameters."""
         # Arrange
         mock_check.return_value = "/tmp/ranky.jar"
         mock_write.return_value = "/tmp/training.txt"
-        mock_popen.return_value.read.return_value = "Training log output"
+        mock_result = Mock()
+        mock_result.stdout = "Training log output"
+        mock_subprocess.return_value = mock_result
         mock_parse.return_value = Mock()
         training_set = []
         # Act
         result = trainModel(training_set, "/tmp/model.txt")
         # Assert
         assert result is not None
-        mock_popen.assert_called_once()
-        call_args = mock_popen.call_args[0][0]
-        assert "java -jar" in call_args
-        assert "-ranker 6" in call_args
-        assert "-train /tmp/training.txt" in call_args
-        assert "-save /tmp/model.txt" in call_args
+        mock_subprocess.assert_called_once()
+        call_args = mock_subprocess.call_args[0][0]
+        # subprocess.run receives a list of arguments
+        cmd_str = " ".join(call_args)
+        assert "java" in cmd_str
+        assert "-jar" in cmd_str
+        assert "-ranker" in cmd_str
+        assert "6" in cmd_str
+        assert "-train" in cmd_str
+        assert "/tmp/training.txt" in cmd_str
+        assert "-save" in cmd_str
+        assert "/tmp/model.txt" in cmd_str
 
     @patch("ltr.ranklib.parse_training_log")
-    @patch("os.popen")
+    @patch("subprocess.run")
     @patch("ltr.ranklib.write_training_set")
     @patch("ltr.ranklib.check_for_rankymcrankface")
     @patch("builtins.open", new_callable=mock_open)
     @patch("tempfile.gettempdir")
     def test_train_model_with_features(
-        self, mock_tempdir, mock_file, mock_check, mock_write, mock_popen, mock_parse
+        self,
+        mock_tempdir,
+        mock_file,
+        mock_check,
+        mock_write,
+        mock_subprocess,
+        mock_parse,
     ):
         """Test trainModel with features parameter."""
         # Arrange
         mock_tempdir.return_value = "/tmp"
         mock_check.return_value = "/tmp/ranky.jar"
         mock_write.return_value = "/tmp/training.txt"
-        mock_popen.return_value.read.return_value = "Training log output"
+        mock_result = Mock()
+        mock_result.stdout = "Training log output"
+        mock_subprocess.return_value = mock_result
         mock_parse.return_value = Mock()
         training_set = []
         features = [1, 2, 3]
         # Act
         trainModel(training_set, "/tmp/model.txt", features=features)
         # Assert
-        call_args = mock_popen.call_args[0][0]
-        assert "-feature" in call_args
+        call_args = mock_subprocess.call_args[0][0]
+        # subprocess.run receives a list of arguments
+        cmd_str = " ".join(call_args)
+        assert "-feature" in cmd_str
         mock_file.assert_called()
 
     @patch("ltr.ranklib.parse_training_log")
-    @patch("os.popen")
+    @patch("subprocess.run")
     @patch("ltr.ranklib.write_training_set")
     @patch("ltr.ranklib.check_for_rankymcrankface")
-    def test_train_model_with_kcv(self, mock_check, mock_write, mock_popen, mock_parse):
+    def test_train_model_with_kcv(
+        self, mock_check, mock_write, mock_subprocess, mock_parse
+    ):
         """Test trainModel with kcv parameter."""
         # Arrange
         mock_check.return_value = "/tmp/ranky.jar"
         mock_write.return_value = "/tmp/training.txt"
-        mock_popen.return_value.read.return_value = "Training log output"
+        mock_result = Mock()
+        mock_result.stdout = "Training log output"
+        mock_subprocess.return_value = mock_result
         mock_parse.return_value = Mock()
         training_set = []
         # Act
         trainModel(training_set, "/tmp/model.txt", kcv=5)
         # Assert
-        call_args = mock_popen.call_args[0][0]
-        assert "-kcv 5" in call_args
+        call_args = mock_subprocess.call_args[0][0]
+        # subprocess.run receives a list of arguments
+        cmd_str = " ".join(call_args)
+        assert "-kcv" in cmd_str
+        assert "5" in cmd_str
 
 
 class TestSaveModel:

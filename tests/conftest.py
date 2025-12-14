@@ -321,7 +321,7 @@ def file_lock(lock_file_path, timeout=30):
 
     while True:
         try:
-            # Open file for writing (creates if doesn't exist)
+            # Open file for writing (create if it doesn't exist)
             # Note: We intentionally don't use context manager here because we need
             # to keep the file open while holding the lock
             lock_file = open(lock_path, "w")  # noqa: SIM115
@@ -1014,6 +1014,12 @@ def cleanup_registry(request):
     cleanup_functions = []
 
     class CleanupRegistry:
+        """Registry for cleanup functions to be executed after tests.
+
+        Provides a way to register cleanup functions that will be called
+        in reverse order after the test completes, even if the test fails.
+        """
+
         def register(self, cleanup_func, *args, **kwargs):
             """Register a cleanup function to be called after the test."""
             if args or kwargs:

@@ -1,3 +1,9 @@
+"""Typo injection for testing fuzzy search capabilities.
+
+This module provides functionality for injecting random typos into judgment
+files to test how well search systems handle misspellings and typos.
+"""
+
 try:
     from helpers.butterfingers import butterfingers
     from judgments import (
@@ -17,6 +23,25 @@ except ImportError:
 
 
 def typoIt(judgmentInFile, judgmentOutFile, rounds=100):
+    """Inject random typos into judgment keywords to create test data.
+
+    Reads judgments from a file, generates typo variants of keywords using
+    the butterfingers algorithm, and creates new query-judgment pairs with
+    the typo variants. This is useful for testing fuzzy search capabilities.
+
+    Args:
+        judgmentInFile: Path to input judgment file.
+        judgmentOutFile: Path to output file where judgments with typos will be written.
+        rounds: Number of rounds of typo generation to attempt (default: 100).
+            Each round attempts to generate a typo for each unique query keyword.
+
+    Returns:
+        None: Results are written to judgmentOutFile.
+
+    Note:
+        Duplicate typos are skipped. Each typo variant gets a new query ID.
+        The original judgments are preserved, with new typo-based judgments appended.
+    """
     with open(judgmentInFile) as f:
         currJudgments = list(judgments_from_file(f))
     lastQid = currJudgments[-1].qid

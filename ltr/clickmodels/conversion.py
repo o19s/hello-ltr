@@ -1,12 +1,30 @@
+"""Conversion-augmented attractiveness adjustment.
+
+This module provides functionality for adjusting document attractiveness based
+on conversion data, penalizing clicks that don't lead to conversions while
+accounting for action costs.
+"""
+
 from collections import Counter
 
 
 def conv_aug_attracts(attracts, sessions, costs):
-    """Rescan sessions, using click-derrived attractiveness.
+    """Adjust attractiveness values based on conversion data.
 
-    If theres no conversion, punish the attractiveness derrived judgment
+    Rescans sessions using click-derived attractiveness, but penalizes
+    attractiveness when clicks don't lead to conversions. The penalty is
+    inversely proportional to cost: expensive actions are penalized less
+    (user may have been satisfied but didn't convert due to cost), while
+    cheap actions are penalized more (user likely wasn't satisfied).
 
-    BUT we punish costly things less, and cheap things more
+    Args:
+        attracts: Dictionary mapping (query, doc_id) tuples to attractiveness values.
+        sessions: List of search session objects with click and conversion data.
+        costs: Dictionary mapping doc_id to action cost values.
+
+    Returns:
+        dict: Dictionary mapping (query, doc_id) tuples to adjusted attractiveness
+            values based on conversion data.
     """
     satisfacts: Counter[tuple[str, str]] = Counter()  # type: ignore[type-arg]
     counts = Counter()
@@ -20,9 +38,9 @@ def conv_aug_attracts(attracts, sessions, costs):
                     satisfacts[(session.query, doc.doc_id)] += attract
                 else:
                     # If it costs a lot, and there wasn't a conversion,
-                    #  thats ok, we default to attractiveness
+                    #  that's ok, we default to attractiveness
                     # If it costs little, and there wasn't a conversion,
-                    #  thats generally not ok, why didn't they do (easy action)
+                    #  that's generally not ok, why didn't they do (easy action)
                     counts[(session.query, doc.doc_id)] += 1
                     satisfacts[(session.query, doc.doc_id)] += (
                         attract * costs[doc.doc_id]

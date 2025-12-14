@@ -1,15 +1,35 @@
+"""RankLib training result parsing and data structures.
+
+This module provides classes and functions for parsing RankLib training output
+and representing training results, including cross-validation results.
+"""
+
 import re
 
 
 class RanklibResult:
-    """A result of ranklib training, either for a
-    single training operation
-    (where trainingLogs is just set, and has a single item)
-    or k-folds cross validation
-    (where the foldResults/kcv are set; with a result for
-     each fold that is run"""
+    """Result of RankLib training operation.
+
+    Represents either a single training operation (where trainingLogs contains
+    a single item) or k-fold cross-validation (where foldResults and kcv
+    metrics are populated with results for each fold).
+
+    Attributes:
+        trainingLogs: List of TrainingLog objects, one per training run.
+        foldResults: List of FoldResult objects, one per cross-validation fold.
+        kcvTestAvg: Average test metric across all folds (None if not KCV).
+        kcvTrainAvg: Average training metric across all folds (None if not KCV).
+    """
 
     def __init__(self, trainingLogs, foldResults, kcvTestAvg, kcvTrainAvg):
+        """Initialize a RanklibResult.
+
+        Args:
+            trainingLogs: List of TrainingLog objects, one per training run.
+            foldResults: List of FoldResult objects, one per cross-validation fold.
+            kcvTestAvg: Average test metric across all folds (None if not KCV).
+            kcvTrainAvg: Average training metric across all folds (None if not KCV).
+        """
         self.trainingLogs = trainingLogs
         self.foldResults = foldResults
         self.kcvTrainAvg = kcvTrainAvg
@@ -17,13 +37,36 @@ class RanklibResult:
 
 
 class TrainingLog:
+    """Log of a single RankLib training run.
+
+    Attributes:
+        impacts: Dictionary mapping feature IDs to error reduction values.
+        rounds: List of metric values for each training round.
+        trainMetricName: Name of the training metric (e.g., "DCG@10").
+        trainMetricVal: Final training metric value.
+    """
+
     def __init__(self, rounds, impacts, trainMetricName, trainMetricVal):
+        """Initialize a TrainingLog.
+
+        Args:
+            rounds: List of metric values for each training round.
+            impacts: Dictionary mapping feature IDs to error reduction values.
+            trainMetricName: Name of the training metric (e.g., "DCG@10").
+            trainMetricVal: Final training metric value.
+        """
         self.impacts = impacts
         self.rounds = rounds
         self.trainMetricName = trainMetricName
         self.trainMetricVal = trainMetricVal
 
     def metric(self):
+        """Get the training metric value.
+
+        Returns:
+            float: Training metric value, preferring trainMetricVal if available,
+                otherwise the last round value, or 0 if no rounds.
+        """
         if self.trainMetricName is not None:
             return self.trainMetricVal
         if len(self.rounds) > 0:
@@ -33,7 +76,22 @@ class TrainingLog:
 
 
 class FoldResult:
+    """Result of a single cross-validation fold.
+
+    Attributes:
+        foldNum: Fold number/identifier.
+        trainMetric: Training metric value for this fold.
+        testMetric: Test metric value for this fold.
+    """
+
     def __init__(self, foldId, trainMetric, testMetric):
+        """Initialize a FoldResult.
+
+        Args:
+            foldId: Fold number/identifier.
+            trainMetric: Training metric value for this fold.
+            testMetric: Test metric value for this fold.
+        """
         self.foldNum = foldId
         self.trainMetric = trainMetric
         self.testMetric = testMetric
@@ -47,9 +105,21 @@ trainMetricRe = re.compile(r"(.*@.*) on training data: (.*)")
 
 
 def parse_training_log(rawResult):
-    """Takes raw result from Ranklib training and
-    gathers the feature impacts, training rounds,
-    and any cross-validation information"""
+    """Parse raw RankLib training output into structured result objects.
+
+    Extracts feature impacts, training rounds, cross-validation fold results,
+    and average metrics from RankLib's text output.
+
+    Args:
+        rawResult: Raw text output from RankLib training command.
+
+    Returns:
+        RanklibResult: Parsed result object containing:
+            - trainingLogs: List of TrainingLog objects
+            - foldResults: List of FoldResult objects (empty if not KCV)
+            - kcvTestAvg: Average test metric (None if not KCV)
+            - kcvTrainAvg: Average training metric (None if not KCV)
+    """
     lines = rawResult.split("\n")
     # Fold 1	|   0.9396	|  0.8764
     train = False
