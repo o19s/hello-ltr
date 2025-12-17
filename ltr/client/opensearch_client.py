@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 from collections.abc import Callable, Iterable
 from typing import Any
 
@@ -131,6 +132,33 @@ class OpenSearchClient(BaseClient):
         self.opensearch_ep: str = f"http://{self.host}:9201/_ltr"
         self.opensearch: OpenSearch = OpenSearch(f"http://{self.host}:9201")
         logger.debug(f"OpenSearch endpoint: {self.opensearch_ep}")
+
+    def _validate_search_response(
+        self, resp: JSONDict, operation: str = "query"
+    ) -> None:
+        """Validate OpenSearch search response structure.
+
+        Checks for error responses and missing 'hits' key, raising ValueError
+        with descriptive messages if validation fails.
+
+        Args:
+            resp: OpenSearch search API response dictionary.
+            operation: Operation name for error messages (e.g., "query", "model query").
+
+        Raises:
+            ValueError: If response contains an error or is missing the 'hits' key.
+        """
+        if "error" in resp:
+            error_detail = resp.get("error", {})
+            if isinstance(error_detail, dict):
+                error_msg = error_detail.get("reason", str(error_detail))
+            else:
+                error_msg = str(error_detail)
+            raise ValueError(f"OpenSearch {operation} failed: {error_msg}")
+        if "hits" not in resp:
+            raise ValueError(
+                f"Unexpected response structure: missing 'hits' key. Response: {json.dumps(resp, indent=2)[:500]}"
+            )
 
     def get_host(self) -> str:
         """Get the OpenSearch hostname.
@@ -315,6 +343,35 @@ class OpenSearchClient(BaseClient):
 
         resp_msg(msg=f"Create {name} feature set", resp=resp)
 
+        # Verify feature set was actually created and persisted
+        # OpenSearch LTR may return 200 but not persist the feature set in some cases
+        # Retry a few times with small delays to handle potential timing issues
+        max_retries = 3
+        retry_delay = 0.1  # 100ms delay between retries
+        for attempt in range(max_retries):
+            try:
+                # Try to retrieve the feature set to verify it was persisted
+                self.feature_set(index=index, name=name)
+                # If we get here, feature set exists - verification successful
+                logger.debug(f"Verified feature set '{name}' was created successfully")
+                return
+            except RuntimeError:
+                # Feature set not found yet, retry if we have attempts left
+                if attempt < max_retries - 1:
+                    time.sleep(retry_delay)
+                    retry_delay *= 2  # Exponential backoff
+                    continue
+                # All retries exhausted, raise error
+                raise RuntimeError(
+                    f"Feature set '{name}' creation appeared to succeed (HTTP {resp.status_code}), "
+                    f"but verification failed - the feature set could not be retrieved. "
+                    f"This may indicate a persistence issue with the OpenSearch LTR plugin. "
+                    f"Please check:\n"
+                    f"  1. The index '{index}' exists and is accessible\n"
+                    f"  2. The LTR plugin is properly installed and configured\n"
+                    f"  3. Try creating the feature set again or check OpenSearch logs for errors"
+                )
+
     def get_feature_name(self, config: FeatureConfig, ftr_idx: int) -> str:
         """Get the name of a feature by its index.
 
@@ -385,6 +442,8 @@ class OpenSearchClient(BaseClient):
 
         resp = self.opensearch.search(index=index, body=params)
         # resp_msg(msg="Searching {} - {}".format(index, str(terms_query)[:20]), resp=SearchResp(resp))
+
+        self._validate_search_response(resp, operation="query")
 
         matches = []
         for hit in resp["hits"]["hits"]:
@@ -506,6 +565,8 @@ class OpenSearchClient(BaseClient):
         resp = self.opensearch.search(index=index, body=params)
         # resp_msg(msg="Searching {} - {}".format(index, str(query)[:20]), resp=SearchResp(resp))
 
+        self._validate_search_response(resp, operation="model query")
+
         # Transform to consistent format between ES/Solr
         matches = []
         for hit in resp["hits"]["hits"]:
@@ -529,6 +590,8 @@ class OpenSearchClient(BaseClient):
         logger.debug(f"OpenSearch query: {query}")
         resp = self.opensearch.search(index=index, body=query)
         # resp_msg(msg="Searching {} - {}".format(index, str(query)[:20]), resp=SearchResp(resp))
+
+        self._validate_search_response(resp, operation="query")
 
         # Transform to consistent format between ES/Solr
         matches = []

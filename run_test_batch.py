@@ -151,7 +151,9 @@ def main():
             print(f"❌ FAILED: {notebook_path} (errors: {result['error_count']})")
 
     # Save results to JSON
-    output_file = Path(f"test_results_batch_{start_idx}_{end_idx}.json")
+    logs_dir = Path("tests/logs")
+    logs_dir.mkdir(parents=True, exist_ok=True)
+    output_file = logs_dir / f"test_results_batch_{start_idx}_{end_idx}.json"
     with open(output_file, "w") as f:
         json.dump(
             {

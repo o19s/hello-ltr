@@ -29,3 +29,11 @@ coverage.xml
 test_run.log
 performance_comparison_*.log
 **/performance_report_*.json
+
+# Test results and logs
+tests/logs/
+test_results*.json
+notebook_test_analysis*.json
+*_failing_tests.log
+*_batch*.log
+test_run_output.log

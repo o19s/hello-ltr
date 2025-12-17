@@ -167,3 +167,15 @@ Or run a specific hook:
 pre-commit run ruff --all-files
 pre-commit run notebook-output-check --all-files
 ```
+
+### Code Standards
+
+This project follows PEP 8 naming conventions. For detailed guidelines and examples, see [`NAMING_CONVENTIONS.md`](NAMING_CONVENTIONS.md).
+
+Key points:
+- Functions and variables: `snake_case`
+- Classes: `PascalCase`
+- Constants: `UPPER_SNAKE_CASE`
+- Naming violations are automatically checked by ruff in CI/CD
+
+For a complete audit of existing violations and their justifications, see [`NAMING_CONVENTIONS_VIOLATIONS.md`](NAMING_CONVENTIONS_VIOLATIONS.md).
