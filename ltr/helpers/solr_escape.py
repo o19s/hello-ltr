@@ -5,7 +5,7 @@ to prevent them from being interpreted as query operators.
 """
 
 
-def esc_kw(kw):
+def esc_kw(kw: str) -> str:
     """Escape special Solr query syntax characters in a keyword string.
 
     Escapes characters that have special meaning in Solr query syntax to ensure

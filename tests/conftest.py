@@ -329,7 +329,7 @@ def file_lock(lock_file_path, timeout=30):
             # Platform-specific locking
             if HAS_FCNTL:
                 # Unix/Linux: Use fcntl advisory locks
-                fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)  # pyright: ignore[reportPossiblyUnboundVariable]
             elif HAS_MSVCRT:
                 # Windows: Use msvcrt file locking
                 # msvcrt.locking requires file descriptor and byte range
@@ -337,7 +337,7 @@ def file_lock(lock_file_path, timeout=30):
                 import msvcrt  # noqa: PLC0415
 
                 try:
-                    msvcrt.locking(lock_file.fileno(), msvcrt.LK_NBLCK, 1)
+                    msvcrt.locking(lock_file.fileno(), msvcrt.LK_NBLCK, 1)  # type: ignore[attr-defined]
                 except OSError:
                     # Lock is held by another process
                     raise OSError("Lock is held by another process")
@@ -373,11 +373,11 @@ def file_lock(lock_file_path, timeout=30):
         if lock_file:
             try:
                 if HAS_FCNTL:
-                    fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+                    fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)  # pyright: ignore[reportPossiblyUnboundVariable]
                 elif HAS_MSVCRT:
                     import msvcrt  # noqa: PLC0415
 
-                    msvcrt.locking(lock_file.fileno(), msvcrt.LK_UNLCK, 1)
+                    msvcrt.locking(lock_file.fileno(), msvcrt.LK_UNLCK, 1)  # type: ignore[attr-defined]
             except OSError:
                 pass  # Ignore unlock errors
             lock_file.close()

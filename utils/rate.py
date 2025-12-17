@@ -2,7 +2,7 @@ import json
 
 from elasticsearch import Elasticsearch, TransportError
 
-from ltr.helpers.es_url_parse import parseUrl
+from ltr.helpers.es_url_parse import parse_url
 from ltr.judgments import (
     Judgment,
     judgments_by_qid,
@@ -24,8 +24,8 @@ def format_search(keywords):
 
     with open("rateSearch.json.jinja") as f:
         template = Template(f.read())
-    jsonStr = template.render(keywords=keywords)
-    return json.loads(jsonStr)
+    json_str = template.render(keywords=keywords)
+    return json.loads(json_str)
 
 
 def format_fuzzy(keywords):
@@ -41,8 +41,8 @@ def format_fuzzy(keywords):
 
     with open("rateFuzzySearch.json.jinja") as f:
         template = Template(f.read())
-    jsonStr = template.render(keywords=keywords)
-    return json.loads(jsonStr)
+    json_str = template.render(keywords=keywords)
+    return json.loads(json_str)
 
 
 def get_potential_results(es_url, keywords, fuzzy):
@@ -59,7 +59,7 @@ def get_potential_results(es_url, keywords, fuzzy):
     Raises:
         TransportError: If the Elasticsearch query fails.
     """
-    (es_url, index, _search_type) = parseUrl(es_url)
+    (es_url, index, _search_type) = parse_url(es_url)
     es = Elasticsearch(es_url)
 
     query = format_fuzzy(keywords) if fuzzy else format_search(keywords)
@@ -113,7 +113,7 @@ def grade_results(results, keywords, qid):
             while grade not in ["0", "1", "2", "3", "4"]:
                 grade = input("Rate this shiznit (0-4) ")
             judgment = Judgment(
-                int(grade), qid=qid, keywords=keywords, docId=result["_id"]
+                int(grade), qid=qid, keywords=keywords, doc_id=result["_id"]
             )
             ratings.append(judgment)
 
@@ -128,56 +128,56 @@ def load_judgments(judg_file):
 
     Returns:
         tuple: A tuple containing:
-            - currJudgments: List of Judgment objects loaded from file.
-            - existingKws: Set of keyword strings already in the file.
+            - curr_judgments: List of Judgment objects loaded from file.
+            - existing_kws: Set of keyword strings already in the file.
             - last_qid: Highest query ID found in the file (0 if file doesn't exist).
     """
-    currJudgments = []
-    existingKws = set()
+    curr_judgments = []
+    existing_kws = set()
     last_qid = 0
     try:
         with open(judg_file) as f:
-            currJudgments = list(judgments_from_file(f))
-            existingKws = {judg.keywords for judg in currJudgments}
-            judgDict = judgments_by_qid(currJudgments)
-            judgProfile = []
-            for _qid, judglist in judgDict.items():
-                judgProfile.append((judglist[0], len(judglist)))
-            judgProfile.sort(key=lambda j: j[1], reverse=True)
-            for prof in judgProfile:
+            curr_judgments = list(judgments_from_file(f))
+            existing_kws = {judg.keywords for judg in curr_judgments}
+            judg_dict = judgments_by_qid(curr_judgments)
+            judg_profile = []
+            for _qid, judglist in judg_dict.items():
+                judg_profile.append((judglist[0], len(judglist)))
+            judg_profile.sort(key=lambda j: j[1], reverse=True)
+            for prof in judg_profile:
                 print(f"{prof[0].keywords} has {prof[1]} judgments")
 
-            last_qid = currJudgments[-1].qid
+            last_qid = curr_judgments[-1].qid
     except FileNotFoundError:
         pass
 
-    return (currJudgments, existingKws, last_qid)
+    return (curr_judgments, existing_kws, last_qid)
 
 
-def seeded_judgments_from(currJudgments, existing_kws, keywords):
+def seeded_judgments_from(curr_judgments, existing_kws, keywords):
     """Find existing judgments for given keywords.
 
     Args:
-        currJudgments: List of current Judgment objects.
+        curr_judgments: List of current Judgment objects.
         existing_kws: Set of keyword strings that already have judgments.
         keywords: Keywords to search for.
 
     Returns:
         tuple: A tuple containing:
             - seeded_judgments: List of Judgment objects matching the keywords.
-            - existingQid: Query ID if found, otherwise -1.
+            - existing_qid: Query ID if found, otherwise -1.
     """
-    existingQid = -1
+    existing_qid = -1
     seeded_judgments = []
     if keywords in existing_kws:
-        for judgment in currJudgments:
+        for judgment in curr_judgments:
             if judgment.keywords == keywords:
                 seeded_judgments.append(judgment)
-                existingQid = judgment.qid
-    return seeded_judgments, existingQid
+                existing_qid = judgment.qid
+    return seeded_judgments, existing_qid
 
 
-def handleKeywords(inputKws, existing_kws, currJudgments):
+def handle_keywords(input_kws, existing_kws, curr_judgments):
     """
     Handles the users input at the prompt, returns tuple describing
     the requested action
@@ -193,38 +193,38 @@ def handleKeywords(inputKws, existing_kws, currJudgments):
 
     from ltr.helpers.butterfingers import butterfingers
 
-    keywordsWithExpansion = inputKws.split(";")
-    keywordsWithButterfingers = inputKws.split("!")
-    keywordsWithSearchInstead = inputKws.split(";;")
-    keywordsWithCopy = inputKws.split("<-")
-    keywords = keywordsWithExpansion[0]
-    searchWith = keywords
+    keywords_with_expansion = input_kws.split(";")
+    keywords_with_butterfingers = input_kws.split("!")
+    keywords_with_search_instead = input_kws.split(";;")
+    keywords_with_copy = input_kws.split("<-")
+    keywords = keywords_with_expansion[0]
+    search_with = keywords
     fuzzy = False
     copy_src_keywords = None
-    if len(keywordsWithCopy) > 1:
-        keywords = keywordsWithCopy[0]
-        copy_src_keywords = keywordsWithCopy[1]
-    if len(keywordsWithExpansion) > 1:
-        searchWith += f" {keywordsWithExpansion[1]}"
-    if len(keywordsWithSearchInstead) > 1:
-        searchWith = keywordsWithSearchInstead[1]
-    if len(keywordsWithButterfingers) > 1:
-        keywords = keywordsWithButterfingers[0]
-        searchWith = butterfingers(keywords, prob=0.2)
+    if len(keywords_with_copy) > 1:
+        keywords = keywords_with_copy[0]
+        copy_src_keywords = keywords_with_copy[1]
+    if len(keywords_with_expansion) > 1:
+        search_with += f" {keywords_with_expansion[1]}"
+    if len(keywords_with_search_instead) > 1:
+        search_with = keywords_with_search_instead[1]
+    if len(keywords_with_butterfingers) > 1:
+        keywords = keywords_with_butterfingers[0]
+        search_with = butterfingers(keywords, prob=0.2)
         fuzzy = True
 
     if copy_src_keywords is not None:
         this_query_judgments, existing_qid = seeded_judgments_from(
-            currJudgments, existing_kws, copy_src_keywords
+            curr_judgments, existing_kws, copy_src_keywords
         )
     else:
         this_query_judgments, existing_qid = seeded_judgments_from(
-            currJudgments, existing_kws, keywords
+            curr_judgments, existing_kws, keywords
         )
 
     return (
         keywords,
-        searchWith,
+        search_with,
         this_query_judgments,
         existing_qid,
         fuzzy,
@@ -232,25 +232,25 @@ def handleKeywords(inputKws, existing_kws, currJudgments):
     )
 
 
-def foldInNewRatings(fullJudgments, origJudgments, newJudgs):
+def fold_in_new_ratings(full_judgments, orig_judgments, new_judgs):
     """Merge new judgments into existing judgments, updating grades for matching pairs.
 
     For each new judgment, if a matching judgment exists (same query and document),
     update its grade. Otherwise, append the new judgment to the full list.
 
     Args:
-        fullJudgments: List of all Judgment objects (will be modified).
-        origJudgments: List of original Judgment objects for the query.
-        newJudgs: List of new Judgment objects to merge in.
+        full_judgments: List of all Judgment objects (will be modified).
+        orig_judgments: List of original Judgment objects for the query.
+        new_judgs: List of new Judgment objects to merge in.
     """
-    for newJudg in newJudgs:
-        wasAnUpdate = False
-        for origJudg in origJudgments:
-            if origJudg.sameQueryAndDoc(newJudg):
-                origJudg.grade = newJudg.grade
-                wasAnUpdate = True
-        if not wasAnUpdate:
-            fullJudgments.append(newJudg)
+    for new_judg in new_judgs:
+        was_an_update = False
+        for orig_judg in orig_judgments:
+            if orig_judg.same_query_and_doc(new_judg):
+                orig_judg.grade = new_judg.grade
+                was_an_update = True
+        if not was_an_update:
+            full_judgments.append(new_judg)
 
 
 def rate_results():
@@ -265,10 +265,10 @@ def rate_results():
     """
     from sys import argv
 
-    esUrl = "http://localhost:9200/tmdb/"
+    es_url = "http://localhost:9200/tmdb/"
 
-    judgFile = argv[1]
-    full_judgments, existing_kws, last_qid = load_judgments(judgFile)
+    judg_file = argv[1]
+    full_judgments, existing_kws, last_qid = load_judgments(judg_file)
 
     keywords = "-"
     new_qid = last_qid + 1
@@ -285,7 +285,7 @@ def rate_results():
             existing_qid,
             fuzzy,
             copy_src_kws,
-        ) = handleKeywords(input_kws, existing_kws, full_judgments)
+        ) = handle_keywords(input_kws, existing_kws, full_judgments)
         curr_qid = 0
         if existing_qid > 0:
             curr_qid = existing_qid
@@ -301,19 +301,19 @@ def rate_results():
             print(f"Copying from {keywords} <- {copy_src_kws}")
             for judg in orig_query_judgments:
                 judgment = Judgment(
-                    int(judg.grade), qid=new_qid, keywords=keywords, docId=judg.docId
+                    int(judg.grade), qid=new_qid, keywords=keywords, doc_id=judg.docId
                 )
                 new_query_judgments.append(judgment)
             existing_kws.add(keywords)
             curr_qid = new_qid
             new_qid += 1
         else:
-            results = get_potential_results(esUrl, search_with, fuzzy)
+            results = get_potential_results(es_url, search_with, fuzzy)
             new_query_judgments = grade_results(results, keywords, curr_qid)
 
-        foldInNewRatings(full_judgments, orig_query_judgments, new_query_judgments)
+        fold_in_new_ratings(full_judgments, orig_query_judgments, new_query_judgments)
 
-    with open(judgFile, "w") as f:
+    with open(judg_file, "w") as f:
         judgments_to_file(f, full_judgments)
 
 

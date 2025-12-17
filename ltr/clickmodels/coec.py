@@ -5,7 +5,12 @@ sessions. COEC compares actual clicks to expected clicks based on position-based
 CTR to identify query-document pairs that perform above or below average.
 """
 
-from collections import Counter
+from __future__ import annotations
+
+from collections import defaultdict
+
+from ltr.clickmodels.session import Session
+from ltr.types import AttractivenessMap, CTRByRank, QueryDocPair
 
 
 class Model:
@@ -16,20 +21,20 @@ class Model:
         ctrs: Dictionary mapping query-doc pairs to CTR values (currently unused).
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize a COEC model with empty statistics.
 
         Initializes empty dictionaries for COEC values and CTR values.
         These will be populated by the coec() function.
         """
         # COEC statistic
-        self.coecs: dict[tuple[str, str], float] = {}
+        self.coecs: AttractivenessMap = {}
 
         # CTR for each query-doc pair in this session
-        self.ctrs = {}
+        self.ctrs: AttractivenessMap = {}
 
 
-def coec(ctr_by_rank, sessions):
+def coec(ctr_by_rank: CTRByRank, sessions: list[Session]) -> Model:
     """Calculate COEC (Clicks Over Expected Clicks) for query-document pairs.
 
     COEC is a metric used to identify items that perform above or below average
@@ -51,8 +56,8 @@ def coec(ctr_by_rank, sessions):
         - COEC < 1 means below average CTR for that position
         - COEC = 1 means average CTR for that position
     """
-    clicks = Counter()
-    weighted_impressions = Counter()
+    clicks: defaultdict[QueryDocPair, int] = defaultdict(lambda: 0)
+    weighted_impressions: defaultdict[QueryDocPair, float] = defaultdict(lambda: 0.0)
 
     for session in sessions:
         for rank, doc in enumerate(session.docs):

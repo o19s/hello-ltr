@@ -5,8 +5,14 @@ converting it to standard Python dictionaries, handling nested structures
 and term vector data.
 """
 
+from __future__ import annotations
 
-def every_other_zipped(lst):
+from typing import Any
+
+from ltr.types import JSONDict
+
+
+def every_other_zipped(lst: list[Any]) -> zip:
     """Zip every other element of a list into pairs.
 
     Args:
@@ -18,7 +24,7 @@ def every_other_zipped(lst):
     return zip(lst[0::2], lst[1::2])
 
 
-def dictify(nl_tups):
+def dictify(nl_tups: list[tuple[Any, Any]]) -> dict[Any, Any] | list[tuple[Any, Any]]:
     """Convert list of tuples to dictionary if all keys are unique.
 
     Args:
@@ -34,7 +40,7 @@ def dictify(nl_tups):
     return nl_tups
 
 
-def parse_named_list(lst):
+def parse_named_list(lst: list[Any]) -> dict[Any, Any] | list[tuple[Any, Any]]:
     """Recursively parse Solr named list format into nested dictionaries.
 
     Solr named lists are alternating key-value pairs that can be nested.
@@ -58,7 +64,9 @@ def parse_named_list(lst):
     return dictify(nl_as_tups)
 
 
-def parse_termvect_namedlist(lst, field):
+def parse_termvect_namedlist(
+    lst: list[Any], field: str
+) -> JSONDict | list[tuple[Any, Any]]:
     """Parse Solr term vector named list format with position normalization.
 
     Parses the named list and performs transformations to create consistent
@@ -72,7 +80,7 @@ def parse_termvect_namedlist(lst, field):
         dict: Parsed term vector dictionary with normalized structure.
     """
 
-    def listify_posns(posn_attrs):
+    def listify_posns(posn_attrs: dict[str, int] | list[tuple[str, int]]) -> list[int]:
         """Normalize position attributes to a list format.
 
         Converts position attributes from various formats (dict or list of tuples)

@@ -16,6 +16,8 @@ Usage:
     python tests/measure_performance.py --docker-monitor    # Monitor Docker resources
 """
 
+from __future__ import annotations
+
 import argparse
 import json
 import os
@@ -171,7 +173,7 @@ def generate_report(
     unit_total: float,
     integration_total: float,
     notebook_total: float,
-    output_file: str = None,
+    output_file: str | None = None,
 ) -> str:
     """
     Generate a formatted performance report.

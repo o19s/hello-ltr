@@ -5,9 +5,12 @@ attractiveness and position-based examination probability, accounting for the
 user's browsing behavior including the last clicked position.
 """
 
+from __future__ import annotations
+
 from collections import Counter, defaultdict
 
-from ltr.clickmodels.session import build
+from ltr.clickmodels.session import Session, build
+from ltr.types import QueryDocPair, UBMRankPair
 
 
 class Model:
@@ -19,7 +22,7 @@ class Model:
         attracts: Dictionary mapping (query, doc_id) tuples to attractiveness values.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize a UBM model with default values.
 
         Initializes examination probabilities to 0.4 for all (last_click, rank)
@@ -30,13 +33,13 @@ class Model:
         # Examine prob per-rank
         # Rank 0 is first displayed on page
         # Rank -1 indicates no previous click
-        self.ranks = defaultdict(lambda: 0.4)
+        self.ranks: defaultdict[UBMRankPair, float] = defaultdict(lambda: 0.4)
 
         # Attractiveness per query-doc
-        self.attracts = defaultdict(lambda: 0.5)
+        self.attracts: defaultdict[QueryDocPair, float] = defaultdict(lambda: 0.5)
 
 
-def update_attractiveness(sessions, model):
+def update_attractiveness(sessions: list[Session], model: Model) -> None:
     """Update document attractiveness using UBM Expectation Maximization.
 
     Runs one step of the EM algorithm to update attractiveness values based on
@@ -44,14 +47,18 @@ def update_attractiveness(sessions, model):
     position of the last click in each session.
 
     Args:
-        sessions: List of search session objects containing queries and clicked documents.
-        model: UBM Model object to update. The model.attracts dictionary will be modified.
+        sessions: List of search session objects containing queries and
+            clicked documents.
+        model: UBM Model object to update. The model.attracts dictionary will
+            be modified.
 
     Note:
         Algorithm based on Expectation Maximization derived in chapter 4 of
         "Click Models for Web Search" by Chuklin, Markov, de Rijke.
     """
-    attractions = Counter()  # Track query-doc attractiveness in this round
+    attractions: defaultdict[QueryDocPair, float] = defaultdict(
+        lambda: 0.0
+    )  # Track query-doc attractiveness in this round
     num_sessions = Counter()  # Track num sessions where query-doc appears
     for session in sessions:
         last_click = -1
@@ -91,7 +98,7 @@ def update_attractiveness(sessions, model):
         model.attracts[query_doc_key] = att
 
 
-def update_examines(sessions, model):
+def update_examines(sessions: list[Session], model: Model) -> None:
     """Update position-based examination probabilities using UBM.
 
     Runs one step of the Expectation Maximization algorithm to update
@@ -99,8 +106,10 @@ def update_examines(sessions, model):
     observed clicks and current query-document attractiveness values.
 
     Args:
-        sessions: List of search session objects containing queries and clicked documents.
-        model: UBM Model object to update. The model.ranks dictionary will be modified.
+        sessions: List of search session objects containing queries and
+            clicked documents.
+        model: UBM Model object to update. The model.ranks dictionary will be
+            modified.
 
     Note:
         Algorithm based on Expectation Maximization derived in chapter 4 of
@@ -108,7 +117,7 @@ def update_examines(sessions, model):
         Unlike PBM, UBM considers the last clicked position when computing
         examination probabilities.
     """
-    new_rank_probs = defaultdict(lambda: 0)
+    new_rank_probs: defaultdict[UBMRankPair, float] = defaultdict(lambda: 0.0)
     counts = defaultdict(lambda: 0)
 
     for session in sessions:
@@ -145,7 +154,7 @@ def update_examines(sessions, model):
         model.ranks[(last_click, click)] = new_rank_probs[(last_click, click)] / count
 
 
-def user_browse_model(sessions, rounds=20):
+def user_browse_model(sessions: list[Session], rounds: int = 20) -> Model:
     """Train a User Browsing Model using Expectation Maximization.
 
     Iteratively updates examination probabilities and document attractiveness
@@ -154,7 +163,8 @@ def user_browse_model(sessions, rounds=20):
     examination probabilities.
 
     Args:
-        sessions: List of search session objects containing queries and clicked documents.
+        sessions: List of search session objects containing queries and
+            clicked documents.
         rounds: Number of EM iterations to perform (default: 20).
 
     Returns:
@@ -178,16 +188,16 @@ def user_browse_model(sessions, rounds=20):
 if __name__ == "__main__":
     sessions = build(
         [
-            ("A", ((1, True), (2, False), (3, True), (0, False))),
-            ("B", ((5, False), (2, True), (3, True), (0, False))),
-            ("A", ((1, False), (2, False), (3, True), (0, False))),
-            ("B", ((1, False), (2, False), (3, False), (9, True))),
-            ("A", ((9, False), (2, False), (1, True), (0, True))),
-            ("B", ((6, True), (2, False), (3, True), (1, False))),
-            ("A", ((7, False), (4, True), (1, False), (3, False))),
-            ("B", ((8, True), (2, False), (3, True), (1, False))),
-            ("A", ((1, False), (4, True), (2, False), (3, False))),
-            ("B", ((7, True), (4, False), (5, True), (1, True))),
+            ("A", [(1, True), (2, False), (3, True), (0, False)]),
+            ("B", [(5, False), (2, True), (3, True), (0, False)]),
+            ("A", [(1, False), (2, False), (3, True), (0, False)]),
+            ("B", [(1, False), (2, False), (3, False), (9, True)]),
+            ("A", [(9, False), (2, False), (1, True), (0, True)]),
+            ("B", [(6, True), (2, False), (3, True), (1, False)]),
+            ("A", [(7, False), (4, True), (1, False), (3, False)]),
+            ("B", [(8, True), (2, False), (3, True), (1, False)]),
+            ("A", [(1, False), (4, True), (2, False), (3, False)]),
+            ("B", [(7, True), (4, False), (5, True), (1, True)]),
         ]
     )
     user_browse_model(sessions, rounds=100)

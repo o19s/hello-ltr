@@ -150,7 +150,7 @@ def test_sklearn_operations():
         x_data = np.array([[1, 2], [3, 4], [5, 6]])
         scaler = StandardScaler()
         scaler.fit(x_data)
-        x_scaled = scaler.transform(x_data)
+        x_scaled = np.asarray(scaler.transform(x_data))
 
         assert x_scaled.shape == x_data.shape
 
@@ -164,7 +164,7 @@ def test_sklearn_operations():
 
         # Test LinearSVC (used in svmrank notebooks)
         y_binary = np.array([0, 1, 0])
-        model = svm.LinearSVC(max_iter=1000)
+        model = svm.LinearSVC(max_iter=1000, dual="auto")
         model.fit(x_data, y_binary)
 
         assert hasattr(model, "coef_")
@@ -280,7 +280,7 @@ def test_integration():
         # Apply StandardScaler (as in svmrank notebooks)
         scaler = StandardScaler()
         scaler.fit(features)
-        features_scaled = scaler.transform(features)
+        features_scaled = np.asarray(scaler.transform(features))
 
         # Convert to DataFrame (as in lambda-mart notebooks)
         df = pd.DataFrame(

@@ -53,7 +53,7 @@ def patch_requests_for_test_ports():
 
     # Store original request method
     if not hasattr(requests.Session, "_original_request"):
-        requests.Session._original_request = requests.Session.request
+        requests.Session._original_request = requests.Session.request  # type: ignore[attr-defined]
 
     def rewrite_url(url):
         """Rewrite URL to use test ports if they match standard ports."""
@@ -124,41 +124,53 @@ def patch_requests_for_test_ports():
             self._original_request, method, url, max_retries=3, **kwargs
         )
 
-    requests.Session.request = patched_request
+    requests.Session.request = patched_request  # type: ignore[assignment]
 
     # Also patch the module-level functions
     if not hasattr(requests, "_original_get"):
-        requests._original_get = requests.get
-        requests._original_post = requests.post
-        requests._original_put = requests.put
-        requests._original_delete = requests.delete
+        requests._original_get = requests.get  # type: ignore[attr-defined]
+        requests._original_post = requests.post  # type: ignore[attr-defined]
+        requests._original_put = requests.put  # type: ignore[attr-defined]
+        requests._original_delete = requests.delete  # type: ignore[attr-defined]
 
     def patched_get(url, **kwargs):
         """Patched GET request that rewrites URLs and adds retry logic."""
         rewritten_url = rewrite_url(url)
         return _retry_request(
-            requests._original_get, rewritten_url, max_retries=3, **kwargs
+            requests._original_get,  # type: ignore[attr-defined]
+            rewritten_url,
+            max_retries=3,
+            **kwargs,
         )
 
     def patched_post(url, **kwargs):
         """Patched POST request that rewrites URLs and adds retry logic."""
         rewritten_url = rewrite_url(url)
         return _retry_request(
-            requests._original_post, rewritten_url, max_retries=3, **kwargs
+            requests._original_post,  # type: ignore[attr-defined]
+            rewritten_url,
+            max_retries=3,
+            **kwargs,
         )
 
     def patched_put(url, **kwargs):
         """Patched PUT request that rewrites URLs and adds retry logic."""
         rewritten_url = rewrite_url(url)
         return _retry_request(
-            requests._original_put, rewritten_url, max_retries=3, **kwargs
+            requests._original_put,  # type: ignore[attr-defined]
+            rewritten_url,
+            max_retries=3,
+            **kwargs,
         )
 
     def patched_delete(url, **kwargs):
         """Patched DELETE request that rewrites URLs and adds retry logic."""
         rewritten_url = rewrite_url(url)
         return _retry_request(
-            requests._original_delete, rewritten_url, max_retries=3, **kwargs
+            requests._original_delete,  # type: ignore[attr-defined]
+            rewritten_url,
+            max_retries=3,
+            **kwargs,
         )
 
     requests.get = patched_get

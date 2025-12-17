@@ -6,7 +6,7 @@ a QWERTY keyboard.
 """
 
 
-def butterfingers(text, prob=0.1, keyboard="qwerty"):
+def butterfingers(text: str, prob: float = 0.1, keyboard: str = "qwerty") -> str:
     """Generate typos in text by simulating keyboard proximity errors.
 
     Randomly replaces characters with nearby keys on a QWERTY keyboard to
@@ -27,51 +27,51 @@ def butterfingers(text, prob=0.1, keyboard="qwerty"):
     """
     import random
 
-    keyApprox = {}
+    key_approx = {}
 
     if keyboard == "qwerty":
-        keyApprox["q"] = "qwasedzx"
-        keyApprox["w"] = "wqesadrfcx"
-        keyApprox["e"] = "ewrsfdqazxcvgt"
-        keyApprox["r"] = "retdgfwsxcvgt"
-        keyApprox["t"] = "tryfhgedcvbnju"
-        keyApprox["y"] = "ytugjhrfvbnji"
-        keyApprox["u"] = "uyihkjtgbnmlo"
-        keyApprox["i"] = "iuojlkyhnmlp"
-        keyApprox["o"] = "oipklujm"
-        keyApprox["p"] = "plo['ik"
+        key_approx["q"] = "qwasedzx"
+        key_approx["w"] = "wqesadrfcx"
+        key_approx["e"] = "ewrsfdqazxcvgt"
+        key_approx["r"] = "retdgfwsxcvgt"
+        key_approx["t"] = "tryfhgedcvbnju"
+        key_approx["y"] = "ytugjhrfvbnji"
+        key_approx["u"] = "uyihkjtgbnmlo"
+        key_approx["i"] = "iuojlkyhnmlp"
+        key_approx["o"] = "oipklujm"
+        key_approx["p"] = "plo['ik"
 
-        keyApprox["a"] = "aqszwxwdce"
-        keyApprox["s"] = "swxadrfv"
-        keyApprox["d"] = "decsfaqgbv"
-        keyApprox["f"] = "fdgrvwsxyhn"
-        keyApprox["g"] = "gtbfhedcyjn"
-        keyApprox["h"] = "hyngjfrvkim"
-        keyApprox["j"] = "jhknugtblom"
-        keyApprox["k"] = "kjlinyhn"
-        keyApprox["l"] = "lokmpujn"
+        key_approx["a"] = "aqszwxwdce"
+        key_approx["s"] = "swxadrfv"
+        key_approx["d"] = "decsfaqgbv"
+        key_approx["f"] = "fdgrvwsxyhn"
+        key_approx["g"] = "gtbfhedcyjn"
+        key_approx["h"] = "hyngjfrvkim"
+        key_approx["j"] = "jhknugtblom"
+        key_approx["k"] = "kjlinyhn"
+        key_approx["l"] = "lokmpujn"
 
-        keyApprox["z"] = "zaxsvde"
-        keyApprox["x"] = "xzcsdbvfrewq"
-        keyApprox["c"] = "cxvdfzswergb"
-        keyApprox["v"] = "vcfbgxdertyn"
-        keyApprox["b"] = "bvnghcftyun"
-        keyApprox["n"] = "nbmhjvgtuik"
-        keyApprox["m"] = "mnkjloik"
-        keyApprox[" "] = " "
+        key_approx["z"] = "zaxsvde"
+        key_approx["x"] = "xzcsdbvfrewq"
+        key_approx["c"] = "cxvdfzswergb"
+        key_approx["v"] = "vcfbgxdertyn"
+        key_approx["b"] = "bvnghcftyun"
+        key_approx["n"] = "nbmhjvgtuik"
+        key_approx["m"] = "mnkjloik"
+        key_approx[" "] = " "
     else:
         print("Keyboard not supported.")
 
-    probOfTypo = int(prob * 100)
+    prob_of_typo = int(prob * 100)
 
     buttertext = ""
     for letter in text:
         lcletter = letter.lower()
-        if lcletter not in keyApprox:
+        if lcletter not in key_approx:
             newletter = lcletter
         else:
-            if random.choice(range(0, 100)) <= probOfTypo:
-                newletter = random.choice(keyApprox[lcletter])
+            if random.choice(range(0, 100)) <= prob_of_typo:
+                newletter = random.choice(key_approx[lcletter])
             else:
                 newletter = lcletter
         # go back to original case

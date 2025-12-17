@@ -4,16 +4,31 @@ This module provides the Elasticsearch-specific implementation of the BaseClient
 interface, handling Elasticsearch API calls and response formatting for LTR operations.
 """
 
+from __future__ import annotations
+
 import json
 import os
+from collections.abc import Callable, Iterable
+from typing import Any
 
 import elasticsearch.helpers
 import requests
 from elasticsearch import Elasticsearch
 
 from ltr.helpers.handle_resp import resp_msg
+from ltr.logger import get_logger
+from ltr.types import (
+    FeatureConfig,
+    FeatureSetResult,
+    JSONDict,
+    JSONDictList,
+    ModelPayload,
+    QueryParams,
+)
 
 from .base_client import BaseClient
+
+logger = get_logger(__name__)
 
 
 class ElasticResp:
@@ -27,18 +42,18 @@ class ElasticResp:
         text: JSON-formatted response text (only present on errors).
     """
 
-    def __init__(self, resp):
+    def __init__(self, resp: JSONDict) -> None:
         """Initialize an ElasticResp wrapper.
 
         Args:
             resp: Elasticsearch API response dictionary.
         """
-        self.status_code = 400
+        self.status_code: int = 400
         if "acknowledged" in resp and resp["acknowledged"]:
             self.status_code = 200
         else:
             self.status_code = resp["status"]
-            self.text = json.dumps(resp, indent=2)
+            self.text: str = json.dumps(resp, indent=2)
 
 
 class BulkResp:
@@ -48,13 +63,13 @@ class BulkResp:
         status_code: HTTP status code (201 if documents indexed, 400 otherwise).
     """
 
-    def __init__(self, resp):
+    def __init__(self, resp: tuple[int, Any]) -> None:
         """Initialize a BulkResp wrapper.
 
         Args:
             resp: Elasticsearch bulk operation response tuple.
         """
-        self.status_code = 400
+        self.status_code: int = 400
         if resp[0] > 0:
             self.status_code = 201
 
@@ -67,18 +82,18 @@ class SearchResp:
         text: JSON-formatted response text (only present on errors).
     """
 
-    def __init__(self, resp):
+    def __init__(self, resp: JSONDict) -> None:
         """Initialize a SearchResp wrapper.
 
         Args:
             resp: Elasticsearch search API response dictionary.
         """
-        self.status_code = 400
+        self.status_code: int = 400
         if "hits" in resp:
             self.status_code = 200
         else:
             self.status_code = resp["status"]
-            self.text = json.dumps(resp, indent=2)
+            self.text: str = json.dumps(resp, indent=2)
 
 
 class ElasticClient(BaseClient):
@@ -99,25 +114,25 @@ class ElasticClient(BaseClient):
         host: Hostname for Elasticsearch server.
     """
 
-    def __init__(self, configs_dir="."):
+    def __init__(self, configs_dir: str = ".") -> None:
         """Initialize an ElasticClient.
 
         Args:
             configs_dir: Directory containing Elasticsearch configuration files
                 (default: current directory).
         """
-        self.docker = os.environ.get("LTR_DOCKER") is not None
-        self.configs_dir = configs_dir  # location of elastic configs
+        self.docker: bool = os.environ.get("LTR_DOCKER") is not None
+        self.configs_dir: str = configs_dir  # location of elastic configs
 
         if self.docker:
             self.host = "elastic"
         else:
             self.host = "localhost"
 
-        self.elastic_ep = f"http://{self.host}:9200/_ltr"
-        self.es = Elasticsearch(f"http://{self.host}:9200")
+        self.elastic_ep: str = f"http://{self.host}:9200/_ltr"
+        self.es: Elasticsearch = Elasticsearch(f"http://{self.host}:9200")
 
-    def get_host(self):
+    def get_host(self) -> str:
         """Get the Elasticsearch hostname.
 
         Returns:
@@ -125,7 +140,7 @@ class ElasticClient(BaseClient):
         """
         return self.host
 
-    def name(self):
+    def name(self) -> str:
         """Get the client name.
 
         Returns:
@@ -133,7 +148,7 @@ class ElasticClient(BaseClient):
         """
         return "elastic"
 
-    def check_index_exists(self, index):
+    def check_index_exists(self, index: str) -> bool:
         """Check if an index exists.
 
         Args:
@@ -144,7 +159,7 @@ class ElasticClient(BaseClient):
         """
         return self.es.indices.exists(index=index)
 
-    def delete_index(self, index):
+    def delete_index(self, index: str) -> None:
         """Delete an Elasticsearch index.
 
         Args:
@@ -162,27 +177,36 @@ class ElasticClient(BaseClient):
             ignore=[400, 404],
         )
 
-    def create_index(self, index):
-        """Take the local config files for Elasticsearch for index, reload them into ES"""
+    def create_index(self, index: str) -> None:
+        """Take the local config files for Elasticsearch for index, reload
+        them into ES"""
         cfg_json_path = os.path.join(self.configs_dir, f"{index}_settings.json")
         with open(cfg_json_path) as src:
             settings = json.load(src)
             resp = self.es.indices.create(index=index, body=settings)
             resp_msg(msg=f"Created index {index}", resp=ElasticResp(resp))
 
-    def index_documents(self, index, doc_src):
+    def index_documents(
+        self,
+        index: str,
+        doc_src: Iterable[JSONDict] | Callable[[], Iterable[JSONDict]],
+    ) -> None:
         """Index documents into Elasticsearch using bulk operations.
 
         Args:
             index: Index name to index documents into.
-            doc_src: Iterable of document dictionaries. Each document must
-                have an "id" field that uniquely identifies it.
+            doc_src: Iterable of document dictionaries or a callable that returns
+                an iterable. Each document must have an "id" field that uniquely
+                identifies it. File paths (str) are not supported.
 
         Raises:
-            ValueError: If a document is missing the required "id" field.
+            ValueError: If a document is missing the required "id" field, or if
+                doc_src is a string (file paths not supported).
         """
 
-        def bulkDocs(doc_src):
+        def bulk_docs(
+            doc_src: Iterable[JSONDict],
+        ) -> Iterable[JSONDict]:
             """Generate bulk index commands for documents.
 
             Args:
@@ -194,16 +218,23 @@ class ElasticClient(BaseClient):
             for doc in doc_src:
                 if "id" not in doc:
                     raise ValueError(
-                        "Expecting docs to have field 'id' that uniquely identifies document"
+                        "Expecting docs to have field 'id' that uniquely "
+                        "identifies document"
                     )
-                addCmd = {"_index": index, "_id": doc["id"], "_source": doc}
-                yield addCmd
+                add_cmd = {"_index": index, "_id": doc["id"], "_source": doc}
+                yield add_cmd
 
-        resp = elasticsearch.helpers.bulk(self.es, bulkDocs(doc_src), chunk_size=100)
+        if isinstance(doc_src, str):
+            raise ValueError(
+                "ElasticClient.index_documents does not support file paths"
+            )
+        if callable(doc_src):
+            doc_src = doc_src()
+        resp = elasticsearch.helpers.bulk(self.es, bulk_docs(doc_src), chunk_size=100)
         self.es.indices.refresh(index=index)
         resp_msg(msg=f"Streaming Bulk index DONE {index}", resp=BulkResp(resp))
 
-    def reset_ltr(self, index):
+    def reset_ltr(self, index: str) -> None:
         """Reset the Learn-to-Rank feature store.
 
         Deletes and recreates the default LTR feature store. Note that the
@@ -220,18 +251,64 @@ class ElasticClient(BaseClient):
         resp = requests.put(self.elastic_ep)
         resp_msg(msg="Initialize Default LTR feature store".format(), resp=resp)
 
-    def create_featureset(self, index, name, ftr_config):
+    def create_featureset(
+        self, index: str, name: str, ftr_config: FeatureConfig
+    ) -> None:
         """Create a feature set in Elasticsearch LTR.
 
         Args:
-            index: Index name (unused, kept for API compatibility).
+            index: Index name (used for validation - index must exist).
             name: Name of the feature set to create.
             ftr_config: Feature set configuration dictionary.
+
+        Raises:
+            RuntimeError: If the index does not exist or feature set creation fails.
         """
+        # Check if index exists before creating feature set
+        # Elasticsearch LTR validates feature sets against indices, so the index must exist
+        if not self.check_index_exists(index):
+            raise RuntimeError(
+                f"Cannot create feature set '{name}': index '{index}' does not exist. "
+                f"Please create the index first using create_index('{index}')."
+            )
+
         resp = requests.post(f"{self.elastic_ep}/_featureset/{name}", json=ftr_config)
+
+        # Enhanced error handling for index_not_found_exception in API response
+        if resp.status_code >= 400:
+            try:
+                error_json = resp.json()
+                # Check for index_not_found_exception in the error response
+                if "error" in error_json:
+                    error_detail = error_json.get("error", {})
+                    if isinstance(error_detail, dict):
+                        # Check root cause for index_not_found_exception
+                        root_causes = error_detail.get("root_cause", [])
+                        for root_cause in root_causes:
+                            if root_cause.get("type") == "index_not_found_exception":
+                                missing_index = root_cause.get("index", index)
+                                raise RuntimeError(
+                                    f"Cannot create feature set '{name}': index '{missing_index}' does not exist. "
+                                    f"Please create the index first using create_index('{missing_index}')."
+                                )
+                        # Check caused_by for nested index_not_found_exception
+                        caused_by = error_detail.get("caused_by", {})
+                        if (
+                            isinstance(caused_by, dict)
+                            and caused_by.get("type") == "index_not_found_exception"
+                        ):
+                            missing_index = caused_by.get("index", index)
+                            raise RuntimeError(
+                                f"Cannot create feature set '{name}': index '{missing_index}' does not exist. "
+                                f"Please create the index first using create_index('{missing_index}')."
+                            )
+            except (ValueError, KeyError, TypeError):
+                # If JSON parsing fails or structure is unexpected, fall through to resp_msg
+                pass
+
         resp_msg(msg=f"Create {name} feature set", resp=resp)
 
-    def get_feature_name(self, config, ftr_idx):
+    def get_feature_name(self, config: FeatureConfig, ftr_idx: int) -> str:
         """Get the name of a feature by its index.
 
         Args:
@@ -241,9 +318,17 @@ class ElasticClient(BaseClient):
         Returns:
             str: Name of the feature at the specified index.
         """
+        if isinstance(config, list):
+            raise ValueError("ElasticClient.get_feature_name requires a dict config")
         return config["featureset"]["features"][int(ftr_idx) - 1]["name"]
 
-    def log_query(self, index, featureset, ids, params=None):
+    def log_query(
+        self,
+        index: str,
+        featureset: str,
+        ids: list[str] | None,
+        params: QueryParams,
+    ) -> JSONDictList:
         """Execute a query and log feature values for specified documents.
 
         Uses Elasticsearch's LTR logging functionality to extract feature values
@@ -260,8 +345,7 @@ class ElasticClient(BaseClient):
             list: List of document dictionaries, each with an added "ltr_features"
                 field containing the logged feature values.
         """
-        if params is None:
-            params = {}
+        query_params = params.copy() if params else {}
         params = {
             "query": {
                 "bool": {
@@ -270,7 +354,7 @@ class ElasticClient(BaseClient):
                             "sltr": {
                                 "_name": "logged_features",
                                 "featureset": featureset,
-                                "params": params,
+                                "params": query_params,
                             }
                         }
                     ]
@@ -310,7 +394,13 @@ class ElasticClient(BaseClient):
 
         return matches
 
-    def submit_model(self, featureset, index, model_name, model_payload):
+    def submit_model(
+        self,
+        featureset: str,
+        index: str,
+        model_name: str,
+        model_payload: ModelPayload,
+    ) -> None:
         """Submit a machine learning model to Elasticsearch LTR.
 
         Deletes any existing model with the same name, then creates a new model
@@ -326,12 +416,14 @@ class ElasticClient(BaseClient):
         create_ep = f"{self.elastic_ep}/_featureset/{featureset}/_createmodel"
 
         resp = requests.delete(f"{model_ep}{model_name}")
-        print(f"Delete model {model_name}: {resp.status_code}")
+        logger.info(f"Delete model {model_name}: {resp.status_code}")
 
         resp = requests.post(create_ep, json=model_payload)
         resp_msg(msg=f"Created Model {model_name}", resp=resp)
 
-    def submit_ranklib_model(self, featureset, index, model_name, model_payload):
+    def submit_ranklib_model(
+        self, featureset: str, index: str, model_name: str, model_payload: str
+    ) -> None:
         """Submit a RankLib model to Elasticsearch LTR.
 
         Args:
@@ -348,7 +440,13 @@ class ElasticClient(BaseClient):
         }
         self.submit_model(featureset, index, model_name, params)
 
-    def submit_xgboost_model(self, featureset, index, model_name, model_payload):
+    def submit_xgboost_model(
+        self,
+        featureset: str,
+        index: str,
+        model_name: str,
+        model_payload: ModelPayload,
+    ) -> None:
         """Submit an XGBoost model to Elasticsearch LTR.
 
         Args:
@@ -365,7 +463,13 @@ class ElasticClient(BaseClient):
         }
         self.submit_model(featureset, index, model_name, params)
 
-    def model_query(self, index, model, model_params, query):
+    def model_query(
+        self,
+        index: str,
+        model: str,
+        model_params: QueryParams,
+        query: QueryParams,
+    ) -> JSONDictList:
         """Execute a query using an LTR model for rescoring.
 
         Uses Elasticsearch's rescore functionality to apply an LTR model to
@@ -404,7 +508,7 @@ class ElasticClient(BaseClient):
 
         return matches
 
-    def query(self, index, query):
+    def query(self, index: str, query: QueryParams) -> JSONDictList:
         """Execute a search query against an Elasticsearch index.
 
         Args:
@@ -426,7 +530,7 @@ class ElasticClient(BaseClient):
 
         return matches
 
-    def feature_set(self, index, name):
+    def feature_set(self, index: str, name: str) -> FeatureSetResult:
         """Retrieve a feature set configuration.
 
         Args:
@@ -436,28 +540,51 @@ class ElasticClient(BaseClient):
         Returns:
             tuple: A tuple containing:
                 - mapping: List of dictionaries with feature names
-                - rawFeatureSet: Full feature set configuration dictionary
+                - raw_feature_set: Full feature set configuration dictionary
 
         Raises:
             RuntimeError: If the feature set is not found.
         """
         resp = requests.get(f"{self.elastic_ep}/_featureset/{name}")
 
-        jsonResp = resp.json()
-        if not jsonResp["found"]:
-            raise RuntimeError(f"Unable to find {name}")
+        # Check HTTP status code first
+        if resp.status_code == 404:
+            raise RuntimeError(
+                f"Feature set '{name}' not found. "
+                f"Please ensure the feature set has been created using "
+                f"client.create_featureset(index='{index}', name='{name}', ftr_config=...). "
+                f"If the index doesn't exist, create it first using client.create_index('{index}')."
+            )
+
+        json_resp = resp.json()
+        if not json_resp.get("found", False):
+            # Provide helpful error message with suggestions
+            error_msg = f"Feature set '{name}' not found"
+            if "error" in json_resp:
+                error_detail = json_resp.get("error", {})
+                if isinstance(error_detail, dict):
+                    error_reason = error_detail.get("reason", "")
+                    if error_reason:
+                        error_msg += f": {error_reason}"
+
+            error_msg += (
+                f". Please ensure the feature set has been created using "
+                f"client.create_featureset(index='{index}', name='{name}', ftr_config=...). "
+                f"If the index doesn't exist, create it first using client.create_index('{index}')."
+            )
+            raise RuntimeError(error_msg)
 
         resp_msg(msg=f"Fetched FeatureSet {name}", resp=resp)
 
-        rawFeatureSet = jsonResp["_source"]["featureset"]["features"]
+        raw_feature_set = json_resp["_source"]["featureset"]["features"]
 
         mapping = []
-        for feature in rawFeatureSet:
+        for feature in raw_feature_set:
             mapping.append({"name": feature["name"]})
 
-        return mapping, rawFeatureSet
+        return mapping, raw_feature_set
 
-    def get_doc(self, doc_id, index):
+    def get_doc(self, doc_id: str, index: str) -> JSONDict:
         """Retrieve a single document by ID.
 
         Args:

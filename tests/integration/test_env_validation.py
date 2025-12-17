@@ -5,15 +5,16 @@ This module provides functions to validate that the test environment
 is properly configured before running tests.
 """
 
+from __future__ import annotations
+
 import os
 import shutil
 import socket
 import subprocess
 import sys
-from typing import Optional
 
 
-def check_docker_installed() -> tuple[bool, Optional[str]]:
+def check_docker_installed() -> tuple[bool, str | None]:
     """
     Check if Docker is installed and accessible.
 
@@ -37,7 +38,7 @@ def check_docker_installed() -> tuple[bool, Optional[str]]:
         return False, f"Error checking Docker: {str(e)}"
 
 
-def check_docker_compose() -> tuple[bool, Optional[str]]:
+def check_docker_compose() -> tuple[bool, str | None]:
     """
     Check if Docker Compose is available.
 
@@ -61,9 +62,7 @@ def check_docker_compose() -> tuple[bool, Optional[str]]:
     )
 
 
-def check_port_available(
-    port: int, host: str = "localhost"
-) -> tuple[bool, Optional[str]]:
+def check_port_available(port: int, host: str = "localhost") -> tuple[bool, str | None]:
     """
     Check if a port is available (not in use).
 
@@ -139,9 +138,7 @@ def check_python_packages() -> tuple[bool, list[str]]:
     return len(missing) == 0, missing
 
 
-def check_disk_space(
-    min_gb: float = 1.0, path: str = "."
-) -> tuple[bool, Optional[str]]:
+def check_disk_space(min_gb: float = 1.0, path: str = ".") -> tuple[bool, str | None]:
     """
     Check if there's sufficient disk space available.
 

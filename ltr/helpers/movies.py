@@ -5,9 +5,15 @@ data for indexing into search engines. Includes memoization for efficient repeat
 loading and a generator for bulk indexing operations.
 """
 
+from __future__ import annotations
+
 import json
+from collections.abc import Callable, Iterator
+from typing import Any
 
 from tqdm import tqdm
+
+from ltr.types import JSONDict, NestedJSONDict
 
 
 class Memoize:
@@ -22,16 +28,16 @@ class Memoize:
         memo: Dictionary cache mapping argument tuples to results.
     """
 
-    def __init__(self, f):
+    def __init__(self, f: Callable[..., Any]) -> None:
         """Initialize a Memoize decorator.
 
         Args:
             f: Function to be memoized.
         """
-        self.f = f
-        self.memo = {}
+        self.f: Callable[..., Any] = f
+        self.memo: dict[tuple[Any, ...], Any] = {}
 
-    def __call__(self, *args):
+    def __call__(self, *args: Any) -> Any:
         """Call the memoized function with caching.
 
         Args:
@@ -51,7 +57,7 @@ class Memoize:
 
 
 @Memoize
-def load_movies(json_path):
+def load_movies(json_path: str) -> NestedJSONDict:
     """Load TMDB movie data from JSON file with memoization.
 
     Args:
@@ -67,22 +73,22 @@ def load_movies(json_path):
         return json.load(f)
 
 
-def get_movie(tmdb_id, movies="data/tmdb.json"):
+def get_movie(tmdb_id: str | int, movies_path: str = "data/tmdb.json") -> JSONDict:
     """Get a single movie by TMDB ID.
 
     Args:
         tmdb_id: TMDB movie ID (will be converted to string).
-        movies: Path to TMDB JSON file (default: "data/tmdb.json").
+        movies_path: Path to TMDB JSON file (default: "data/tmdb.json").
 
     Returns:
         dict: Movie data dictionary for the specified ID.
     """
-    movies = load_movies(movies)
-    tmdb_id = str(tmdb_id)
-    return movies[tmdb_id]
+    movies_dict = load_movies(movies_path)
+    tmdb_id_str = str(tmdb_id)
+    return movies_dict[tmdb_id_str]
 
 
-def noop(src_movie, base_doc):
+def noop(src_movie: JSONDict, base_doc: JSONDict) -> JSONDict:
     """No-op enrichment function that returns the base document unchanged.
 
     Args:
@@ -95,7 +101,10 @@ def noop(src_movie, base_doc):
     return base_doc
 
 
-def indexable_movies(enrich=noop, movies="data/tmdb.json"):
+def indexable_movies(
+    enrich: Callable[[JSONDict, JSONDict], JSONDict] = noop,
+    movies_path: str = "data/tmdb.json",
+) -> Iterator[JSONDict]:
     """Generate TMDB movies as indexable documents.
 
     Processes TMDB movie data and yields documents ready for bulk indexing,
@@ -104,7 +113,7 @@ def indexable_movies(enrich=noop, movies="data/tmdb.json"):
     Args:
         enrich: Function to enrich base documents with additional data.
             Takes (src_movie, base_doc) and returns enriched document (default: noop).
-        movies: Path to TMDB JSON file (default: "data/tmdb.json").
+        movies_path: Path to TMDB JSON file (default: "data/tmdb.json").
 
     Yields:
         dict: Indexable document dictionaries containing:
@@ -125,46 +134,47 @@ def indexable_movies(enrich=noop, movies="data/tmdb.json"):
         Movies missing required attributes are skipped silently.
         Progress is displayed using tqdm progress bar.
     """
-    movies = load_movies(movies)
+    movies_dict = load_movies(movies_path)
     idx = 0
-    for movieId, tmdbMovie in tqdm(movies.items(), total=len(movies)):
+    for movie_id, tmdb_movie in tqdm(movies_dict.items(), total=len(movies_dict)):
         try:
-            releaseDate = None
-            if "release_date" in tmdbMovie and len(tmdbMovie["release_date"]) > 0:
-                releaseDate = tmdbMovie["release_date"]
-                releaseYear = releaseDate[0:4]
+            release_date = None
+            release_year = None
+            if "release_date" in tmdb_movie and len(tmdb_movie["release_date"]) > 0:
+                release_date = tmdb_movie["release_date"]
+                release_year = release_date[0:4]
 
             full_poster_path = ""
             if (
-                "poster_path" in tmdbMovie
-                and tmdbMovie["poster_path"] is not None
-                and len(tmdbMovie["poster_path"]) > 0
+                "poster_path" in tmdb_movie
+                and tmdb_movie["poster_path"] is not None
+                and len(tmdb_movie["poster_path"]) > 0
             ):
                 full_poster_path = (
-                    "https://image.tmdb.org/t/p/w185" + tmdbMovie["poster_path"]
+                    "https://image.tmdb.org/t/p/w185" + tmdb_movie["poster_path"]
                 )
 
             base_doc = {
-                "id": movieId,
-                "title": tmdbMovie["title"],
-                "overview": tmdbMovie["overview"],
-                "tagline": tmdbMovie["tagline"],
-                "directors": [director["name"] for director in tmdbMovie["directors"]],
+                "id": movie_id,
+                "title": tmdb_movie["title"],
+                "overview": tmdb_movie["overview"],
+                "tagline": tmdb_movie["tagline"],
+                "directors": [director["name"] for director in tmdb_movie["directors"]],
                 "cast": " ".join(
-                    [castMember["name"] for castMember in tmdbMovie["cast"]]
+                    [castMember["name"] for castMember in tmdb_movie["cast"]]
                 ),
-                "genres": [genre["name"] for genre in tmdbMovie["genres"]],
-                "release_date": releaseDate,
-                "release_year": releaseYear,
+                "genres": [genre["name"] for genre in tmdb_movie["genres"]],
+                "release_date": release_date,
+                "release_year": release_year,
                 "poster_path": full_poster_path,
-                "vote_average": float(tmdbMovie["vote_average"])
-                if "vote_average" in tmdbMovie
+                "vote_average": float(tmdb_movie["vote_average"])
+                if "vote_average" in tmdb_movie
                 else None,
-                "vote_count": int(tmdbMovie["vote_count"])
-                if "vote_count" in tmdbMovie
+                "vote_count": int(tmdb_movie["vote_count"])
+                if "vote_count" in tmdb_movie
                 else 0,
             }
-            yield enrich(tmdbMovie, base_doc)
+            yield enrich(tmdb_movie, base_doc)
             idx += 1
         except KeyError:  # Ignore any movies missing these attributes
             continue

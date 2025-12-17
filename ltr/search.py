@@ -4,9 +4,16 @@ This module provides functions to construct and execute LTR queries
 for Elasticsearch/OpenSearch and Solr search engines.
 """
 
+import json
 import re
 
-baseEsQuery = {
+from ltr.client.base_client import BaseClient
+from ltr.logger import get_logger
+from ltr.types import JSONDict
+
+logger = get_logger(__name__)
+
+base_es_query: JSONDict = {
     "size": 5,
     "query": {
         "sltr": {
@@ -19,37 +26,35 @@ baseEsQuery = {
 }
 
 
-def esLtrQuery(keywords, modelName):
+def es_ltr_query(keywords: str, model_name: str) -> JSONDict:
     """Construct an Elasticsearch/OpenSearch LTR query.
 
     Args:
         keywords: Search keywords string to query for.
-        modelName: Name of the LTR model to use for ranking.
+        model_name: Name of the LTR model to use for ranking.
 
     Returns:
         dict: Elasticsearch/OpenSearch query dictionary with LTR parameters.
 
     Note:
-        Modifies the global baseEsQuery dictionary. The keywordsList parameter
+        Modifies the global base_es_query dictionary. The keywordsList parameter
         is added for compatibility with TSQ (Term Statistics Query).
     """
-    import json
-
-    baseEsQuery["query"]["sltr"]["params"]["keywords"] = keywords
-    baseEsQuery["query"]["sltr"]["params"]["keywordsList"] = [
+    base_es_query["query"]["sltr"]["params"]["keywords"] = keywords
+    base_es_query["query"]["sltr"]["params"]["keywordsList"] = [
         keywords
     ]  # Needed by TSQ for now
-    baseEsQuery["query"]["sltr"]["model"] = modelName
-    print(f"{json.dumps(baseEsQuery)}")
-    return baseEsQuery
+    base_es_query["query"]["sltr"]["model"] = model_name
+    logger.debug(f"ES LTR query: {json.dumps(base_es_query)}")
+    return base_es_query
 
 
-def solrLtrQuery(keywords, modelName):
+def solr_ltr_query(keywords: str, model_name: str) -> JSONDict:
     """Construct a Solr LTR query.
 
     Args:
         keywords: Search keywords string to query for.
-        modelName: Name of the LTR model to use for ranking.
+        model_name: Name of the LTR model to use for ranking.
 
     Returns:
         dict: Solr query dictionary with LTR parameters including:
@@ -68,23 +73,32 @@ def solrLtrQuery(keywords, modelName):
     return {
         "fl": "*,score",
         "rows": 5,
-        "q": f'{{!ltr reRankDocs=30000 model={modelName} efi.keywords="{keywords}" efi.fuzzy_keywords="{fuzzy_keywords}"}}',
+        "q": (
+            f"{{!ltr reRankDocs=30000 model={model_name} "
+            f'efi.keywords="{keywords}" efi.fuzzy_keywords="{fuzzy_keywords}"}}'
+        ),
     }
 
 
-tmdbFields = {
+tmdb_fields: JSONDict = {
     "title": "title",
     "display_fields": ["release_year", "genres", "overview"],
 }
 
 
-def search(client, keywords, modelName, index="tmdb", fields=tmdbFields):
+def search(
+    client: BaseClient,
+    keywords: str,
+    model_name: str,
+    index: str = "tmdb",
+    fields: JSONDict = tmdb_fields,
+) -> None:
     """Execute a Learn-to-Rank search query and display results.
 
     Args:
         client: Search client instance (ElasticClient, OpenSearchClient, or SolrClient).
         keywords: Search keywords string to query for.
-        modelName: Name of the LTR model to use for ranking.
+        model_name: Name of the LTR model to use for ranking.
         index: Name of the search index to query (default: "tmdb").
         fields: Dictionary specifying field mappings:
             - title: Field name for document title
@@ -99,14 +113,16 @@ def search(client, keywords, modelName, index="tmdb", fields=tmdbFields):
         >>> search(client, "action movie", "my_model", index="tmdb")
     """
     if client.name() == "elastic" or client.name() == "opensearch":
-        results = client.query(index, esLtrQuery(keywords, modelName))
+        results = client.query(index, es_ltr_query(keywords, model_name))
     else:
-        q = solrLtrQuery(keywords, modelName)
-        print(q)
+        q = solr_ltr_query(keywords, model_name)
+        logger.debug(f"Solr LTR query: {q}")
         results = client.query(index, q)
 
     ti = fields["title"]
 
+    # Print results to stdout for user-facing output
+    # (keeping print for user-facing display, but logging the query)
     for result in results:
         print("{} ".format(result.get(ti, "N/A")))
         print(f"{result['_score']} ")

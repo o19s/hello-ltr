@@ -658,12 +658,15 @@ def test_model_query(client_class, patch_path, client_type):
             mock_response.json.return_value = {"response": {"docs": [{"id": "1"}]}}
             mock_post.return_value = mock_response
             # Act
-            results = client.model_query("test_index", "mymodel", {}, "test query")
+            results = client.model_query(
+                "test_index", "mymodel", {}, {"q": "test query"}
+            )
             # Assert
             assert len(results) == 1
             call_args = mock_post.call_args
             assert "rq" in call_args[1]["data"]
             assert "ltr model=mymodel" in call_args[1]["data"]["rq"]
+            assert call_args[1]["data"]["q"] == "test query"
     else:
         # OpenSearch/Elastic use client.search()
         with patch(patch_path) as mock_client_class:
@@ -945,7 +948,8 @@ def test_get_doc(client_class, patch_path, client_type):
             }
             mock_post.return_value = mock_response
             # Act
-            doc = client.get_doc("test_index", "123")
+            # Note: get_doc signature is (doc_id, index) to match base class
+            doc = client.get_doc("123", "test_index")
             # Assert
             assert doc["id"] == "123"
             assert doc["title"] == "Test"

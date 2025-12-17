@@ -5,12 +5,22 @@ RankLib XML output, including identifying prediction errors ("whoopsies") and
 analyzing model behavior.
 """
 
+from __future__ import annotations
+
 import xml.etree.ElementTree as ET
+from collections.abc import Iterable
+from typing import Any
 
-from ltr.judgments import _judgments_by_qid
+from ltr.judgments import Judgment, _judgments_by_qid
+from ltr.logger import get_logger
+from ltr.types import FeatureList
+
+logger = get_logger(__name__)
 
 
-def fold_whoopsies(whoopsies1, whoopsies2):
+def fold_whoopsies(
+    whoopsies1: list[Whoopsie], whoopsies2: list[Whoopsie]
+) -> list[Whoopsie]:
     """Merge two lists of whoopsies, sorted by query and magnitude.
 
     Combines whoopsies2 into whoopsies1 and sorts the result first by query ID,
@@ -28,30 +38,30 @@ def fold_whoopsies(whoopsies1, whoopsies2):
     return whoopsies1
 
 
-def dedup_whoopsies(sortedWhoopsies):
+def dedup_whoopsies(sorted_whoopsies: list[Whoopsie]) -> list[Whoopsie]:
     """Deduplicate whoopsies, keeping only the worst error per query.
 
     Takes whoopsies sorted first by query ID, then by magnitude, and returns
     only the worst (highest magnitude) whoopsie for each query.
 
     Args:
-        sortedWhoopsies: List of whoopsie objects, sorted by qid then magnitude.
+        sorted_whoopsies: List of whoopsie objects, sorted by qid then magnitude.
 
     Returns:
         list: List containing only the worst whoopsie per query.
     """
-    mergedWhoopsies = iter(sortedWhoopsies)
+    merged_whoopsies = iter(sorted_whoopsies)
 
     whoopsies = []
     whoopsie = None
-    lastQid = -1
+    last_qid = -1
     try:
         while True:
             # Read ahead to next query
-            while whoopsie is None or lastQid == whoopsie.qid:
-                whoopsie = next(mergedWhoopsies)
+            while whoopsie is None or last_qid == whoopsie.qid:
+                whoopsie = next(merged_whoopsies)
             whoopsies.append(whoopsie)
-            lastQid = whoopsie.qid
+            last_qid = whoopsie.qid
     except StopIteration:
         pass
     return whoopsies
@@ -68,7 +78,7 @@ class MARTModel:
         features: List of feature dictionaries mapping indices to names.
     """
 
-    def __init__(self, ranklib_xml, features):
+    def __init__(self, ranklib_xml: str, features: FeatureList) -> None:
         """Create a MART model from RankLib XML output.
 
         Args:
@@ -78,15 +88,15 @@ class MARTModel:
         """
         # Clean up header
         valid = False
-        linesSplit = ranklib_xml.split("\n")
-        if linesSplit[0] == "## LambdaMART":
-            print("Whoopsies on LAMBDAMart")
+        lines_split = ranklib_xml.split("\n")
+        if lines_split[0] == "## LambdaMART":
+            logger.debug("Processing LambdaMART model")
             valid = True
         if (
-            linesSplit[0] == "## Random Forests"
-            and linesSplit[1] == "## No. of bags = 1"
+            lines_split[0] == "## Random Forests"
+            and lines_split[1] == "## No. of bags = 1"
         ):
-            print("RF with 1 bag")
+            logger.debug("Processing Random Forest model with 1 bag")
             valid = True
 
         if not valid:
@@ -94,38 +104,38 @@ class MARTModel:
                 "Whoopsies only support LambdaMART of Random Forest of bags=1"
             )
 
-        headerAt = 0
-        for line in linesSplit:
+        header_at = 0
+        for line in lines_split:
             if len(line) > 0 and line[0] == "#":
-                headerAt += 1
+                header_at += 1
             else:
                 break
 
-        print(f"Header At {headerAt}")
-        validXml = "\n".join(ranklib_xml.split("\n")[headerAt:])
-        lambdaModel = ET.fromstring(validXml)
+        logger.debug(f"Header at line {header_at}")
+        valid_xml = "\n".join(ranklib_xml.split("\n")[header_at:])
+        lambda_model = ET.fromstring(valid_xml)
 
         # List of tuples (weight, root split)
-        self.trees = []
-        for node in lambdaModel:
+        self.trees: list[tuple[float, Split]] = []
+        for node in lambda_model:
             self.trees.append((float(node.attrib["weight"]), Split(node[0], features)))
 
-    def __str__(self):
+    def __str__(self) -> str:
         """Generate string representation of the model.
 
         Returns:
             str: Human-readable representation of all trees in the ensemble,
                 with each tree separated by blank lines.
         """
-        rVal = ""
+        r_val = ""
         for tree in self.trees:
             weight = tree[0]
             tree = tree[1]
-            rVal += tree.treeString(weight=weight)
-            rVal += "\n\n"
-        return rVal
+            r_val += tree.tree_string(weight=weight)
+            r_val += "\n\n"
+        return r_val
 
-    def whoopsies(self):
+    def whoopsies(self) -> dict[int, QueryWhoopsie]:
         """Identify the most glaring query-document inconsistencies after evaluation.
 
         Analyzes prediction errors ("whoopsies") across the entire ensemble,
@@ -139,31 +149,33 @@ class MARTModel:
         Note:
             Requires eval() to be called first with judgments.
         """
-        whoopsQueries = {}
-        perTreeWhoops = [None for _ in self.trees]
-        for treeNo, tree in enumerate(self.trees):
-            treeWhoopsies = tree[1].whoopsies()
+        whoops_queries: dict[int, QueryWhoopsie] = {}
+        per_tree_whoops: list[Whoopsie | None] = []
+        for _ in self.trees:
+            per_tree_whoops.append(None)
+        for tree_no, tree in enumerate(self.trees):
+            tree_whoopsies = tree[1].whoopsies()
 
-            for whoops in dedup_whoopsies(treeWhoopsies):
-                if whoops.qid not in whoopsQueries:
-                    whoopsQueries[whoops.qid] = QueryWhoopsie(
+            for whoops in dedup_whoopsies(tree_whoopsies):
+                if whoops.qid not in whoops_queries:
+                    whoops_queries[whoops.qid] = QueryWhoopsie(
                         qid=whoops.qid,
-                        totalMagnitude=0,
-                        minGrade=0,
+                        total_magnitude=0,
                         count=0,
-                        maxGrade=0,
-                        perTreeWhoops=perTreeWhoops,
+                        max_grade=0,
+                        min_grade=0,
+                        per_tree_whoops=per_tree_whoops,
                     )
 
-                whoopsQueries[whoops.qid].count += 1
-                whoopsQueries[whoops.qid].totalMagnitude += whoops.magnitude()
-                whoopsQueries[whoops.qid].minGrade = whoops.minGrade
-                whoopsQueries[whoops.qid].maxGrade = whoops.maxGrade
-                whoopsQueries[whoops.qid].perTreeWhoops[treeNo] = whoops
+                whoops_queries[whoops.qid].count += 1
+                whoops_queries[whoops.qid].totalMagnitude += whoops.magnitude()
+                whoops_queries[whoops.qid].minGrade = whoops.minGrade
+                whoops_queries[whoops.qid].maxGrade = whoops.maxGrade
+                whoops_queries[whoops.qid].perTreeWhoops[tree_no] = whoops
 
-        return whoopsQueries
+        return whoops_queries
 
-    def eval(self, judgments):
+    def eval(self, judgments: Iterable[Judgment]) -> None:
         """Evaluate the model against a set of judgments.
 
         Runs judgments through each tree in the ensemble and collects
@@ -190,40 +202,48 @@ class QueryWhoopsie:
         perTreeWhoops: List of Whoopsie objects, one per tree (None if no whoopsie for that tree).
     """
 
-    def __init__(self, qid, totalMagnitude, count, maxGrade, minGrade, perTreeWhoops):
+    def __init__(
+        self,
+        qid: int,
+        total_magnitude: float,
+        count: int,
+        max_grade: int,
+        min_grade: int,
+        per_tree_whoops: list[Whoopsie | None],
+    ) -> None:
         """Initialize a QueryWhoopsie.
 
         Args:
             qid: Query ID.
-            totalMagnitude: Sum of magnitudes of all whoopsies for this query.
+            total_magnitude: Sum of magnitudes of all whoopsies for this query.
             count: Number of whoopsies found for this query.
-            maxGrade: Maximum relevance grade in the judgments for this query.
-            minGrade: Minimum relevance grade in the judgments for this query.
-            perTreeWhoops: List of Whoopsie objects, one per tree (None if no whoopsie for that tree).
+            max_grade: Maximum relevance grade in the judgments for this query.
+            min_grade: Minimum relevance grade in the judgments for this query.
+            per_tree_whoops: List of Whoopsie objects, one per tree (None if no whoopsie for that tree).
         """
-        self.qid = qid
-        self.count = count
-        self.totalMagnitude = totalMagnitude
-        self.maxGrade = maxGrade
-        self.minGrade = minGrade
-        self.perTreeWhoops = perTreeWhoops
+        self.qid: int = qid
+        self.count: int = count
+        self.totalMagnitude: float = total_magnitude
+        self.maxGrade: int = max_grade
+        self.minGrade: int = min_grade
+        self.perTreeWhoops: list[Whoopsie | None] = per_tree_whoops
 
-    def perTreeReport(self):
+    def per_tree_report(self) -> str:
         """Generate a summary report of whoopsies per tree.
 
         Returns:
             str: Semicolon-separated string describing whoopsies for each tree,
                 or "<None>" if no whoopsie exists for that tree.
         """
-        treeSummary = []
-        for treeNo, whoops in enumerate(self.perTreeWhoops):
+        tree_summary = []
+        for tree_no, whoops in enumerate(self.perTreeWhoops):
             if whoops is None:
-                treeSummary.append("<None>")
+                tree_summary.append("<None>")
             else:
-                treeSummary.append(
-                    f"tree:{treeNo}=>{whoops.minGrade}({whoops.minGradeDocId})-{whoops.maxGrade}({whoops.maxGradeDocId})"
+                tree_summary.append(
+                    f"tree:{tree_no}=>{whoops.minGrade}({whoops.minGradeDocId})-{whoops.maxGrade}({whoops.maxGradeDocId})"
                 )
-        return ";".join(treeSummary)
+        return ";".join(tree_summary)
 
 
 class Whoopsie:
@@ -243,28 +263,35 @@ class Whoopsie:
     """
 
     def __init__(
-        self, qid, judgList, minGrade, maxGrade, minGradeDocId, maxGradeDocId, output
-    ):
+        self,
+        qid: int,
+        judg_list: list[Judgment],
+        min_grade: int,
+        max_grade: int,
+        min_grade_doc_id: str,
+        max_grade_doc_id: str,
+        output: float,
+    ) -> None:
         """Initialize a Whoopsie.
 
         Args:
             qid: Query ID.
-            judgList: List of Judgment objects that ended up in this node.
-            minGrade: Minimum relevance grade in judgList.
-            maxGrade: Maximum relevance grade in judgList.
-            minGradeDocId: Document ID with the minimum grade.
-            maxGradeDocId: Document ID with the maximum grade.
+            judg_list: List of Judgment objects that ended up in this node.
+            min_grade: Minimum relevance grade in judg_list.
+            max_grade: Maximum relevance grade in judg_list.
+            min_grade_doc_id: Document ID with the minimum grade.
+            max_grade_doc_id: Document ID with the maximum grade.
             output: Tree node output value (predicted score).
         """
-        self.qid = qid
-        self.judgList = judgList
-        self.minGrade = minGrade
-        self.maxGrade = maxGrade
-        self.minGradeDocId = minGradeDocId
-        self.maxGradeDocId = maxGradeDocId
-        self.output = output
+        self.qid: int = qid
+        self.judgList: list[Judgment] = judg_list
+        self.minGrade: int = min_grade
+        self.maxGrade: int = max_grade
+        self.minGradeDocId: str = min_grade_doc_id
+        self.maxGradeDocId: str = max_grade_doc_id
+        self.output: float = output
 
-    def magnitude(self):
+    def magnitude(self) -> float:
         """Calculate the magnitude of the prediction error.
 
         Returns:
@@ -286,7 +313,7 @@ class EvalReport:
         whoopsies: List of Whoopsie objects representing prediction errors.
     """
 
-    def __init__(self, split):
+    def __init__(self, split: Split) -> None:
         """Initialize an EvalReport for a leaf node.
 
         Args:
@@ -298,49 +325,51 @@ class EvalReport:
         if split.output is None:
             raise ValueError("Split not a leaf")
 
-        self.split = split
-        self.count = len(split.evals)
-        self.whoopsies = []
+        self.split: Split = split
+        self.count: int = len(split.evals)
+        self.whoopsies: list[Whoopsie] = []
 
-        self.computeWhoopsies()
+        self.compute_whoopsies()
 
-    def computeWhoopsies(self):
+    def compute_whoopsies(self) -> None:
         """Compute prediction errors (whoopsies) for this leaf node.
 
         Identifies queries where documents with different relevance grades
         ended up in the same leaf node, indicating inconsistent predictions.
         Results are sorted by magnitude (largest errors first).
         """
-        judgmentsByQid = _judgments_by_qid(self.split.evals)
+        judgments_by_qid = _judgments_by_qid(self.split.evals)
         report = []
-        for qid, judgList in judgmentsByQid.items():
-            if len(judgList) > 1:
-                minGradeDocId = judgList[0].docId
-                maxGradeDocId = judgList[0].docId
-                minGrade = maxGrade = judgList[0].grade
-                for judg in judgList:
-                    if judg.grade < minGrade:
-                        minGrade = judg.grade
-                        minGradeDocId = judg.docId
-                    if judg.grade > maxGrade:
-                        maxGrade = judg.grade
-                        maxGradeDocId = judg.docId
-                if minGrade != maxGrade:
+        for qid, judg_list in judgments_by_qid.items():
+            if len(judg_list) > 1:
+                min_grade_doc_id = judg_list[0].docId
+                max_grade_doc_id = judg_list[0].docId
+                min_grade = max_grade = judg_list[0].grade
+                for judg in judg_list:
+                    if judg.grade < min_grade:
+                        min_grade = judg.grade
+                        min_grade_doc_id = judg.docId
+                    if judg.grade > max_grade:
+                        max_grade = judg.grade
+                        max_grade_doc_id = judg.docId
+                if min_grade != max_grade:
+                    if self.split.output is None:
+                        raise ValueError("Cannot create Whoopsie: split.output is None")
                     report.append(
                         Whoopsie(
                             qid=qid,
-                            judgList=judgList,
-                            minGrade=minGrade,
-                            maxGrade=maxGrade,
-                            minGradeDocId=minGradeDocId,
-                            maxGradeDocId=maxGradeDocId,
+                            judg_list=judg_list,
+                            min_grade=min_grade,
+                            max_grade=max_grade,
+                            min_grade_doc_id=min_grade_doc_id,
+                            max_grade_doc_id=max_grade_doc_id,
                             output=self.split.output,
                         )
                     )
         report.sort(key=lambda x: x.maxGrade - x.minGrade, reverse=True)
         self.whoopsies = report
 
-    def __str__(self):
+    def __str__(self) -> str:
         """Generate string representation of the evaluation report.
 
         Returns:
@@ -349,15 +378,15 @@ class EvalReport:
                 of whoopsies found, and whoopsie_details is a semicolon-separated
                 list of whoopsie information.
         """
-        reportStr = ";".join(
+        report_str = ";".join(
             [
                 f"qid:{report.qid}:{report.minGrade}({report.minGradeDocId})-{report.maxGrade}({report.maxGradeDocId})"
                 for report in self.whoopsies
             ]
         )
-        return f"{self.count}/{len(self.whoopsies)}/{reportStr}"
+        return f"{self.count}/{len(self.whoopsies)}/{report_str}"
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         """Generate string representation for debugging.
 
         Returns:
@@ -382,26 +411,28 @@ class Split:
         evals: List of judgments that ended up in this node during evaluation.
     """
 
-    def __init__(self, splitEl, features):
+    def __init__(self, split_el: ET.Element, features: FeatureList) -> None:
         """Initialize a Split node from XML element.
 
         Args:
-            splitEl: XML ElementTree element representing a tree node.
+            split_el: XML ElementTree element representing a tree node.
             features: List of feature dictionaries mapping indices to names.
         """
-        self.feature = None  # Name of the feature
-        self.featureOrd = None  # ONE BASED, feature ord in the ranklib model
-        self.featureIdx = None  # Zero BASED - use for lookups
-        self.threshold = None
-        self.value = None
-        self.left = None
-        self.right = None
-        self.output = None
-        self.evalReport = None
+        self.feature: str | None = None  # Name of the feature
+        self.featureOrd: int | None = (
+            None  # ONE BASED, feature ord in the ranklib model
+        )
+        self.featureIdx: int | None = None  # Zero BASED - use for lookups
+        self.threshold: float | None = None
+        self.value: Any | None = None
+        self.left: Split | None = None
+        self.right: Split | None = None
+        self.output: float | None = None
+        self.evalReport: EvalReport | None = None
 
-        self.evals = []
+        self.evals: list[Judgment] = []
 
-        for el in splitEl:
+        for el in split_el:
             if el.tag == "feature":
                 self.featureOrd = int(el.text.strip())
                 self.featureIdx = self.featureOrd - 1
@@ -410,9 +441,9 @@ class Split:
                 self.threshold = float(el.text.strip())
             elif el.tag == "split" and "pos" in el.attrib:
                 if el.attrib["pos"] == "right":
-                    self.right = Split(splitEl=el, features=features)
+                    self.right = Split(split_el=el, features=features)
                 elif el.attrib["pos"] == "left":
-                    self.left = Split(splitEl=el, features=features)
+                    self.left = Split(split_el=el, features=features)
                 else:
                     raise ValueError(
                         "Unrecognized Split Pos {}".format(el.attrib["pos"])
@@ -420,7 +451,7 @@ class Split:
             elif el.tag == "output":
                 self.output = float(el.text.strip())
 
-    def clearEvals(self):
+    def clear_evals(self) -> None:
         """Clear evaluation state from this node and all descendants.
 
         Resets evals list and evalReport to None, allowing the tree
@@ -430,11 +461,11 @@ class Split:
             self.evals = []
             self.evalReport = None
         elif self.right:
-            self.right.clearEvals()
+            self.right.clear_evals()
         elif self.left:
-            self.left.clearEvals()
+            self.left.clear_evals()
 
-    def _evalAppend(self, judgment):
+    def _eval_append(self, judgment: Judgment) -> None:
         """Recursively evaluate a judgment through the tree.
 
         Traverses the tree based on feature values, placing the judgment
@@ -449,16 +480,20 @@ class Split:
             self.evals.append(judgment)
             return
 
-        ftrToEval = self.featureIdx
-        featureVal = judgment.features[ftrToEval]
-        if featureVal > self.threshold:
+        ftr_to_eval = self.featureIdx
+        if ftr_to_eval is None:
+            raise ValueError("Cannot evaluate judgment: featureIdx is None")
+        if self.threshold is None:
+            raise ValueError("Cannot evaluate judgment: threshold is None")
+        feature_val = judgment.features[ftr_to_eval]
+        if feature_val > self.threshold:
             assert self.right is not None
-            self.right._evalAppend(judgment)
+            self.right._eval_append(judgment)
         else:
             assert self.left is not None
-            self.left._evalAppend(judgment)
+            self.left._eval_append(judgment)
 
-    def _computeEvalStats(self):
+    def _compute_eval_stats(self) -> None:
         """Compute evaluation statistics for this node and all descendants.
 
         For leaf nodes, creates an EvalReport. For split nodes, recursively
@@ -470,10 +505,10 @@ class Split:
         else:
             assert self.right is not None
             assert self.left is not None
-            self.right._computeEvalStats()
-            self.left._computeEvalStats()
+            self.right._compute_eval_stats()
+            self.left._compute_eval_stats()
 
-    def eval(self, judgments):
+    def eval(self, judgments: Iterable[Judgment]) -> None:
         """Evaluate a set of judgments through this tree.
 
         Clears previous evaluation state, runs all judgments through the tree,
@@ -482,12 +517,12 @@ class Split:
         Args:
             judgments: List of Judgment objects to evaluate.
         """
-        self.clearEvals()
+        self.clear_evals()
         for judgment in judgments:
-            self._evalAppend(judgment)
-        self._computeEvalStats()
+            self._eval_append(judgment)
+        self._compute_eval_stats()
 
-    def whoopsies(self):
+    def whoopsies(self) -> list[Whoopsie]:
         """Get all prediction errors (whoopsies) from this node and descendants.
 
         Returns:
@@ -505,16 +540,16 @@ class Split:
         else:
             assert self.right is not None
             assert self.left is not None
-            rWhoopsies = self.right.whoopsies()
-            lWhoopsies = self.left.whoopsies()
-            return fold_whoopsies(lWhoopsies, rWhoopsies)
+            r_whoopsies = self.right.whoopsies()
+            l_whoopsies = self.left.whoopsies()
+            return fold_whoopsies(l_whoopsies, r_whoopsies)
 
-    def treeString(self, weight=1.0, nestLevel=0):
+    def tree_string(self, weight: float = 1.0, nest_level: int = 0) -> str:
         """Generate a human-readable string representation of the tree.
 
         Args:
             weight: Weight multiplier for leaf output values (default: 1.0).
-            nestLevel: Current nesting level for indentation (default: 0).
+            nest_level: Current nesting level for indentation (default: 0).
 
         Returns:
             str: Python-like code representation of the decision tree.
@@ -523,69 +558,73 @@ class Split:
             Includes evaluation report information if available.
         """
 
-        def idt(nestLevel):
+        def idt(nest_level: int) -> str:
             """Generate indentation string for a given nesting level.
 
             Args:
-                nestLevel: Nesting level.
+                nest_level: Nesting level.
 
             Returns:
                 str: Indentation string (2 spaces per level).
             """
-            # return ("%s" % nestLevel) * 2 * nestLevel
-            return (" ") * 2 * nestLevel
+            # return ("%s" % nest_level) * 2 * nest_level
+            return (" ") * 2 * nest_level
 
-        rVal = ""
+        r_val = ""
         if self.feature:
-            rVal += idt(nestLevel)
-            rVal += f"if {self.feature} > {self.threshold}:\n"
+            r_val += idt(nest_level)
+            r_val += f"if {self.feature} > {self.threshold}:\n"
             assert self.right is not None
             assert self.left is not None
             if self.right:
-                rVal += self.right.treeString(weight=weight, nestLevel=nestLevel + 1)
+                r_val += self.right.tree_string(
+                    weight=weight, nest_level=nest_level + 1
+                )
             if self.left:
-                rVal += idt(nestLevel)
-                rVal += "else:\n"
-                rVal += self.left.treeString(weight=weight, nestLevel=nestLevel + 1)
+                r_val += idt(nest_level)
+                r_val += "else:\n"
+                r_val += self.left.tree_string(weight=weight, nest_level=nest_level + 1)
         if self.output:
-            rVal += idt(nestLevel)
-            rVal += f"<= {self.output * weight:.4f}"
+            r_val += idt(nest_level)
+            r_val += f"<= {self.output * weight:.4f}"
             if self.evalReport:
-                rVal += f"({self.evalReport})"
-            rVal += "\n"
-        return rVal
+                r_val += f"({self.evalReport})"
+            r_val += "\n"
+        return r_val
 
 
-def dump_model(modelName, features):
+def dump_model(model_name: str, features: FeatureList) -> None:
     """Print a model in Python-like code format.
 
     Loads a RankLib model from disk and prints a human-readable representation
     of all trees in the ensemble.
 
     Args:
-        modelName: Name of the model. The model file will be read from
-            data/{modelName}_model.txt.
+        model_name: Name of the model. The model file will be read from
+            data/{model_name}_model.txt.
         features: List of feature dictionaries, where the 0th item corresponds
             to RankLib feature 1. Each feature must have a 'name' parameter.
     """
-    with open(f"data/{modelName}_model.txt") as f:
-        ensembleXml = f.read()
-        model = MARTModel(ensembleXml, features)
+    with open(f"data/{model_name}_model.txt") as f:
+        ensemble_xml = f.read()
+        model = MARTModel(ensemble_xml, features)
         for tree in model.trees:
             weight = tree[0]
             tree = tree[1]
-            print(tree.treeString(weight=weight))
+            logger.debug(tree.tree_string(weight=weight))
 
 
-def eval_model(modelName, features, judgments):
+def eval_model(
+    model_name: str, features: FeatureList, judgments: Iterable[Judgment]
+) -> MARTModel:
     """Evaluate a model against a set of judgments and return the model.
 
     Loads a RankLib model from disk, evaluates it against the provided judgments,
     and returns the model with evaluation statistics populated.
 
     Args:
-        modelName: Name of the model. The model file will be read from
-            data/{modelName}_model.txt.
+        model_name: Name of the model. The model file will be read from
+            data/{model_name}_model.txt.
         features: List of feature dictionaries, where the 0th item corresponds
             to RankLib feature 1. Each feature must have a 'name' parameter.
         judgments: Iterable of Judgment objects to evaluate.
@@ -593,9 +632,9 @@ def eval_model(modelName, features, judgments):
     Returns:
         MARTModel: Model object with evaluation statistics populated.
     """
-    judgmentList = list(judgments)
-    with open(f"data/{modelName}_model.txt") as f:
-        ensembleXml = f.read()
-        model = MARTModel(ensembleXml, features)
-        model.eval(judgmentList)
+    judgment_list = list(judgments)
+    with open(f"data/{model_name}_model.txt") as f:
+        ensemble_xml = f.read()
+        model = MARTModel(ensemble_xml, features)
+        model.eval(judgment_list)
         return model

@@ -4,6 +4,12 @@ This module provides classes for representing search sessions and documents
 in click model analysis, including click and conversion tracking.
 """
 
+from __future__ import annotations
+
+from typing import Any
+
+from ltr.types import SessionTuple, SessionTupleList
+
 
 class Doc:
     """Represents a document in a search result with click and conversion information.
@@ -14,27 +20,31 @@ class Doc:
         conversion: Boolean indicating whether a conversion occurred (default: False).
     """
 
-    def __init__(self, click, doc_id, conversion=False):
+    def __init__(self, click: bool, doc_id: Any, conversion: bool = False) -> None:
         """Initialize a Doc.
 
         Args:
             click: Boolean indicating whether this document was clicked.
             doc_id: Document identifier.
-            conversion: Boolean indicating whether a conversion occurred (default: False).
+            conversion: Boolean indicating whether a conversion occurred
+                (default: False).
         """
-        self.click = click
-        self.doc_id = doc_id
-        self.conversion = conversion
+        self.click: bool = click
+        self.doc_id: Any = doc_id
+        self.conversion: bool = conversion
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         """Generate developer-friendly string representation.
 
         Returns:
             str: String representation suitable for debugging.
         """
-        return f"Doc(doc_id={self.doc_id}, click={self.click}, conversion={self.conversion})"
+        return (
+            f"Doc(doc_id={self.doc_id}, click={self.click}, "
+            f"conversion={self.conversion})"
+        )
 
-    def __str__(self):
+    def __str__(self) -> str:
         """Generate user-friendly string representation.
 
         Returns:
@@ -57,7 +67,7 @@ class Session:
         ValueError: If the same document appears multiple times in the results.
     """
 
-    def __init__(self, query, docs):
+    def __init__(self, query: Any, docs: list[Doc]) -> None:
         """Initialize a Session.
 
         Args:
@@ -67,8 +77,8 @@ class Session:
         Raises:
             ValueError: If the same document appears multiple times in the results.
         """
-        self.query = query
-        self.docs = docs
+        self.query: Any = query
+        self.docs: list[Doc] = docs
         # Check if docs are unique
         docset = set()
         for doc in docs:
@@ -78,7 +88,7 @@ class Session:
                 )
             docset.add(doc.doc_id)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         """Generate developer-friendly string representation.
 
         Returns:
@@ -86,7 +96,7 @@ class Session:
         """
         return f"Session(query={self.query}, docs={self.docs})"
 
-    def __str__(self):
+    def __str__(self) -> str:
         """Generate user-friendly string representation.
 
         Returns:
@@ -95,7 +105,7 @@ class Session:
         return f"({self.query}, ({self.docs}))"
 
 
-def build_one(sess_tuple):
+def build_one(sess_tuple: SessionTuple) -> Session:
     """Build a Session from a tuple representation.
 
     Converts a tuple format into a Session object. The tuple format is:
@@ -108,7 +118,8 @@ def build_one(sess_tuple):
     Args:
         sess_tuple: Tuple of (query, list of doc tuples).
             Example: ('A', ((1, True), (2, False), (3, True), (0, False)))
-            With conversions: ('A', ((1, True, 0.9), (2, False, 0.8), (3, True, 1.0), (0, False)))
+            With conversions: ('A', ((1, True, 0.9), (2, False, 0.8),
+                (3, True, 1.0), (0, False)))
 
     Returns:
         Session: Session object constructed from the tuple data.
@@ -123,7 +134,7 @@ def build_one(sess_tuple):
     return Session(query=query, docs=docs)
 
 
-def build(sess_tuples):
+def build(sess_tuples: SessionTupleList) -> list[Session]:
     """Build multiple Session objects from a list of tuple representations.
 
     Args:

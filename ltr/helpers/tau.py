@@ -4,8 +4,13 @@ This module provides functions for calculating Kendall's Tau, a measure of
 rank correlation between two rankings. Higher values indicate better agreement.
 """
 
+from __future__ import annotations
 
-def sign(a):
+from collections.abc import Iterator
+from typing import Any
+
+
+def sign(a: float) -> int:
     """Get the sign of a number.
 
     Args:
@@ -17,7 +22,9 @@ def sign(a):
     return (a > 0) - (a < 0)
 
 
-def pairs_in_order(ranking, both_ways=True):
+def pairs_in_order(
+    ranking: list[Any], both_ways: bool = True
+) -> Iterator[tuple[Any, Any, int]]:
     """Generate all ordered pairs from a ranking.
 
     Args:
@@ -41,7 +48,7 @@ def pairs_in_order(ranking, both_ways=True):
                     yield val2, val1, sign(idx1 - idx2)
 
 
-def tau(rank1, rank2, at=4):
+def tau(rank1: list[Any], rank2: list[Any], at: int = 4) -> float:
     """Calculate Kendall's Tau rank correlation coefficient.
 
     Measures the correlation between two rankings by counting concordant and
@@ -93,7 +100,7 @@ def tau(rank1, rank2, at=4):
     return (concords - discords) / ((at * (at - 1)) / 2)
 
 
-def avg_tau(rank1, rank2, at=4):
+def avg_tau(rank1: list[Any], rank2: list[Any], at: int = 4) -> float:
     """Calculate average Kendall's Tau across top-k positions.
 
     Computes the average of Kendall's Tau coefficients calculated at each

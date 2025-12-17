@@ -5,9 +5,13 @@ version of the Dynamic Bayesian Network that achieves similar accuracy but
 can be solved directly without iterative Expectation Maximization.
 """
 
-from collections import Counter, defaultdict
+from __future__ import annotations
 
-from ltr.clickmodels.session import build
+from collections import Counter, defaultdict
+from collections.abc import Iterator
+
+from ltr.clickmodels.session import Doc, Session, build
+from ltr.types import QueryDocPair
 
 
 class Model:
@@ -18,20 +22,20 @@ class Model:
         attracts: Dictionary mapping (query, doc_id) tuples to attractiveness values.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize an S-DBN model with default values.
 
         Initializes satisfaction and attractiveness values to 0.1 for all
         query-document pairs.
         """
         # Satisfaction per query-doc
-        self.satisfacts = defaultdict(lambda: 0.1)
+        self.satisfacts: defaultdict[QueryDocPair, float] = defaultdict(lambda: 0.1)
 
         # Attractiveness per query-doc
-        self.attracts = defaultdict(lambda: 0.1)
+        self.attracts: defaultdict[QueryDocPair, float] = defaultdict(lambda: 0.1)
 
 
-def reverse_enumerate(lst):
+def reverse_enumerate(lst: list[Doc]) -> Iterator[tuple[int, Doc]]:
     """Enumerate a list in reverse order.
 
     Args:
@@ -43,7 +47,7 @@ def reverse_enumerate(lst):
     return zip(range(len(lst) - 1, -1, -1), reversed(lst))
 
 
-def sdbn(sessions):
+def sdbn(sessions: list[Session]) -> Model:
     """Train an Simplified Dynamic Bayesian Network click model from search sessions.
 
     The Simplified Dynamic Bayesian Network (S-DBN) can be solved directly without
@@ -56,23 +60,24 @@ def sdbn(sessions):
     - Satisfaction: Occurs when a document is the last document clicked in a session
 
     Args:
-        sessions: List of search session objects containing queries and clicked documents.
+        sessions: List of search session objects containing queries and
+            clicked documents.
 
     Returns:
         Model: Trained S-DBN model with satisfaction and attractiveness values.
     """
     model = Model()
-    NO_CLICK = -1
+    no_click = -1
     counts = Counter()
     clicks = Counter()
     last_clicks = Counter()
     for session in sessions:
-        last_click = NO_CLICK
+        last_click = no_click
         for rank, doc in reverse_enumerate(session.docs):
-            if last_click == NO_CLICK and doc.click:
+            if last_click == no_click and doc.click:
                 last_click = rank
 
-            if last_click != NO_CLICK:
+            if last_click != no_click:
                 query_doc = (session.query, doc.doc_id)
                 counts[query_doc] += 1
 
@@ -97,16 +102,16 @@ def sdbn(sessions):
 if __name__ == "__main__":
     sessions = build(
         [
-            ("A", ((1, True), (2, False), (3, True), (0, False))),
-            ("B", ((5, False), (2, True), (3, True), (0, False))),
-            ("A", ((1, False), (2, False), (3, True), (0, False))),
-            ("B", ((1, False), (2, False), (3, False), (9, True))),
-            ("A", ((9, False), (2, False), (1, True), (0, True))),
-            ("B", ((6, True), (2, False), (3, True), (1, False))),
-            ("A", ((7, False), (4, True), (1, False), (3, False))),
-            ("B", ((8, True), (2, False), (3, True), (1, False))),
-            ("A", ((1, False), (4, True), (2, False), (3, False))),
-            ("B", ((7, True), (4, False), (5, True), (1, True))),
+            ("A", [(1, True), (2, False), (3, True), (0, False)]),
+            ("B", [(5, False), (2, True), (3, True), (0, False)]),
+            ("A", [(1, False), (2, False), (3, True), (0, False)]),
+            ("B", [(1, False), (2, False), (3, False), (9, True)]),
+            ("A", [(9, False), (2, False), (1, True), (0, True)]),
+            ("B", [(6, True), (2, False), (3, True), (1, False)]),
+            ("A", [(7, False), (4, True), (1, False), (3, False)]),
+            ("B", [(8, True), (2, False), (3, True), (1, False)]),
+            ("A", [(1, False), (4, True), (2, False), (3, False)]),
+            ("B", [(7, True), (4, False), (5, True), (1, True)]),
         ]
     )
     model = sdbn(sessions)

@@ -1,11 +1,24 @@
 """HTTP response handling and error reporting utilities.
 
 This module provides functions for handling HTTP responses from search engines,
-printing status messages, and optionally raising errors for non-2xx status codes.
+logging status messages, and optionally raising errors for non-2xx status codes.
 """
 
+from __future__ import annotations
 
-def resp_msg(msg, resp, throw=True, ignore=None):
+from typing import Any
+
+from ltr.logger import get_logger
+
+logger = get_logger(__name__)
+
+
+def resp_msg(
+    msg: str,
+    resp: Any,
+    throw: bool = True,
+    ignore: list[int] | None = None,
+) -> None:
     """Print response message and optionally raise error for non-2xx status codes.
 
     Args:
@@ -20,6 +33,9 @@ def resp_msg(msg, resp, throw=True, ignore=None):
     if ignore is None:
         ignore = []
     rsc = resp.status_code
-    print(f"{msg} [Status: {rsc}]")
+    if rsc >= 400:
+        logger.error(f"{msg} [Status: {rsc}]")
+    else:
+        logger.info(f"{msg} [Status: {rsc}]")
     if rsc >= 400 and rsc not in ignore and throw:
         raise RuntimeError(resp.text)

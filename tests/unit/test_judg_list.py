@@ -135,13 +135,15 @@ class JudgmentsTestCase(unittest.TestCase):
         try:
             with judgments_open(judgment_file, "w") as judg_list:
                 judg_list.write(
-                    judgment=Judgment(keywords="rambo", qid=1, grade=4, docId=1234)
+                    judgment=Judgment(keywords="rambo", qid=1, grade=4, doc_id="1234")
                 )
                 judg_list.write(
-                    judgment=Judgment(keywords="rambo", qid=1, grade=3, docId=5670)
+                    judgment=Judgment(keywords="rambo", qid=1, grade=3, doc_id="5670")
                 )
                 judg_list.write(
-                    judgment=Judgment(keywords="rocky ii", qid=2, grade=1, docId=9876)
+                    judgment=Judgment(
+                        keywords="rocky ii", qid=2, grade=1, doc_id="9876"
+                    )
                 )
 
             read_judgments = 0

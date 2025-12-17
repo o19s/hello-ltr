@@ -5,15 +5,23 @@ RankLib (via RankyMcRankFace.jar), saving models to search engines, and
 performing feature selection.
 """
 
+from __future__ import annotations
+
 import os
 import shlex
 import subprocess
+from typing import Any
 
 from ltr import download
-from ltr.helpers.ranklib_result import parse_training_log
+from ltr.client.base_client import BaseClient
+from ltr.helpers.ranklib_result import RanklibResult, parse_training_log
+from ltr.judgments import Judgment
+from ltr.logger import get_logger
+
+logger = get_logger(__name__)
 
 
-def check_for_rankymcrankface():
+def check_for_rankymcrankface() -> str:
     """Ensure RankyMcRankFace.jar is available in the system temp directory.
 
     Downloads the RankyMcRankFace.jar file if it doesn't already exist.
@@ -33,7 +41,7 @@ def check_for_rankymcrankface():
     return os.path.join(tempdir, "RankyMcRankFace.jar")
 
 
-def write_training_set(training_set):
+def write_training_set(training_set: list[Judgment]) -> str:
     """Write training set judgments to a temporary file in RankLib format.
 
     Args:
@@ -52,25 +60,25 @@ def write_training_set(training_set):
 
     tempdir = tempfile.gettempdir()
     train_path = os.path.join(tempdir, "training.txt")
-    with open(train_path, "w") as outF:
-        judgments_to_file(outF, training_set)
+    with open(train_path, "w") as out_f:
+        judgments_to_file(out_f, training_set)
     return train_path
 
 
-def trainModel(
-    training_set,
-    out,
-    features=None,
-    kcv=None,
-    ranker=6,
-    leafs=10,
-    trees=50,
-    frate=1.0,
-    shrinkage=0.1,
-    srate=1.0,
-    bag=1,
-    metric2t="DCG@10",
-):
+def train_model(
+    training_set: list[Judgment],
+    out: str,
+    features: list[int] | None = None,
+    kcv: int | None = None,
+    ranker: int = 6,
+    leafs: int = 10,
+    trees: int = 50,
+    frate: float = 1.0,
+    shrinkage: float = 0.1,
+    srate: float = 1.0,
+    bag: int = 1,
+    metric2t: str = "DCG@10",
+) -> RanklibResult:
     """Train a RankLib model using the provided training set.
 
     Args:
@@ -118,7 +126,7 @@ def trainModel(
     if kcv is not None and kcv > 0:
         cmd += f" -kcv {kcv} "
 
-    print(f"Running {cmd}")
+    logger.info(f"Running RankLib command: {cmd}")
     result = subprocess.run(
         shlex.split(cmd),
         capture_output=True,
@@ -128,38 +136,45 @@ def trainModel(
     return parse_training_log(result)
 
 
-def save_model(client, modelName, modelFile, index, featureSet):
+def save_model(
+    client: BaseClient,
+    model_name: str,
+    model_file: str,
+    index: str,
+    feature_set: str,
+) -> None:
     """Save a trained RankLib model to the search engine.
 
     Args:
         client: Search client instance (ElasticClient, OpenSearchClient, or SolrClient).
-        modelName: Name to assign to the model in the search engine.
-        modelFile: Path to the file containing the trained model definition.
+        model_name: Name to assign to the model in the search engine.
+        model_file: Path to the file containing the trained model definition.
         index: Name of the search index where the model will be stored.
-        featureSet: Name of the feature set associated with this model.
+        feature_set: Name of the feature set associated with this model.
     """
-    with open(modelFile) as src:
+    with open(model_file) as src:
         definition = src.read()
-        client.submit_ranklib_model(featureSet, index, modelName, definition)
+        client.submit_ranklib_model(feature_set, index, model_name, definition)
 
 
 def train(
-    client,
-    training_set,
-    modelName,
-    featureSet,
-    index,
-    features=None,
-    kcv=None,
-    metric2t="DCG@10",
-    leafs=10,
-    trees=50,
-    frate=1.0,
-    srate=1.0,
-    bag=1,
-    ranker=6,
-    shrinkage=0.1,
-):
+    client: BaseClient,
+    training_set: list[Judgment],
+    model_name: str,
+    feature_set: str,
+    index: str,
+    features: list[int] | None = None,
+    kcv: int | None = None,
+    metric2t: str = "DCG@10",
+    leafs: int = 10,
+    trees: int = 50,
+    frate: float = 1.0,
+    srate: float = 1.0,
+    bag: int = 1,
+    ranker: int = 6,
+    shrinkage: float = 0.1,
+    **kwargs: Any,
+) -> RanklibResult:
     """Train a RankLib model and store it in the search engine.
 
     This function trains a model using RankLib, validates the training results,
@@ -168,8 +183,8 @@ def train(
     Args:
         client: Search client instance (ElasticClient, OpenSearchClient, or SolrClient).
         training_set: List of Judgment objects for training.
-        modelName: Name to assign to the trained model.
-        featureSet: Name of the feature set to use with this model.
+        model_name: Name to assign to the trained model.
+        feature_set: Name of the feature set to use with this model.
         index: Name of the search index where the model will be stored.
         features: Optional list of feature indices to use. If None, all features are used.
         kcv: Optional integer for k-fold cross-validation. If provided, cross-validation
@@ -188,11 +203,35 @@ def train(
 
     Raises:
         RuntimeError: If training fails or produces no training logs.
+        TypeError: If camelCase parameter names are used (e.g., featureSet instead of feature_set).
     """
-    modelFile = f"data/{modelName}_model.txt"
-    ranklibResult = trainModel(
+    # Check for common camelCase parameter name mistakes
+    camel_case_mappings = {
+        "featureSet": "feature_set",
+        "modelName": "model_name",
+        "featureCost": "feature_cost",
+    }
+
+    for camel_name, snake_name in camel_case_mappings.items():
+        if camel_name in kwargs:
+            raise TypeError(
+                f"{train.__name__}() got an unexpected keyword argument '{camel_name}'. "
+                f"Did you mean '{snake_name}'? The codebase uses snake_case for parameter names."
+            )
+
+    # Reject any unexpected keyword arguments
+    if kwargs:
+        unexpected = ", ".join(f"'{k}'" for k in kwargs)
+        raise TypeError(
+            f"{train.__name__}() got unexpected keyword argument(s): {unexpected}. "
+            f"Valid parameters are: model_name, feature_set, index, features, kcv, metric2t, "
+            f"leafs, trees, frate, srate, bag, ranker, shrinkage"
+        )
+
+    model_file = f"data/{model_name}_model.txt"
+    ranklib_result = train_model(
         training_set,
-        out=modelFile,
+        out=model_file,
         metric2t=metric2t,
         features=features,
         leafs=leafs,
@@ -205,35 +244,36 @@ def train(
         shrinkage=shrinkage,
     )
 
-    if len(ranklibResult.trainingLogs) == 0:
+    if len(ranklib_result.trainingLogs) == 0:
         raise RuntimeError(
             "Training failed: RankLib did not produce any training logs. This may indicate an error in the training data or RankLib execution."
         )
 
     if not kcv:
         # Ranklib doesn't save a model to disk if KCV is used
-        save_model(client, modelName, modelFile, index, featureSet)
-        print("Model saved")
+        save_model(client, model_name, model_file, index, feature_set)
+        logger.info("Model saved successfully")
 
-    return ranklibResult
+    return ranklib_result
 
 
 def feature_search(
-    client,
-    training_set,
-    featureSet,
-    features=None,
-    featureCost=0.0,
-    metric2t="DCG@10",
-    kcv=5,
-    leafs=10,
-    trees=10,
-    frate=1.0,
-    srate=1.0,
-    bag=1,
-    ranker=6,
-    shrinkage=0.1,
-):
+    client: BaseClient,
+    training_set: list[Judgment],
+    feature_set: str,
+    features: list[int] | None = None,
+    feature_cost: float = 0.0,
+    metric2t: str = "DCG@10",
+    kcv: int = 5,
+    leafs: int = 10,
+    trees: int = 10,
+    frate: float = 1.0,
+    srate: float = 1.0,
+    bag: int = 1,
+    ranker: int = 6,
+    shrinkage: float = 0.1,
+    **kwargs: Any,
+) -> tuple[RanklibResult | None, dict[int, float]]:
     """Perform feature selection by testing all combinations of features.
 
     This function exhaustively tests all combinations of features to find
@@ -243,9 +283,9 @@ def feature_search(
     Args:
         client: Search client instance (ElasticClient, OpenSearchClient, or SolrClient).
         training_set: List of Judgment objects for training.
-        featureSet: Name of the feature set to use.
+        feature_set: Name of the feature set to use.
         features: List of feature indices to test combinations from. Required.
-        featureCost: Cost penalty for using more features (0.0 = no penalty, default: 0.0).
+        feature_cost: Cost penalty for using more features (0.0 = no penalty, default: 0.0).
             Higher values penalize larger feature sets.
         metric2t: Metric to optimize during training (default: "DCG@10").
         kcv: Number of folds for k-fold cross-validation (default: 5).
@@ -259,13 +299,14 @@ def feature_search(
 
     Returns:
         tuple: A tuple containing:
-            - bestCombo: RanklibResult object for the best performing feature combination,
+            - best_combo: RanklibResult object for the best performing feature combination,
               or None if no valid combination was found.
-            - metricPerFeature: Dictionary mapping feature index to average metric value
+            - metric_per_feature: Dictionary mapping feature index to average metric value
               when that feature is included. Features not tested have value -1.
 
     Raises:
         ValueError: If features parameter is None or empty.
+        TypeError: If camelCase parameter names are used (e.g., featureSet instead of feature_set).
 
     Note:
         This function tests all combinations from size 1 to len(features),
@@ -274,24 +315,47 @@ def feature_search(
     """
     from itertools import combinations
 
+    # Check for common camelCase parameter name mistakes
+    camel_case_mappings = {
+        "featureSet": "feature_set",
+        "modelName": "model_name",
+        "featureCost": "feature_cost",
+    }
+
+    for camel_name, snake_name in camel_case_mappings.items():
+        if camel_name in kwargs:
+            raise TypeError(
+                f"{feature_search.__name__}() got an unexpected keyword argument '{camel_name}'. "
+                f"Did you mean '{snake_name}'? The codebase uses snake_case for parameter names."
+            )
+
+    # Reject any unexpected keyword arguments
+    if kwargs:
+        unexpected = ", ".join(f"'{k}'" for k in kwargs)
+        raise TypeError(
+            f"{feature_search.__name__}() got unexpected keyword argument(s): {unexpected}. "
+            f"Valid parameters are: feature_set, features, feature_cost, metric2t, kcv, leafs, "
+            f"trees, frate, srate, bag, ranker, shrinkage"
+        )
+
     if features is None:
         raise ValueError("features parameter is required for feature_search")
 
-    modelFile = "data/{}_model.txt".format("temp")
+    model_file = "data/{}_model.txt".format("temp")
     best = 0
-    bestCombo = None
-    metricPerFeature = {}
+    best_combo = None
+    metric_per_feature = {}
     for i in range(1, max(features) + 1):
-        metricPerFeature[i] = [0, 0]  # count, sum
+        metric_per_feature[i] = [0, 0]  # count, sum
     for i in range(1, len(features) + 1):
         for combination in combinations(features, i):
-            cost = (1.0 - featureCost) ** (len(combination) - 1)
-            ranklibResult = trainModel(
+            cost = (1.0 - feature_cost) ** (len(combination) - 1)
+            ranklib_result = train_model(
                 training_set=training_set,
-                out=modelFile,
+                out=model_file,
                 kcv=kcv,
                 metric2t=metric2t,
-                features=combination,
+                features=list(combination),
                 leafs=leafs,
                 trees=trees,
                 ranker=ranker,
@@ -300,36 +364,40 @@ def feature_search(
                 frate=frate,
                 shrinkage=shrinkage,
             )
-            kcvTestMetric = ranklibResult.kcvTestAvg
-            if kcvTestMetric is None:
-                print(
-                    f"Warning: Training failed for features {repr(list(combination))}, skipping..."
+            kcv_test_metric = ranklib_result.kcvTestAvg
+            if kcv_test_metric is None:
+                logger.warning(
+                    f"Training failed for features {repr(list(combination))}, "
+                    "skipping..."
                 )
                 continue
-            if featureCost != 0.0:
-                print(
-                    f"Trying features {repr(list(combination))} TEST {metric2t}={kcvTestMetric} after cost {kcvTestMetric * cost}"
+            if feature_cost != 0.0:
+                logger.info(
+                    f"Trying features {repr(list(combination))} TEST "
+                    f"{metric2t}={kcv_test_metric} after cost "
+                    f"{kcv_test_metric * cost}"
                 )
             else:
-                print(
-                    f"Trying features {repr(list(combination))} TEST {metric2t}={kcvTestMetric}"
+                logger.info(
+                    f"Trying features {repr(list(combination))} TEST "
+                    f"{metric2t}={kcv_test_metric}"
                 )
 
-            if kcvTestMetric > best:
-                best = kcvTestMetric
-                bestCombo = ranklibResult
+            if kcv_test_metric > best:
+                best = kcv_test_metric
+                best_combo = ranklib_result
 
             for feature in combination:
-                metricPerFeature[feature][0] += 1
-                metricPerFeature[feature][1] += ranklibResult.kcvTestAvg
+                metric_per_feature[feature][0] += 1
+                metric_per_feature[feature][1] += ranklib_result.kcvTestAvg
 
     # Compute avg metric with each feature
     for i in range(1, max(features) + 1):
-        if metricPerFeature[i][0] > 0:
-            metricPerFeature[i] = (
-                metricPerFeature[i][1] / metricPerFeature[i][0]
+        if metric_per_feature[i][0] > 0:
+            metric_per_feature[i] = (
+                metric_per_feature[i][1] / metric_per_feature[i][0]
             )  # count, sum
         else:
-            metricPerFeature[i] = -1
+            metric_per_feature[i] = -1
 
-    return bestCombo, metricPerFeature
+    return best_combo, metric_per_feature

@@ -4,13 +4,24 @@ This module provides the Solr-specific implementation of the BaseClient
 interface, handling Solr API calls and response formatting for LTR operations.
 """
 
+from __future__ import annotations
+
 import os
 import re
+from collections.abc import Callable, Iterable, Iterator
 
 import requests
 
 from ltr.helpers.convert import convert
 from ltr.helpers.handle_resp import resp_msg
+from ltr.types import (
+    FeatureConfig,
+    FeatureSetResult,
+    JSONDict,
+    JSONDictList,
+    ModelPayload,
+    QueryParams,
+)
 
 from .base_client import BaseClient
 
@@ -29,14 +40,14 @@ class SolrClient(BaseClient):
         host: Hostname for Solr server.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize a SolrClient.
 
         Sets up connection to Solr server, using Docker hostname if LTR_DOCKER
         environment variable is set, otherwise connecting to localhost.
         """
-        self.docker = os.environ.get("LTR_DOCKER") is not None
-        self.solr = requests.Session()
+        self.docker: bool = os.environ.get("LTR_DOCKER") is not None
+        self.solr: requests.Session = requests.Session()
 
         if self.docker:
             self.host = "solr"
@@ -45,7 +56,7 @@ class SolrClient(BaseClient):
             self.host = "localhost"
             self.solr_base_ep = "http://localhost:8983/solr"
 
-    def get_host(self):
+    def get_host(self) -> str:
         """Get the Solr hostname.
 
         Returns:
@@ -53,7 +64,7 @@ class SolrClient(BaseClient):
         """
         return self.host
 
-    def name(self):
+    def name(self) -> str:
         """Get the client name.
 
         Returns:
@@ -61,7 +72,7 @@ class SolrClient(BaseClient):
         """
         return "solr"
 
-    def check_index_exists(self, index):
+    def check_index_exists(self, index: str) -> bool:
         """Check if a Solr core (index) exists.
 
         Args:
@@ -75,7 +86,7 @@ class SolrClient(BaseClient):
         )
         return bool(re.search("instanceDir", str(resp.content)))
 
-    def delete_index(self, index):
+    def delete_index(self, index: str) -> None:
         """Delete a Solr core (index).
 
         Unloads the core and deletes its index, data directory, and instance directory.
@@ -94,7 +105,7 @@ class SolrClient(BaseClient):
         resp = requests.get(f"{self.solr_base_ep}/admin/cores?", params=params)
         resp_msg(msg=f"Deleted index {index}", resp=resp, throw=False)
 
-    def create_index(self, index):
+    def create_index(self, index: str) -> None:
         """Create a Solr core (index) from a configset.
 
         Creates a new core using a configset with the same name as the index.
@@ -113,7 +124,11 @@ class SolrClient(BaseClient):
         resp = requests.get(f"{self.solr_base_ep}/admin/cores?", params=params)
         resp_msg(msg=f"Created index {index}", resp=resp)
 
-    def index_documents(self, index, doc_src):
+    def index_documents(
+        self,
+        index: str,
+        doc_src: Iterable[JSONDict] | Callable[[], Iterable[JSONDict]],
+    ) -> None:
         """Index documents into Solr using batch updates.
 
         Processes documents in batches and commits at the end. Automatically
@@ -121,15 +136,19 @@ class SolrClient(BaseClient):
 
         Args:
             index: Core name to index documents into.
-            doc_src: Iterable of document dictionaries to index.
+            doc_src: Iterable of document dictionaries or a callable that returns
+                an iterable. File paths (str) are not supported.
+
+        Raises:
+            ValueError: If doc_src is a string (file paths not supported).
         """
 
-        def commit():
+        def commit() -> None:
             """Commit pending changes to the index."""
             resp = requests.get(f"{self.solr_base_ep}/{index}/update?commit=true")
             resp_msg(msg=f"Committed index {index}", resp=resp)
 
-        def flush(docs):
+        def flush(docs: JSONDictList) -> None:
             """Send a batch of documents to Solr for indexing.
 
             Args:
@@ -140,21 +159,26 @@ class SolrClient(BaseClient):
             # resp_msg(msg="Done", resp=resp)
             docs.clear()
 
-        BATCH_SIZE = 5000
-        docs = []
+        if isinstance(doc_src, str):
+            raise ValueError("SolrClient.index_documents does not support file paths")
+        if callable(doc_src):
+            doc_src = doc_src()
+
+        batch_size = 5000
+        docs: JSONDictList = []
         for doc in doc_src:
             if "release_date" in doc and doc["release_date"] is not None:
                 doc["release_date"] += "T00:00:00Z"
 
             docs.append(doc)
 
-            if len(docs) % BATCH_SIZE == 0:
+            if len(docs) % batch_size == 0:
                 flush(docs)
 
         flush(docs)
         commit()
 
-    def reset_ltr(self, index):
+    def reset_ltr(self, index: str) -> None:
         """Reset the Learn-to-Rank feature store and models for an index.
 
         Deletes all models and feature stores associated with the specified core.
@@ -176,7 +200,7 @@ class SolrClient(BaseClient):
             )
             resp_msg(msg=f"Deleted {store} Featurestore", resp=resp)
 
-    def validate_featureset(self, name, config):
+    def validate_featureset(self, name: str, config: JSONDictList) -> None:
         """Validate that all features in a config belong to the specified store.
 
         Args:
@@ -192,7 +216,9 @@ class SolrClient(BaseClient):
                     f'Feature {feature["name"]} needs to be created with "store": "{name}" '
                 )
 
-    def create_featureset(self, index, name, ftr_config):
+    def create_featureset(
+        self, index: str, name: str, ftr_config: FeatureConfig
+    ) -> None:
         """Create a feature store in Solr LTR.
 
         Args:
@@ -204,13 +230,15 @@ class SolrClient(BaseClient):
         Raises:
             ValueError: If any feature doesn't have the correct store name.
         """
+        if isinstance(ftr_config, dict):
+            raise ValueError("SolrClient.create_featureset requires a list of features")
         self.validate_featureset(name, ftr_config)
         resp = requests.put(
             f"{self.solr_base_ep}/{index}/schema/feature-store", json=ftr_config
         )
         resp_msg(msg=f"Created {name} feature store under {index}:", resp=resp)
 
-    def get_feature_name(self, config, ftr_idx):
+    def get_feature_name(self, config: FeatureConfig, ftr_idx: int) -> str:
         """Get the name of a feature by its index.
 
         Args:
@@ -220,9 +248,17 @@ class SolrClient(BaseClient):
         Returns:
             str: Name of the feature at the specified index.
         """
+        if isinstance(config, dict):
+            raise ValueError("SolrClient.get_feature_name requires a list config")
         return config[int(ftr_idx) - 1]["name"]
 
-    def log_query(self, index, featureset, ids, params=None):
+    def log_query(
+        self,
+        index: str,
+        featureset: str,
+        ids: list[str] | None,
+        params: QueryParams,
+    ) -> JSONDictList:
         """Execute a query and log feature values for specified documents.
 
         Uses Solr's LTR feature logging functionality to extract feature values
@@ -240,27 +276,44 @@ class SolrClient(BaseClient):
             list: List of document dictionaries, each with an added "ltr_features"
                 field containing the logged feature values.
         """
-        if params is None:
-            params = {}
+        query_params = params.copy() if params else {}
         efi_options = []
-        for key, val in params.items():
+        for key, val in query_params.items():
             efi_options.append(f'efi.{key}="{val}"')
 
         efi_str = " ".join(efi_options)
 
         query = "*:*" if ids is None else f"{{!terms f=id}}{','.join(ids)}"
 
-        params = {
+        solr_params = {
             "fl": f"id,[features store={featureset} {efi_str}]",
             "q": query,
             "rows": 1000,
             "wt": "json",
         }
-        resp = requests.post(f"{self.solr_base_ep}/{index}/select", data=params)
+        resp = requests.post(f"{self.solr_base_ep}/{index}/select", data=solr_params)
         # resp_msg(msg='Searching {}'.format(index), resp=resp)
-        resp = resp.json()
+        resp_json = resp.json()
 
-        def parseFeatures(features):
+        # Check for error responses
+        if "error" in resp_json:
+            error_msg = resp_json.get("error", {}).get("msg", "Unknown Solr error")
+            raise RuntimeError(f"Solr log_query failed: {error_msg}")
+
+        # Validate response structure
+        if "response" not in resp_json:
+            raise RuntimeError(
+                f"Unexpected Solr response structure: missing 'response' key. "
+                f"Response: {resp_json}"
+            )
+
+        if "docs" not in resp_json["response"]:
+            raise RuntimeError(
+                f"Unexpected Solr response structure: missing 'docs' key in response. "
+                f"Response: {resp_json}"
+            )
+
+        def parse_features(features: str) -> list[float]:
             """Parse feature string into a list of float values.
 
             Args:
@@ -280,12 +333,22 @@ class SolrClient(BaseClient):
             return fv
 
         # Clean up features to consistent format
-        for doc in resp["response"]["docs"]:
-            doc["ltr_features"] = parseFeatures(doc["[features]"])
+        for doc in resp_json["response"]["docs"]:
+            if "[features]" in doc:
+                doc["ltr_features"] = parse_features(doc["[features]"])
+            else:
+                # If features are missing, set empty list
+                doc["ltr_features"] = []
 
-        return resp["response"]["docs"]
+        return resp_json["response"]["docs"]
 
-    def submit_model(self, featureset, index, model_name, model_payload):
+    def submit_model(
+        self,
+        featureset: str,
+        index: str,
+        model_name: str,
+        model_payload: ModelPayload,
+    ) -> None:
         """Submit a machine learning model to Solr LTR.
 
         Deletes any existing model with the same name, then creates a new model
@@ -304,7 +367,9 @@ class SolrClient(BaseClient):
         resp = requests.put(url, json=model_payload)
         resp_msg(msg=f"Created Model {model_name}", resp=resp)
 
-    def submit_ranklib_model(self, featureset, index, model_name, model_payload):
+    def submit_ranklib_model(
+        self, featureset: str, index: str, model_name: str, model_payload: str
+    ) -> None:
         """Submit a RankLib model to Solr LTR, converting it to Solr representation.
 
         Retrieves the feature store configuration, maps feature indices to names,
@@ -332,7 +397,13 @@ class SolrClient(BaseClient):
         solr_model = convert(model_payload, model_name, featureset, feature_mapping)
         self.submit_model(featureset, index, model_name, solr_model)
 
-    def model_query(self, index, model, model_params, query):
+    def model_query(
+        self,
+        index: str,
+        model: str,
+        model_params: QueryParams,
+        query: QueryParams,
+    ) -> JSONDictList:
         """Execute a query using an LTR model for reranking.
 
         Uses Solr's LTR reranking query parser to apply an LTR model to
@@ -342,24 +413,56 @@ class SolrClient(BaseClient):
             index: Core name to query.
             model: Name of the LTR model to use for reranking.
             model_params: Parameters to pass to the model (unused in Solr).
-            query: Base query string to execute.
+            query: Query parameters dictionary. Must contain a "q" key with the query string.
 
         Returns:
             list: List of document dictionaries with scores.
+
+        Raises:
+            ValueError: If query dict does not contain a "q" key.
         """
+        # Extract query string from QueryParams dict
+        # Solr's model_query expects a query string in the "q" parameter
+        if not isinstance(query, dict):
+            raise TypeError(f"query must be a dict (QueryParams), got {type(query)}")
+
+        query_str = query.get("q")
+        if query_str is None:
+            raise ValueError('query dict must contain a "q" key with the query string')
+
         url = f"{self.solr_base_ep}/{index}/select?"
         params = {
-            "q": query,
+            "q": query_str,
             "fl": "score *",
             "rq": f"{{!ltr model={model}}}",
             "rows": 10000,
         }
 
         resp = requests.post(url, data=params)
-        resp_msg(msg=f"Search keywords - {query}", resp=resp)
-        return resp.json()["response"]["docs"]
+        resp_msg(msg=f"Search keywords - {query_str}", resp=resp)
+        resp_json = resp.json()
 
-    def query(self, index, query):
+        # Check for error responses
+        if "error" in resp_json:
+            error_msg = resp_json.get("error", {}).get("msg", "Unknown Solr error")
+            raise RuntimeError(f"Solr model_query failed: {error_msg}")
+
+        # Validate response structure
+        if "response" not in resp_json:
+            raise RuntimeError(
+                f"Unexpected Solr response structure: missing 'response' key. "
+                f"Response: {resp_json}"
+            )
+
+        if "docs" not in resp_json["response"]:
+            raise RuntimeError(
+                f"Unexpected Solr response structure: missing 'docs' key in response. "
+                f"Response: {resp_json}"
+            )
+
+        return resp_json["response"]["docs"]
+
+    def query(self, index: str, query: QueryParams) -> JSONDictList:
         """Execute a search query against a Solr core.
 
         Args:
@@ -369,21 +472,140 @@ class SolrClient(BaseClient):
         Returns:
             list: List of document dictionaries with scores, transformed to
                 a format consistent with Elasticsearch/OpenSearch (score -> _score).
+
+        Raises:
+            RuntimeError: If the Solr response indicates an error or has unexpected structure.
+            ValueError: If JSON parsing fails or response structure is invalid.
         """
         url = f"{self.solr_base_ep}/{index}/select?"
 
         resp = requests.post(url, data=query)
-        # resp_msg(msg='Query {}...'.format(str(query)[:20]), resp=resp)
-        resp = resp.json()
+
+        # Check HTTP status code before parsing JSON
+        if resp.status_code >= 400:
+            error_context = f"Solr query failed for index '{index}'"
+            try:
+                # Try to parse error response as JSON
+                error_json = resp.json()
+                error_details = self._extract_solr_error_details(error_json)
+                raise RuntimeError(
+                    f"{error_context} [HTTP {resp.status_code}]: {error_details}"
+                )
+            except ValueError:
+                # If JSON parsing fails, use raw response text
+                raise RuntimeError(
+                    f"{error_context} [HTTP {resp.status_code}]: {resp.text[:500]}"
+                )
+
+        # Parse JSON response
+        try:
+            resp_json = resp.json()
+        except ValueError as e:
+            raise ValueError(
+                f"Failed to parse Solr response as JSON for index '{index}': {e}. "
+                f"Response status: {resp.status_code}, "
+                f"Response text (first 500 chars): {resp.text[:500]}"
+            ) from e
+
+        # Check for error responses in JSON structure
+        if "error" in resp_json:
+            error_details = self._extract_solr_error_details(resp_json)
+            raise RuntimeError(
+                f"Solr query failed for index '{index}': {error_details}"
+            )
+
+        # Validate response structure
+        if "response" not in resp_json:
+            raise RuntimeError(
+                f"Unexpected Solr response structure for index '{index}': "
+                f"missing 'response' key. Response keys: {list(resp_json.keys())}. "
+                f"Full response (first 1000 chars): {str(resp_json)[:1000]}"
+            )
+
+        if not isinstance(resp_json["response"], dict):
+            raise RuntimeError(
+                f"Unexpected Solr response structure for index '{index}': "
+                f"'response' is not a dictionary (got {type(resp_json['response'])}). "
+                f"Response: {resp_json['response']}"
+            )
+
+        if "docs" not in resp_json["response"]:
+            response_keys = list(resp_json["response"].keys())
+            raise RuntimeError(
+                f"Unexpected Solr response structure for index '{index}': "
+                f"missing 'docs' key in response. Response keys: {response_keys}. "
+                f"Response structure: {resp_json['response']}"
+            )
+
+        if not isinstance(resp_json["response"]["docs"], list):
+            raise RuntimeError(
+                f"Unexpected Solr response structure for index '{index}': "
+                f"'docs' is not a list (got {type(resp_json['response']['docs'])}). "
+                f"Response: {resp_json['response']['docs']}"
+            )
 
         # Transform to be consistent
-        for doc in resp["response"]["docs"]:
+        for doc in resp_json["response"]["docs"]:
             if "score" in doc:
                 doc["_score"] = doc["score"]
 
-        return resp["response"]["docs"]
+        return resp_json["response"]["docs"]
 
-    def analyze(self, index, fieldtype, text):
+    def _extract_solr_error_details(self, error_json: JSONDict) -> str:
+        """Extract error details from a Solr error response.
+
+        Solr error responses can have different structures:
+        - Simple: {"error": {"msg": "error message"}}
+        - Detailed: {"error": {"msg": "...", "code": 400, "metadata": [...]}}
+        - Multiple errors: {"error": {"msg": "...", "details": [...]}}
+
+        Args:
+            error_json: JSON dictionary containing error information.
+
+        Returns:
+            str: Formatted error message with all available details.
+        """
+        error_obj = error_json.get("error", {})
+
+        if not isinstance(error_obj, dict):
+            return f"Unknown error format: {error_obj}"
+
+        # Extract primary error message
+        error_msg = error_obj.get("msg", "Unknown Solr error")
+
+        # Collect additional error details
+        details = []
+
+        # Add error code if present
+        if "code" in error_obj:
+            details.append(f"code={error_obj['code']}")
+
+        # Add trace if present (often contains useful debugging info)
+        if "trace" in error_obj:
+            trace = error_obj["trace"]
+            if isinstance(trace, str) and len(trace) > 0:
+                # Truncate long traces
+                trace_preview = trace[:200] + "..." if len(trace) > 200 else trace
+                details.append(f"trace={trace_preview}")
+
+        # Add metadata if present
+        if "metadata" in error_obj:
+            metadata = error_obj["metadata"]
+            if isinstance(metadata, list) and len(metadata) > 0:
+                details.append(f"metadata={metadata}")
+
+        # Add details array if present (for multiple errors)
+        if "details" in error_obj:
+            error_details = error_obj["details"]
+            if isinstance(error_details, list) and len(error_details) > 0:
+                details.append(f"details={error_details}")
+
+        # Construct final error message
+        if details:
+            return f"{error_msg} ({', '.join(details)})"
+        return error_msg
+
+    def analyze(self, index: str, fieldtype: str, text: str) -> JSONDict:
         """Analyze text using a Solr field type analyzer.
 
         Args:
@@ -406,7 +628,7 @@ class SolrClient(BaseClient):
         tok_stream_result = tok_stream[-1]
         return tok_stream_result
 
-    def term_vectors_skip_to(self, index, q="*:*", skip=0):
+    def term_vectors_skip_to(self, index: str, q: str = "*:*", skip: int = 0) -> str:
         """Get a cursor mark for skipping to a specific position in term vectors.
 
         Uses Solr's term vector request handler to advance through documents
@@ -431,7 +653,9 @@ class SolrClient(BaseClient):
         tvrh_resp = requests.post(url, data=query)
         return tvrh_resp.json()["nextCursorMark"]
 
-    def term_vectors(self, index, field, q="*:*", start_cursor="*"):
+    def term_vectors(
+        self, index: str, field: str, q: str = "*:*", start_cursor: str = "*"
+    ) -> Iterator[tuple[str, JSONDict]]:
         """Extract all term vectors for a field using cursor-based pagination.
 
         Uses Solr's term vector request handler to iterate through all documents
@@ -482,7 +706,7 @@ class SolrClient(BaseClient):
             if query["cursorMark"] == next_cursor:
                 break
 
-    def get_feature_stores(self, index):
+    def get_feature_stores(self, index: str) -> list[str]:
         """Get list of feature store names for a core.
 
         Args:
@@ -495,7 +719,7 @@ class SolrClient(BaseClient):
         response = resp.json()
         return response["featureStores"]
 
-    def get_models(self, index):
+    def get_models(self, index: str) -> list[str]:
         """Get list of model names for a core.
 
         Args:
@@ -508,7 +732,7 @@ class SolrClient(BaseClient):
         response = resp.json()
         return [model["name"] for model in response["models"]]
 
-    def feature_set(self, index, name):
+    def feature_set(self, index: str, name: str) -> FeatureSetResult:
         """Retrieve a feature store configuration.
 
         Args:
@@ -518,22 +742,22 @@ class SolrClient(BaseClient):
         Returns:
             tuple: A tuple containing:
                 - mapping: List of dictionaries with feature names
-                - rawFeatureSet: Full feature store configuration list
+                - raw_feature_set: Full feature store configuration list
         """
         resp = requests.get(f"{self.solr_base_ep}/{index}/schema/feature-store/{name}")
         resp_msg(msg=f"Feature Set {name}...", resp=resp)
 
         response = resp.json()
 
-        rawFeatureSet = response["features"]
+        raw_feature_set = response["features"]
 
         mapping = []
         for feature in response["features"]:
             mapping.append({"name": feature["name"]})
 
-        return mapping, rawFeatureSet
+        return mapping, raw_feature_set
 
-    def get_doc(self, doc_id, index):
+    def get_doc(self, doc_id: str, index: str) -> JSONDict:
         """Retrieve a single document by ID.
 
         Args:
@@ -548,5 +772,29 @@ class SolrClient(BaseClient):
         """
         params = {"q": f"id:{doc_id}", "wt": "json"}
 
-        resp = requests.post(f"{self.solr_base_ep}/{index}/select", data=params).json()
-        return resp["response"]["docs"][0]
+        resp_json = requests.post(
+            f"{self.solr_base_ep}/{index}/select", data=params
+        ).json()
+
+        # Check for error responses
+        if "error" in resp_json:
+            error_msg = resp_json.get("error", {}).get("msg", "Unknown Solr error")
+            raise RuntimeError(f"Solr get_doc failed: {error_msg}")
+
+        # Validate response structure
+        if "response" not in resp_json:
+            raise RuntimeError(
+                f"Unexpected Solr response structure: missing 'response' key. "
+                f"Response: {resp_json}"
+            )
+
+        if "docs" not in resp_json["response"]:
+            raise RuntimeError(
+                f"Unexpected Solr response structure: missing 'docs' key in response. "
+                f"Response: {resp_json}"
+            )
+
+        if not resp_json["response"]["docs"]:
+            raise IndexError(f"Document {doc_id} not found in index {index}")
+
+        return resp_json["response"]["docs"][0]

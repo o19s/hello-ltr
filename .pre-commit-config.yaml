@@ -5,6 +5,13 @@
 #   1. git commit -m "message [skip lint]"  (requires setup, see setup-git-hooks.sh)
 #   2. SKIP=ruff,notebooks git commit
 #   3. git commit --no-verify  (skips all hooks)
+#
+# Note: Pre-commit stashes uncommitted changes before running hooks. If hooks modify
+# files that have unstaged changes, you may see a warning about conflicts. To avoid
+# this, either:
+#   - Stage all files you're working on before committing
+#   - Commit or stash uncommitted changes first
+#   - Use --no-verify to skip hooks if you need to commit without staging everything
 
 repos:
 
@@ -13,6 +20,8 @@ repos:
     rev: v0.6.4
     hooks:
       # Run ruff linter
+      # Note: --fix modifies files. If you have unstaged changes in the same files,
+      # pre-commit will warn about conflicts. Consider staging all related files.
       - id: ruff
         name: ruff (lint)
         args: [--fix]

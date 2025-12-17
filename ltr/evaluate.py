@@ -11,8 +11,12 @@ import subprocess
 import plotly.graph_objs as go
 from plotly.offline import init_notebook_mode, iplot
 
+from ltr.logger import get_logger
 
-def log_run(cmd):
+logger = get_logger(__name__)
+
+
+def log_run(cmd: str) -> None:
     """Run a shell command and print its output.
 
     Args:
@@ -27,12 +31,12 @@ def log_run(cmd):
         text=True,
         check=False,
     )
-    print(result.stdout)
+    logger.info(result.stdout)
     if result.stderr:
-        print(result.stderr)
+        logger.error(result.stderr)
 
 
-def quiet_run(cmd):
+def quiet_run(cmd: str) -> None:
     """Run a shell command silently without printing output.
 
     Args:
@@ -49,7 +53,7 @@ def quiet_run(cmd):
     )
 
 
-def evaluate(mode):
+def evaluate(mode: str) -> None:
     """Run RRE (Ranking Relevance Evaluation) using Docker.
 
     Builds a Docker image, runs the evaluation, and copies results to the
@@ -79,7 +83,7 @@ def evaluate(mode):
 
     cmd = f"docker build --no-cache -t ltr-rre rre/{mode}/."
 
-    print("Building RRE image - This will take a while")
+    logger.info("Building RRE image - This will take a while")
     quiet_run(cmd)
 
     # Remove and run a fresh docker image
@@ -87,7 +91,7 @@ def evaluate(mode):
     quiet_run(cmd)
 
     cmd = "docker run --name ltr-rre ltr-rre"
-    print("Running evaluation")
+    logger.info("Running evaluation")
     log_run(cmd)
 
     # Copy out reports
@@ -97,10 +101,10 @@ def evaluate(mode):
     cmd = "docker cp ltr-rre:/rre/target/site/rre-report.xlsx data/rre-report.xlsx"
     log_run(cmd)
 
-    print("RRE Evaluation complete")
+    logger.info("RRE Evaluation complete")
 
 
-def rre_table():
+def rre_table() -> None:
     """Display RRE evaluation results as an interactive table in Jupyter.
 
     Loads evaluation results from data/rre-evaluation.json and displays

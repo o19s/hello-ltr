@@ -4,7 +4,13 @@ This module provides functionality for logging LTR features from search
 engines and building training sets from judgments.
 """
 
+from __future__ import annotations
+
 import re
+from collections.abc import Iterable
+
+from ltr.client.base_client import BaseClient
+from ltr.judgments import Judgment
 
 
 class FeatureLogger:
@@ -22,7 +28,13 @@ class FeatureLogger:
         logged: List of judgments that have been successfully logged with features.
     """
 
-    def __init__(self, client, index, feature_set, drop_missing=True):
+    def __init__(
+        self,
+        client: BaseClient,
+        index: str,
+        feature_set: str,
+        drop_missing: bool = True,
+    ) -> None:
         """Initialize a FeatureLogger.
 
         Args:
@@ -31,13 +43,13 @@ class FeatureLogger:
             feature_set: Name of the feature set to use.
             drop_missing: If True, discard judgments for missing documents (default: True).
         """
-        self.client = client
-        self.index = index
-        self.feature_set = feature_set
-        self.drop_missing = drop_missing
-        self.logged = []
+        self.client: BaseClient = client
+        self.index: str = index
+        self.feature_set: str = feature_set
+        self.drop_missing: bool = drop_missing
+        self.logged: list[Judgment] = []
 
-    def clear(self):
+    def clear(self) -> None:
         """Clear all logged judgments.
 
         Resets the logged list to empty, allowing reuse of the logger
@@ -45,16 +57,21 @@ class FeatureLogger:
         """
         self.logged = []
 
-    def log_for_qid(self, qid, judgments, keywords):
+    def log_for_qid(
+        self,
+        qid: int,
+        judgments: Iterable[Judgment],
+        keywords: str,
+    ) -> tuple[list[Judgment], list[Judgment]]:
         """Log features for a set of judgments associated with a query ID.
 
         Fetches LTR features from the search engine for all documents in the
-        judgments list and attaches them to the judgment objects. Documents
+        judgments iterable and attaches them to the judgment objects. Documents
         are fetched in batches of 500.
 
         Args:
             qid: Query ID associated with these judgments.
-            judgments: List of Judgment objects to log features for.
+            judgments: Iterable of Judgment objects to log features for.
             keywords: Search keywords used for the query (sanitized automatically).
 
         Returns:
@@ -64,30 +81,31 @@ class FeatureLogger:
                   or empty list (if drop_missing=False).
 
         Note:
-            The judgments list will be modified in-place with features attached.
-            Keywords are sanitized to remove special characters for Solr compatibility.
-            Missing documents are handled according to the drop_missing setting.
+            The judgments are converted to a list internally and modified in-place
+            with features attached. Keywords are sanitized to remove special characters
+            for Solr compatibility. Missing documents are handled according to the
+            drop_missing setting.
         """
-        featuresPerDoc = {}
+        features_per_doc = {}
         judgments = list(judgments)
-        docIds = [judgment.docId for judgment in judgments]
+        doc_ids = [judgment.docId for judgment in judgments]
 
         # Check for dupes of documents
-        for docId in docIds:
-            indices = [i for i, x in enumerate(docIds) if x == docId]
+        for doc_id in doc_ids:
+            indices = [i for i, x in enumerate(doc_ids) if x == doc_id]
             if len(indices) > 1:
-                # print("Duplicate Doc in qid:%s %s" % (qid, docId))
+                # print("Duplicate Doc in qid:%s %s" % (qid, doc_id))
                 pass
 
         # For every batch of N docs to generate judgments for
-        BATCH_SIZE = 500
-        numLeft = len(docIds)
-        for i in range(0, 1 + (len(docIds) // BATCH_SIZE)):
-            numFetch = min(BATCH_SIZE, numLeft)
-            start = i * BATCH_SIZE
-            if start >= len(docIds):
+        batch_size = 500
+        num_left = len(doc_ids)
+        for i in range(0, 1 + (len(doc_ids) // batch_size)):
+            num_fetch = min(batch_size, num_left)
+            start = i * batch_size
+            if start >= len(doc_ids):
                 break
-            ids = docIds[start : start + numFetch]
+            ids = doc_ids[start : start + num_fetch]
 
             # Sanitize (Solr has a strict syntax that can easily be tripped up)
             # This removes anything but alphanumeric and spaces
@@ -103,15 +121,15 @@ class FeatureLogger:
 
             # Add feature back to each judgment
             for doc in res:
-                docId = str(doc["id"])
+                doc_id = str(doc["id"])
                 features = doc["ltr_features"]
-                featuresPerDoc[docId] = features
-            numLeft -= BATCH_SIZE
+                features_per_doc[doc_id] = features
+            num_left -= batch_size
 
         # Append features from search engine back to ranklib judgment list
         for judgment in judgments:
             try:
-                features = featuresPerDoc[
+                features = features_per_doc[
                     judgment.docId
                 ]  # If KeyError, then we have a judgment but no movie in index
                 judgment.features = features

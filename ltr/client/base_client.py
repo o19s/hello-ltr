@@ -9,7 +9,19 @@ The implementations of each client serve as useful references for those getting
 started with LTR on their specific platform.
 """
 
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
+from collections.abc import Callable, Iterable
+
+from ltr.types import (
+    FeatureConfig,
+    FeatureSetResult,
+    JSONDict,
+    JSONDictList,
+    ModelPayload,
+    QueryParams,
+)
 
 
 class BaseClient(ABC):
@@ -39,7 +51,7 @@ class BaseClient(ABC):
         pass
 
     @abstractmethod
-    def delete_index(self, index):
+    def delete_index(self, index: str) -> None:
         """Delete a search index.
 
         Args:
@@ -48,7 +60,7 @@ class BaseClient(ABC):
         pass
 
     @abstractmethod
-    def create_index(self, index):
+    def create_index(self, index: str) -> None:
         """Create a new search index.
 
         Args:
@@ -57,18 +69,24 @@ class BaseClient(ABC):
         pass
 
     @abstractmethod
-    def index_documents(self, index, doc_src):
+    def index_documents(
+        self,
+        index: str,
+        doc_src: Iterable[JSONDict] | Callable[[], Iterable[JSONDict]],
+    ) -> None:
         """Index documents into a search index.
 
         Args:
             index: Name of the target index.
-            doc_src: Source of documents. Can be a file path, iterable of documents,
-                or a callable that returns documents. Each document must have an 'id' field.
+            doc_src: Source of documents. Can be an iterable of document
+                dictionaries or a callable that returns an iterable. Each
+                document must have an 'id' field. Note: File paths (str) are
+                not supported by implementations.
         """
         pass
 
     @abstractmethod
-    def reset_ltr(self, index):
+    def reset_ltr(self, index: str) -> None:
         """Reset Learn-to-Rank configuration for an index.
 
         Removes all existing models and feature stores, then reinitializes
@@ -80,7 +98,9 @@ class BaseClient(ABC):
         pass
 
     @abstractmethod
-    def create_featureset(self, index, name, ftr_config):
+    def create_featureset(
+        self, index: str, name: str, ftr_config: FeatureConfig
+    ) -> None:
         """Create a new feature set in the search engine.
 
         Args:
@@ -88,12 +108,13 @@ class BaseClient(ABC):
             name: Name of the feature set.
             ftr_config: Feature configuration. Format depends on search engine:
                 - Solr: List of feature dictionaries
-                - Elasticsearch/OpenSearch: Dictionary with featureset.features structure
+                - Elasticsearch/OpenSearch: Dictionary with featureset.features
+                    structure
         """
         pass
 
     @abstractmethod
-    def get_feature_name(self, config, ftr_idx):
+    def get_feature_name(self, config: FeatureConfig, ftr_idx: int) -> str:
         """Extract feature name from configuration by index.
 
         Args:
@@ -106,7 +127,7 @@ class BaseClient(ABC):
         pass
 
     @abstractmethod
-    def query(self, index, query) -> list[dict]:
+    def query(self, index: str, query: QueryParams) -> JSONDictList:
         """Execute a search query.
 
         Args:
@@ -122,7 +143,7 @@ class BaseClient(ABC):
         pass
 
     @abstractmethod
-    def get_doc(self, doc_id, index):
+    def get_doc(self, doc_id: str, index: str) -> JSONDict:
         """Retrieve a single document by ID.
 
         Args:
@@ -139,7 +160,13 @@ class BaseClient(ABC):
         pass
 
     @abstractmethod
-    def log_query(self, index, featureset, ids, params) -> list[dict]:
+    def log_query(
+        self,
+        index: str,
+        featureset: str,
+        ids: list[str] | None,
+        params: QueryParams,
+    ) -> JSONDictList:
         """Execute a query with feature logging enabled.
 
         Args:
@@ -156,7 +183,13 @@ class BaseClient(ABC):
         pass
 
     @abstractmethod
-    def submit_model(self, featureset, index, model_name, model_payload):
+    def submit_model(
+        self,
+        featureset: str,
+        index: str,
+        model_name: str,
+        model_payload: ModelPayload,
+    ) -> None:
         """Submit a model to the search engine.
 
         Args:
@@ -168,7 +201,9 @@ class BaseClient(ABC):
         pass
 
     @abstractmethod
-    def submit_ranklib_model(self, featureset, index, model_name, model_payload):
+    def submit_ranklib_model(
+        self, featureset: str, index: str, model_name: str, model_payload: str
+    ) -> None:
         """Submit a RankLib model to the search engine.
 
         Converts RankLib model format to search engine-specific format and submits it.
@@ -177,12 +212,19 @@ class BaseClient(ABC):
             featureset: Name of the feature set to associate with the model.
             index: Name of the index where the model will be stored.
             model_name: Name to assign to the model.
-            model_payload: RankLib model definition (XML string for Solr, JSON for others).
+            model_payload: RankLib model definition (XML string for Solr, JSON
+                for others).
         """
         pass
 
     @abstractmethod
-    def model_query(self, index, model, model_params, query) -> list[dict]:
+    def model_query(
+        self,
+        index: str,
+        model: str,
+        model_params: QueryParams,
+        query: QueryParams,
+    ) -> JSONDictList:
         """Execute a query using a Learn-to-Rank model.
 
         Args:
@@ -197,7 +239,7 @@ class BaseClient(ABC):
         pass
 
     @abstractmethod
-    def feature_set(self, index, name) -> tuple[list[dict], list]:
+    def feature_set(self, index: str, name: str) -> FeatureSetResult:
         """Retrieve a feature set configuration.
 
         Args:

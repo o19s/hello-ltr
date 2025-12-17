@@ -504,20 +504,20 @@ def test_notebook_executes_without_errors(notebook_path, notebook_type, engine, 
 
 **Test Files and Coverage:**
 
-| Test File | What It Tests | Key Test Cases |
-|-----------|---------------|----------------|
-| `test_client_solr.py` | SolrClient class | Initialization, index operations, LTR features, queries, document retrieval |
-| `test_client_elastic.py` | ElasticClient class | Initialization, index operations, LTR features, queries, model submission |
-| `client_test_helpers.py` | All client classes (parametrized) | Shared tests for Solr, OpenSearch, and Elastic clients |
-| `test_search.py` | Search query generation | esLtrQuery, solrLtrQuery, search function with all engines |
-| `test_index.py` | Index rebuild functionality | Force rebuild, create new index, method ordering |
-| `test_evaluate.py` | Evaluation functions | evaluate() with all engines, rre_table() data loading |
-| `test_ranklib.py` | RankLib integration | Training, feature search, model saving, KCV support |
-| `test_clickmodels.py` | Click model algorithms | Cascade model, User Browse Model, session building |
-| `test_judg_list.py` | Judgment list parsing | StringIO reading, file I/O, unsorted detection |
-| `test_utils.py` | Utility functions | Helper functions used across the codebase |
-| `test_notebook_patterns.py` | Notebook code patterns | Common patterns and anti-patterns in notebooks |
-| `test_package_compatibility.py` | Package compatibility | NumPy, SciPy, scikit-learn, pandas, matplotlib operations |
+| Test File                       | What It Tests                     | Key Test Cases                                                              |
+|---------------------------------|-----------------------------------|-----------------------------------------------------------------------------|
+| `test_client_solr.py`           | SolrClient class                  | Initialization, index operations, LTR features, queries, document retrieval |
+| `test_client_elastic.py`        | ElasticClient class               | Initialization, index operations, LTR features, queries, model submission   |
+| `client_test_helpers.py`        | All client classes (parametrized) | Shared tests for Solr, OpenSearch, and Elastic clients                      |
+| `test_search.py`                | Search query generation           | esLtrQuery, solrLtrQuery, search function with all engines                  |
+| `test_index.py`                 | Index rebuild functionality       | Force rebuild, create new index, method ordering                            |
+| `test_evaluate.py`              | Evaluation functions              | evaluate() with all engines, rre_table() data loading                       |
+| `test_ranklib.py`               | RankLib integration               | Training, feature search, model saving, KCV support                         |
+| `test_clickmodels.py`           | Click model algorithms            | Cascade model, User Browse Model, session building                          |
+| `test_judg_list.py`             | Judgment list parsing             | StringIO reading, file I/O, unsorted detection                              |
+| `test_utils.py`                 | Utility functions                 | Helper functions used across the codebase                                   |
+| `test_notebook_patterns.py`     | Notebook code patterns            | Common patterns and anti-patterns in notebooks                              |
+| `test_package_compatibility.py` | Package compatibility             | NumPy, SciPy, scikit-learn, pandas, matplotlib operations                   |
 
 **Total:** 13 test files, 200+ individual test cases
 
@@ -1972,13 +1972,13 @@ This test suite was migrated from unittest to pytest in December 2025.
 
 If you're used to the old `run_most_nbs.py` commands, here are the pytest equivalents:
 
-| Old Command | New Pytest Command |
-|-------------|-------------------|
-| `python tests/run_most_nbs.py` | `pytest tests/notebooks/test_notebooks.py` |
-| `SKIP_TO_NB=24 python tests/run_most_nbs.py` | `pytest --lf tests/notebooks/test_notebooks.py` |
-| `--skip-to-path opensearch/tmdb` | `pytest -k "opensearch/tmdb" tests/notebooks/test_notebooks.py` |
-| `--only-path solr` | `pytest -k solr tests/notebooks/test_notebooks.py` |
-| `ONLY_PATH="elasticsearch" python tests/run_most_nbs.py` | `PYTEST_ARGS="-k elasticsearch" ./tests/test.sh` |
+| Old Command                                              | New Pytest Command                                              |
+|----------------------------------------------------------|-----------------------------------------------------------------|
+| `python tests/run_most_nbs.py`                           | `pytest tests/notebooks/test_notebooks.py`                      |
+| `SKIP_TO_NB=24 python tests/run_most_nbs.py`             | `pytest --lf tests/notebooks/test_notebooks.py`                 |
+| `--skip-to-path opensearch/tmdb`                         | `pytest -k "opensearch/tmdb" tests/notebooks/test_notebooks.py` |
+| `--only-path solr`                                       | `pytest -k solr tests/notebooks/test_notebooks.py`              |
+| `ONLY_PATH="elasticsearch" python tests/run_most_nbs.py` | `PYTEST_ARGS="-k elasticsearch" ./tests/test.sh`                |
 
 ## Further Reading
 

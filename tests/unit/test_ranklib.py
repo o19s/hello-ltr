@@ -4,7 +4,7 @@ Unit tests for ranklib.py module.
 Tests cover:
 - check_for_rankymcrankface function
 - write_training_set function
-- trainModel function
+- train_model function
 - save_model function
 - train function
 - feature_search function
@@ -19,7 +19,7 @@ from ltr.ranklib import (
     feature_search,
     save_model,
     train,
-    trainModel,
+    train_model,
     write_training_set,
 )
 
@@ -54,7 +54,7 @@ class TestWriteTrainingSet:
         mock_tempdir.return_value = "/tmp"
         training_set = [Mock(), Mock()]
         # Act
-        result = write_training_set(training_set)
+        result = write_training_set(training_set)  # type: ignore[arg-type]
         # Assert
         assert result == "/tmp/training.txt"
         mock_judgments_to_file.assert_called_once()
@@ -62,7 +62,7 @@ class TestWriteTrainingSet:
 
 
 class TestTrainModel:
-    """Test trainModel function."""
+    """Test train_model function."""
 
     @patch("ltr.ranklib.parse_training_log")
     @patch("subprocess.run")
@@ -71,7 +71,7 @@ class TestTrainModel:
     def test_train_model_basic(
         self, mock_check, mock_write, mock_subprocess, mock_parse
     ):
-        """Test trainModel with basic parameters."""
+        """Test train_model with basic parameters."""
         # Arrange
         mock_check.return_value = "/tmp/ranky.jar"
         mock_write.return_value = "/tmp/training.txt"
@@ -81,7 +81,7 @@ class TestTrainModel:
         mock_parse.return_value = Mock()
         training_set = []
         # Act
-        result = trainModel(training_set, "/tmp/model.txt")
+        result = train_model(training_set, "/tmp/model.txt")
         # Assert
         assert result is not None
         mock_subprocess.assert_called_once()
@@ -112,7 +112,7 @@ class TestTrainModel:
         mock_subprocess,
         mock_parse,
     ):
-        """Test trainModel with features parameter."""
+        """Test train_model with features parameter."""
         # Arrange
         mock_tempdir.return_value = "/tmp"
         mock_check.return_value = "/tmp/ranky.jar"
@@ -124,7 +124,7 @@ class TestTrainModel:
         training_set = []
         features = [1, 2, 3]
         # Act
-        trainModel(training_set, "/tmp/model.txt", features=features)
+        train_model(training_set, "/tmp/model.txt", features=features)
         # Assert
         call_args = mock_subprocess.call_args[0][0]
         # subprocess.run receives a list of arguments
@@ -139,7 +139,7 @@ class TestTrainModel:
     def test_train_model_with_kcv(
         self, mock_check, mock_write, mock_subprocess, mock_parse
     ):
-        """Test trainModel with kcv parameter."""
+        """Test train_model with kcv parameter."""
         # Arrange
         mock_check.return_value = "/tmp/ranky.jar"
         mock_write.return_value = "/tmp/training.txt"
@@ -149,7 +149,7 @@ class TestTrainModel:
         mock_parse.return_value = Mock()
         training_set = []
         # Act
-        trainModel(training_set, "/tmp/model.txt", kcv=5)
+        train_model(training_set, "/tmp/model.txt", kcv=5)
         # Assert
         call_args = mock_subprocess.call_args[0][0]
         # subprocess.run receives a list of arguments
@@ -179,7 +179,7 @@ class TestTrain:
     """Test train function."""
 
     @patch("ltr.ranklib.save_model")
-    @patch("ltr.ranklib.trainModel")
+    @patch("ltr.ranklib.train_model")
     def test_train_success(self, mock_train_model, mock_save_model):
         """Test train function with successful training."""
         # Arrange
@@ -195,7 +195,7 @@ class TestTrain:
         mock_save_model.assert_called_once()
         assert result == mock_result
 
-    @patch("ltr.ranklib.trainModel")
+    @patch("ltr.ranklib.train_model")
     def test_train_fails_with_no_logs(self, mock_train_model):
         """Test train raises RuntimeError when no training logs."""
         # Arrange
@@ -209,7 +209,7 @@ class TestTrain:
             train(mock_client, training_set, "model1", "featureset1", "index1")
 
     @patch("ltr.ranklib.save_model")
-    @patch("ltr.ranklib.trainModel")
+    @patch("ltr.ranklib.train_model")
     def test_train_with_kcv_skips_save(self, mock_train_model, mock_save_model):
         """Test train skips save_model when kcv is used."""
         # Arrange
@@ -230,7 +230,7 @@ class TestTrain:
 class TestFeatureSearch:
     """Test feature_search function."""
 
-    @patch("ltr.ranklib.trainModel")
+    @patch("ltr.ranklib.train_model")
     def test_feature_search_finds_best_combo(self, mock_train_model):
         """Test feature_search finds best feature combination."""
         # Arrange
@@ -251,11 +251,13 @@ class TestFeatureSearch:
             """
             mock_result = Mock()
             # Return different metrics based on features
-            if kwargs.get("features") == (1,):
+            # feature_search passes features as a list, not tuple
+            features_arg = kwargs.get("features")
+            if features_arg == [1]:
                 mock_result.kcvTestAvg = 0.5
-            elif kwargs.get("features") == (2,):
+            elif features_arg == [2]:
                 mock_result.kcvTestAvg = 0.6
-            elif kwargs.get("features") == (1, 2):
+            elif features_arg == [1, 2]:
                 mock_result.kcvTestAvg = 0.7  # Best
             else:
                 mock_result.kcvTestAvg = 0.4
@@ -271,7 +273,7 @@ class TestFeatureSearch:
         assert best_combo.kcvTestAvg == 0.7
         assert isinstance(metric_per_feature, dict)
 
-    @patch("ltr.ranklib.trainModel")
+    @patch("ltr.ranklib.train_model")
     def test_feature_search_handles_failed_training(self, mock_train_model):
         """Test feature_search handles failed training gracefully."""
         # Arrange

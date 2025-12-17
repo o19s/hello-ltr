@@ -148,7 +148,7 @@ class TestSolrClientLTR:
         client = SolrClient()
         config = [{"name": "feature1"}, {"name": "feature2"}]
         # Act
-        name = client.get_feature_name(config, "2")
+        name = client.get_feature_name(config, 2)
         # Assert
         assert name == "feature2"
 

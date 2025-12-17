@@ -6,9 +6,12 @@ are considered examined but not clicked (negative signal), while the clicked
 document receives positive signal.
 """
 
+from __future__ import annotations
+
 from collections import Counter, defaultdict
 
-from ltr.clickmodels.session import build
+from ltr.clickmodels.session import Session, build
+from ltr.types import QueryDocPair
 
 
 class Model:
@@ -18,16 +21,16 @@ class Model:
         attracts: Dictionary mapping (query, doc_id) tuples to attractiveness values.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize a Cascade model with default values.
 
         Initializes attractiveness values to 0.5 for all query-document pairs.
         """
         # Attractiveness per query-doc
-        self.attracts = defaultdict(lambda: 0.5)
+        self.attracts: defaultdict[QueryDocPair, float] = defaultdict(lambda: 0.5)
 
 
-def cascade_model(sessions):
+def cascade_model(sessions: list[Session]) -> Model:
     """Train a Cascade click model from search sessions.
 
     The Cascade model can be solved directly without iterative optimization:
@@ -36,10 +39,12 @@ def cascade_model(sessions):
     - Model stops at first click (assumes user satisfaction)
 
     Args:
-        sessions: List of search session objects containing queries and clicked documents.
+        sessions: List of search session objects containing queries and
+            clicked documents.
 
     Returns:
-        Model: Trained Cascade model with attractiveness values for query-document pairs.
+        Model: Trained Cascade model with attractiveness values for
+            query-document pairs.
     """
     session_counts = Counter()
     click_counts = Counter()
@@ -66,16 +71,16 @@ def cascade_model(sessions):
 if __name__ == "__main__":
     sessions = build(
         [
-            ("A", ((1, True), (2, False), (3, True), (0, False))),
-            ("B", ((5, False), (2, True), (3, True), (0, False))),
-            ("A", ((1, False), (2, False), (3, True), (0, False))),
-            ("B", ((1, False), (2, False), (3, False), (9, True))),
-            ("A", ((9, False), (2, False), (1, True), (0, True))),
-            ("B", ((6, True), (2, False), (3, True), (1, False))),
-            ("A", ((7, False), (4, True), (1, False), (3, False))),
-            ("B", ((8, True), (2, False), (3, True), (1, False))),
-            ("A", ((1, False), (4, True), (2, False), (3, False))),
-            ("B", ((7, True), (4, False), (5, True), (1, True))),
+            ("A", [(1, True), (2, False), (3, True), (0, False)]),
+            ("B", [(5, False), (2, True), (3, True), (0, False)]),
+            ("A", [(1, False), (2, False), (3, True), (0, False)]),
+            ("B", [(1, False), (2, False), (3, False), (9, True)]),
+            ("A", [(9, False), (2, False), (1, True), (0, True)]),
+            ("B", [(6, True), (2, False), (3, True), (1, False)]),
+            ("A", [(7, False), (4, True), (1, False), (3, False)]),
+            ("B", [(8, True), (2, False), (3, True), (1, False)]),
+            ("A", [(1, False), (4, True), (2, False), (3, False)]),
+            ("B", [(7, True), (4, False), (5, True), (1, True)]),
         ]
     )
     cascade_model(sessions)

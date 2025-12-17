@@ -7,6 +7,8 @@ Tests cover:
 - Other click model modules
 """
 
+from __future__ import annotations
+
 import pytest
 
 from ltr.clickmodels.cascade import cascade_model
@@ -17,6 +19,7 @@ from ltr.clickmodels.ubm import (
     update_examines,
     user_browse_model,
 )
+from ltr.types import SessionTupleList
 
 
 class TestCascadeModel:
@@ -27,12 +30,12 @@ class TestCascadeModel:
         # Arrange
         sessions = build(
             [
-                ("query1", ((1, True), (2, False))),  # Click on doc 1, stops here
+                ("query1", [(1, True), (2, False)]),  # Click on doc 1, stops here
                 (
                     "query1",
-                    ((1, False), (2, True)),
+                    [(1, False), (2, True)],
                 ),  # Doc 1 no click, doc 2 clicked, stops here
-                ("query1", ((1, True), (2, False))),  # Click on doc 1, stops here
+                ("query1", [(1, True), (2, False)]),  # Click on doc 1, stops here
             ]
         )
         # Act
@@ -49,7 +52,7 @@ class TestCascadeModel:
         # Arrange
         sessions = build(
             [
-                ("query1", ((1, True), (2, True))),  # Should only count doc 1
+                ("query1", [(1, True), (2, True)]),  # Should only count doc 1
             ]
         )
         # Act
@@ -66,7 +69,7 @@ class TestCascadeModel:
         # Arrange
         sessions = build(
             [
-                ("query1", ((1, False), (2, False))),
+                ("query1", [(1, False), (2, False)]),
             ]
         )
         # Act
@@ -84,7 +87,7 @@ class TestUBMModel:
         # Arrange
         sessions = build(
             [
-                ("query1", ((1, True), (2, False))),
+                ("query1", [(1, True), (2, False)]),
             ]
         )
         # Act
@@ -99,7 +102,7 @@ class TestUBMModel:
         # Arrange
         sessions = build(
             [
-                ("query1", ((1, True), (2, False))),
+                ("query1", [(1, True), (2, False)]),
             ]
         )
         # Act
@@ -113,7 +116,7 @@ class TestUBMModel:
         # Arrange
         sessions = build(
             [
-                ("query1", ((1, True), (2, False))),
+                ("query1", [(1, True), (2, False)]),
             ]
         )
         model = UBMModel()
@@ -128,7 +131,7 @@ class TestUBMModel:
         # Arrange
         sessions = build(
             [
-                ("query1", ((1, True), (2, False))),
+                ("query1", [(1, True), (2, False)]),
             ]
         )
         model = UBMModel()
@@ -143,7 +146,7 @@ class TestUBMModel:
         # Arrange
         sessions = build(
             [
-                ("query1", ((1, True), (2, False))),
+                ("query1", [(1, True), (2, False)]),
             ]
         )
         model = UBMModel()
@@ -158,7 +161,7 @@ class TestUBMModel:
         # Arrange
         sessions = build(
             [
-                ("query1", ((1, True), (2, False))),
+                ("query1", [(1, True), (2, False)]),
             ]
         )
         model = UBMModel()
@@ -175,8 +178,8 @@ class TestSessionBuild:
     def test_build_creates_sessions(self):
         """Test build creates Session objects."""
         # Arrange
-        data = [
-            ("query1", ((1, True), (2, False))),
+        data: SessionTupleList = [
+            ("query1", [(1, True), (2, False)]),
         ]
         # Act
         sessions = build(data)
@@ -188,8 +191,8 @@ class TestSessionBuild:
     def test_build_creates_docs(self):
         """Test build creates Doc objects with correct clicks."""
         # Arrange
-        data = [
-            ("query1", ((1, True), (2, False))),
+        data: SessionTupleList = [
+            ("query1", [(1, True), (2, False)]),
         ]
         # Act
         sessions = build(data)
@@ -203,9 +206,9 @@ class TestSessionBuild:
     def test_build_multiple_sessions(self):
         """Test build creates multiple sessions."""
         # Arrange
-        data = [
-            ("query1", ((1, True),)),
-            ("query2", ((2, False),)),
+        data: SessionTupleList = [
+            ("query1", [(1, True)]),
+            ("query2", [(2, False)]),
         ]
         # Act
         sessions = build(data)
@@ -232,8 +235,8 @@ class TestCascadeModelEdgeCases:
         # Arrange
         sessions = build(
             [
-                ("query1", ((1, True),)),
-                ("query2", ((1, False),)),
+                ("query1", [(1, True)]),
+                ("query2", [(1, False)]),
             ]
         )
         # Act
@@ -261,7 +264,7 @@ class TestUBMModelEdgeCases:
         # Arrange
         sessions = build(
             [
-                ("query1", ((1, True),)),
+                ("query1", [(1, True)]),
             ]
         )
         # Act

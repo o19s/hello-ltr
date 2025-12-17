@@ -2,23 +2,23 @@
 Unit tests for search.py module.
 
 Tests cover:
-- esLtrQuery function
-- solrLtrQuery function
+- es_ltr_query function
+- solr_ltr_query function
 - search function for different clients
 """
 
 from unittest.mock import Mock
 
-from ltr.search import esLtrQuery, search, solrLtrQuery, tmdbFields
+from ltr.search import es_ltr_query, search, solr_ltr_query, tmdb_fields
 
 
 class TestEsLtrQuery:
     """Test Elasticsearch LTR query generation."""
 
     def test_es_ltr_query_sets_keywords(self):
-        """Test esLtrQuery sets keywords correctly."""
+        """Test es_ltr_query sets keywords correctly."""
         # Act
-        query = esLtrQuery("test query", "mymodel")
+        query = es_ltr_query("test query", "mymodel")
         # Assert
         assert (
             query["query"]["sltr"]["params"]["keywords"] == "test query"
@@ -31,9 +31,9 @@ class TestEsLtrQuery:
         ), f"Model name mismatch. Expected 'mymodel', got {query['query']['sltr'].get('model', 'MISSING')}"
 
     def test_es_ltr_query_uses_base_structure(self):
-        """Test esLtrQuery uses base query structure."""
+        """Test es_ltr_query uses base query structure."""
         # Act
-        query = esLtrQuery("test", "model")
+        query = es_ltr_query("test", "model")
         # Assert
         assert "size" in query
         assert query["size"] == 5
@@ -45,32 +45,32 @@ class TestSolrLtrQuery:
     """Test Solr LTR query generation."""
 
     def test_solr_ltr_query_removes_special_chars(self):
-        """Test solrLtrQuery removes special characters."""
+        """Test solr_ltr_query removes special characters."""
         # Act
-        query = solrLtrQuery("test_query!@#", "mymodel")
+        query = solr_ltr_query("test_query!@#", "mymodel")
         # Assert
         assert "testquery" in query["q"].lower()
         assert "!@#" not in query["q"]
 
     def test_solr_ltr_query_adds_fuzzy(self):
-        """Test solrLtrQuery adds fuzzy operators."""
+        """Test solr_ltr_query adds fuzzy operators."""
         # Act
-        query = solrLtrQuery("test query", "mymodel")
+        query = solr_ltr_query("test query", "mymodel")
         # Assert
         assert "test~" in query["q"]
         assert "query~" in query["q"]
 
     def test_solr_ltr_query_includes_model(self):
-        """Test solrLtrQuery includes model name."""
+        """Test solr_ltr_query includes model name."""
         # Act
-        query = solrLtrQuery("test", "mymodel")
+        query = solr_ltr_query("test", "mymodel")
         # Assert
         assert "model=mymodel" in query["q"]
 
     def test_solr_ltr_query_has_correct_structure(self):
-        """Test solrLtrQuery has correct fields."""
+        """Test solr_ltr_query has correct fields."""
         # Act
-        query = solrLtrQuery("test", "model")
+        query = solr_ltr_query("test", "model")
         # Assert
         assert "fl" in query
         assert "rows" in query
@@ -89,7 +89,7 @@ class TestSearch:
             {"title": "Movie1", "_score": 0.9, "release_year": 2020}
         ]
         # Act
-        search(mock_client, "test query", "mymodel", index="tmdb", fields=tmdbFields)
+        search(mock_client, "test query", "mymodel", index="tmdb", fields=tmdb_fields)
         # Assert
         assert (
             mock_client.query.called
@@ -109,7 +109,7 @@ class TestSearch:
         mock_client.name.return_value = "opensearch"
         mock_client.query.return_value = [{"title": "Movie1", "_score": 0.9}]
         # Act
-        search(mock_client, "test query", "mymodel", index="tmdb", fields=tmdbFields)
+        search(mock_client, "test query", "mymodel", index="tmdb", fields=tmdb_fields)
         # Assert
         mock_client.query.assert_called_once()
         call_args = mock_client.query.call_args
@@ -122,7 +122,7 @@ class TestSearch:
         mock_client.name.return_value = "solr"
         mock_client.query.return_value = [{"title": "Movie1", "_score": 0.9}]
         # Act
-        search(mock_client, "test query", "mymodel", index="tmdb", fields=tmdbFields)
+        search(mock_client, "test query", "mymodel", index="tmdb", fields=tmdb_fields)
         # Assert
         mock_client.query.assert_called_once()
         call_args = mock_client.query.call_args

@@ -5,12 +5,19 @@ movie genres and release dates, creating synthetic training data for
 Learn-to-Rank models.
 """
 
+from __future__ import annotations
+
 from tqdm import tqdm
 
-from .judgments import Judgment, judgments_to_file
+from ltr.client.base_client import BaseClient
+from ltr.judgments import Judgment, judgments_to_file
+from ltr.logger import get_logger
+from ltr.types import JSONDict
+
+logger = get_logger(__name__)
 
 
-def genreQid(genre):
+def genre_qid(genre: str) -> int:
     """Map genre name to query ID.
 
     Args:
@@ -30,7 +37,7 @@ def genreQid(genre):
         return 0
 
 
-def genreGrade(movie):
+def genre_grade(movie: JSONDict) -> int:
     """Calculate relevance grade for a movie based on genre and release date.
 
     Creates a simple training set where:
@@ -47,29 +54,29 @@ def genreGrade(movie):
             - Other genres or missing data: 0
     """
     if "release_year" in movie and movie["release_year"] is not None:
-        releaseYear = int(movie["release_year"])
+        release_year = int(movie["release_year"])
     else:
         return 0
     if movie["genres"][0] == "Science Fiction":
-        if releaseYear > 2015:
+        if release_year > 2015:
             return 4
-        elif releaseYear > 2010:
+        elif release_year > 2010:
             return 3
-        elif releaseYear > 2000:
+        elif release_year > 2000:
             return 2
-        elif releaseYear > 1990:
+        elif release_year > 1990:
             return 1
         else:
             return 0
 
     if movie["genres"][0] == "Drama":
-        if releaseYear > 1990:
+        if release_year > 1990:
             return 0
-        elif releaseYear > 1970:
+        elif release_year > 1970:
             return 1
-        elif releaseYear > 1950:
+        elif release_year > 1950:
             return 2
-        elif releaseYear > 1930:
+        elif release_year > 1930:
             return 3
         else:
             return 4
@@ -77,8 +84,10 @@ def genreGrade(movie):
 
 
 def synthesize(
-    client, judgmentsOutFile="genre_by_date_judgments.txt", autoNegate=False
-):
+    client: BaseClient,
+    judgments_out_file: str = "genre_by_date_judgments.txt",
+    auto_negate: bool = False,
+) -> list[Judgment]:
     """Synthesize relevance judgments based on movie genres and release dates.
 
     Queries the search engine for all movies and generates judgments for
@@ -88,16 +97,16 @@ def synthesize(
 
     Args:
         client: Search client instance (Elasticsearch, OpenSearch, or Solr).
-        judgmentsOutFile: Output file path for the generated judgments
+        judgments_out_file: Output file path for the generated judgments
             (default: "genre_by_date_judgments.txt").
-        autoNegate: If True, also creates negative judgments (grade 0) for
+        auto_negate: If True, also creates negative judgments (grade 0) for
             movies in the opposite genre. For example, a Science Fiction movie
             will get a grade 0 judgment for Drama queries (default: False).
 
     Returns:
         list: List of Judgment objects that were generated and written to file.
     """
-    print("Generating judgments for scifi & drama movies")
+    logger.info("Generating judgments for scifi & drama movies")
 
     if client.name() in ["elastic", "opensearch"]:
         params = {"query": {"match_all": {}}, "size": 10000, "sort": [{"_id": "asc"}]}
@@ -111,30 +120,30 @@ def synthesize(
     for movie in tqdm(resp):
         if "genres" in movie and len(movie["genres"]) > 0:
             genre = movie["genres"][0]
-            qid = genreQid(genre)
+            qid = genre_qid(genre)
             if qid == 0:
                 continue
             judgment = Judgment(
-                qid=qid, grade=genreGrade(movie), docId=movie["id"], keywords=genre
+                qid=qid, grade=genre_grade(movie), doc_id=movie["id"], keywords=genre
             )
             judgments.append(judgment)
 
             # This movie is good for its genre, but
             # a bad result for the opposite genre
-            negGenre = None
+            neg_genre = None
             if genre == "Science Fiction":
-                negGenre = "Drama"
+                neg_genre = "Drama"
             elif genre == "Drama":
-                negGenre = "Science Fiction"
+                neg_genre = "Science Fiction"
 
-            if autoNegate and negGenre is not None:
-                negQid = genreQid(negGenre)
+            if auto_negate and neg_genre is not None:
+                neg_qid = genre_qid(neg_genre)
                 judgment = Judgment(
-                    qid=negQid, grade=0, docId=movie["id"], keywords=negGenre
+                    qid=neg_qid, grade=0, doc_id=movie["id"], keywords=neg_genre
                 )
                 judgments.append(judgment)
 
-    with open(judgmentsOutFile, "w") as f:
-        judgments_to_file(f, judgmentsList=judgments)
+    with open(judgments_out_file, "w") as f:
+        judgments_to_file(f, judgments_list=judgments)
 
     return judgments

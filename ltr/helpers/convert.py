@@ -6,15 +6,22 @@ for use with Apache Solr's Learning-to-Rank plugin.
 
 import xml.etree.ElementTree as ET
 
+from ltr.types import FeatureList, JSONDict, ModelPayload
 
-def convert(ensemble_xml_string, modelName, featureSet, featureMapping):
+
+def convert(
+    ensemble_xml_string: str,
+    model_name: str,
+    feature_set: str,
+    feature_mapping: FeatureList,
+) -> ModelPayload:
     """Convert a LambdaMART XML model to Solr JSON format.
 
     Args:
         ensemble_xml_string: XML string containing the LambdaMART ensemble model.
-        modelName: Name to assign to the model in Solr.
-        featureSet: Name of the feature set/store to associate with this model.
-        featureMapping: List of feature dictionaries mapping feature indices
+        model_name: Name to assign to the model in Solr.
+        feature_set: Name of the feature set/store to associate with this model.
+        feature_mapping: List of feature dictionaries mapping feature indices
             to feature names.
 
     Returns:
@@ -25,24 +32,24 @@ def convert(ensemble_xml_string, modelName, featureSet, featureMapping):
             - features: Feature mapping
             - params: Model parameters including tree structures
     """
-    modelClass = "org.apache.solr.ltr.model.MultipleAdditiveTreesModel"
+    model_class = "org.apache.solr.ltr.model.MultipleAdditiveTreesModel"
 
     model = {
-        "store": featureSet,
-        "name": modelName,
-        "class": modelClass,
-        "features": featureMapping,
+        "store": feature_set,
+        "name": model_name,
+        "class": model_class,
+        "features": feature_mapping,
     }
 
     # Clean up header
     ensemble_xml_string = "\n".join(ensemble_xml_string.split("\n")[7:])
-    lambdaModel = ET.fromstring(ensemble_xml_string)
+    lambda_model = ET.fromstring(ensemble_xml_string)
 
     trees = []
-    for node in lambdaModel:
+    for node in lambda_model:
         t = {
             "weight": str(node.attrib["weight"]),
-            "root": parseSplits(node[0], featureMapping),
+            "root": parse_splits(node[0], feature_mapping),
         }
         trees.append(t)
 
@@ -52,7 +59,7 @@ def convert(ensemble_xml_string, modelName, featureSet, featureMapping):
     return model
 
 
-def parseSplits(split, features):
+def parse_splits(split: ET.Element, features: FeatureList) -> JSONDict:
     """Recursively parse XML tree splits into Solr tree structure.
 
     Args:
@@ -73,7 +80,7 @@ def parseSplits(split, features):
         elif el.tag == "threshold":
             obj["threshold"] = str(el.text.strip())
         elif el.tag == "split" and "pos" in el.attrib:
-            obj[el.attrib["pos"]] = parseSplits(el, features)
+            obj[el.attrib["pos"]] = parse_splits(el, features)
         elif el.tag == "output":
             obj["value"] = str(el.text.strip())
     return obj

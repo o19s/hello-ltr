@@ -5,10 +5,21 @@ which are the core training data for Learn-to-Rank models. Judgments represent
 query-document pairs with relevance grades and optional feature vectors.
 """
 
+from __future__ import annotations
+
 import re
 from collections.abc import Iterator
-from contextlib import contextmanager
-from typing import Literal, Optional, overload
+from contextlib import AbstractContextManager, contextmanager
+from typing import Any, Literal, TextIO, cast, overload
+
+from ltr.logger import get_logger
+from ltr.types import QueryKeywordMap
+
+logger = get_logger(__name__)
+
+# Type alias for file-like objects that can be used for reading/writing judgments
+# Using TextIO for compatibility with open() return type
+JudgmentFile = TextIO
 
 
 class JudgmentsWriter:
@@ -22,16 +33,20 @@ class JudgmentsWriter:
         judgments: List of Judgment objects to be written.
     """
 
-    def __init__(self, f):
+    def __init__(self, f: TextIO) -> None:
         """Initialize a JudgmentsWriter.
 
         Args:
             f: File descriptor or file-like object to write judgments to.
         """
         self.f = f
-        self.judgments = []
+        self.judgments: list[Judgment] = []
 
-    def write(self, judgment=None, judgments=None):
+    def write(
+        self,
+        judgment: Judgment | None = None,
+        judgments: list[Judgment] | None = None,
+    ) -> None:
         """Add one or more judgments to the buffer.
 
         Args:
@@ -46,7 +61,7 @@ class JudgmentsWriter:
         elif judgments is not None:
             self.judgments.extend(judgments)
 
-    def flush(self):
+    def flush(self) -> None:
         """Write all buffered judgments to the file and clear the buffer."""
         judgments_to_file(self.f, self.judgments)
 
@@ -63,17 +78,17 @@ class JudgmentsReader:
         judgments: Iterator over Judgment objects.
     """
 
-    def __init__(self, f):
+    def __init__(self, f: JudgmentFile) -> None:
         """Initialize a JudgmentsReader.
 
         Args:
             f: File descriptor or file-like object to read judgments from.
         """
         self.f = f
-        self.kw_with_weight = _queriesFromHeader(f)
-        self.judgments = _judgment_rows(f, self.kw_with_weight)
+        self.kw_with_weight: QueryKeywordMap = _queries_from_header(f)
+        self.judgments: Iterator[Judgment] = _judgment_rows(f, self.kw_with_weight)
 
-    def keywords(self, qid):
+    def keywords(self, qid: int) -> str:
         """Get the search keywords for a query ID.
 
         Args:
@@ -94,10 +109,9 @@ class JudgmentsReader:
 
 
 @overload
-@contextmanager
 def judgments_open(
-    path: Optional[str], mode: Literal["r", "rt", "rb"] = ...
-) -> Iterator[JudgmentsReader]:
+    path: str, mode: Literal["r", "rt", "rb"] = "r"
+) -> AbstractContextManager[JudgmentsReader]:
     """Type overload for reading judgments from a file.
 
     This is a type hint overload. See the implementation below for full documentation.
@@ -106,10 +120,9 @@ def judgments_open(
 
 
 @overload
-@contextmanager
 def judgments_open(
-    path: Optional[str], mode: Literal["w", "wt", "wb"] = ...
-) -> Iterator[JudgmentsWriter]:
+    path: str, mode: Literal["w", "wt", "wb"]
+) -> AbstractContextManager[JudgmentsWriter]:
     """Type overload for writing judgments to a file.
 
     This is a type hint overload. See the implementation below for full documentation.
@@ -118,34 +131,36 @@ def judgments_open(
 
 
 @contextmanager
-def judgments_open(path: Optional[str] = None, mode: str = "r"):
+def judgments_open(path: str | None = None, mode: str = "r"):
     """Work with judgments from the filesystem,
     either in a read or write mode"""
     if path is None:
         raise ValueError("path cannot be None")
     with open(path, mode) as f:
+        f_textio: TextIO = cast(TextIO, f)
         if mode[0] == "r":
-            yield JudgmentsReader(f)
+            yield JudgmentsReader(f_textio)
         elif mode[0] == "w":
-            writer = JudgmentsWriter(f)
+            writer = JudgmentsWriter(f_textio)
             yield writer
             writer.flush()
 
 
 @contextmanager
-def judgments_writer(f):
+def judgments_writer(f: JudgmentFile) -> Iterator[JudgmentsWriter]:
     """Write to a judgment list at
     the provided file descripter (like StringIO)"""
+    writer: JudgmentsWriter | None = None
     try:
         writer = JudgmentsWriter(f)
         yield writer
     finally:
-        writer.flush()
-        pass
+        if writer is not None:
+            writer.flush()
 
 
 @contextmanager
-def judgments_reader(f):
+def judgments_reader(f: JudgmentFile) -> Iterator[JudgmentsReader]:
     """Read from a judgment list at
     the provided file descripter (like StringIO)"""
     try:
@@ -171,28 +186,36 @@ class Judgment:
         weight: Weight for this judgment in training (default: 1).
     """
 
-    def __init__(self, grade, qid, keywords, docId, features=None, weight=1):
+    def __init__(
+        self,
+        grade: int,
+        qid: int,
+        keywords: str,
+        doc_id: str,
+        features: list[float] | None = None,
+        weight: int = 1,
+    ) -> None:
         """Initialize a Judgment.
 
         Args:
             grade: Relevance grade (typically 0-4, where higher is more relevant).
             qid: Query ID identifying the query this judgment belongs to.
             keywords: Search keywords for the query.
-            docId: Document ID being judged.
+            doc_id: Document ID being judged.
             features: Optional list of feature values (default: empty list).
                 Note: 0th feature corresponds to RankLib feature 1.
             weight: Weight for this judgment in training (default: 1).
         """
-        self.grade = grade
-        self.qid = qid
-        self.keywords = keywords
-        self.docId = docId
-        self.features = (
+        self.grade: int = grade
+        self.qid: int = qid
+        self.keywords: str = keywords
+        self.docId: str = doc_id
+        self.features: list[float] = (
             features if features is not None else []
         )  # 0th feature is ranklib feature 1
-        self.weight = weight
+        self.weight: int = weight
 
-    def sameQueryAndDoc(self, other):
+    def same_query_and_doc(self, other: Judgment) -> bool:
         """Check if this judgment is for the same query and document as another.
 
         Args:
@@ -203,7 +226,7 @@ class Judgment:
         """
         return self.qid == other.qid and self.docId == other.docId
 
-    def has_features(self):
+    def has_features(self) -> bool:
         """Check if this judgment has feature values.
 
         Returns:
@@ -211,7 +234,7 @@ class Judgment:
         """
         return self.features is not None and (len(self.features) > 0)
 
-    def __str__(self):
+    def __str__(self) -> str:
         """Generate user-friendly string representation.
 
         Returns:
@@ -219,7 +242,7 @@ class Judgment:
         """
         return f"grade:{self.grade} qid:{self.qid} ({self.keywords}) docid:{self.docId}"
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         """Generate developer-friendly string representation.
 
         Returns:
@@ -229,7 +252,7 @@ class Judgment:
             **vars(self)
         )
 
-    def toRanklibFormat(self):
+    def to_ranklib_format(self) -> str:
         """Convert judgment to RankLib training format string.
 
         Returns:
@@ -239,34 +262,34 @@ class Judgment:
         Note:
             Feature indices are 1-based in RankLib format (0th feature becomes "1:").
         """
-        featuresAsStrs = [
+        features_as_strs = [
             f"{idx + 1}:{feature}" for idx, feature in enumerate(self.features)
         ]
         comment = f"# {self.docId}\t{self.keywords}"
         return "{}\tqid:{}\t{} {}".format(
-            self.grade, self.qid, "\t".join(featuresAsStrs), comment
+            self.grade, self.qid, "\t".join(features_as_strs), comment
         )
 
 
-def _queriesToHeader(qidToKwDict):
+def _queries_to_header(qid_to_kw_dict: QueryKeywordMap) -> str:
     """Convert query ID to keywords mapping into file header format.
 
     Args:
-        qidToKwDict: Dictionary mapping query IDs to (keywords, weight) tuples.
+        qid_to_kw_dict: Dictionary mapping query IDs to (keywords, weight) tuples.
 
     Returns:
         str: Header string with query information in format:
             # qid:<qid>: <keywords>*<weight>
     """
-    rVal = ""
-    for qid, kws in qidToKwDict.items():
-        rVal += f"# qid:{qid}: {kws[0]}"
-        rVal += f"*{kws[1]}\n"
-    rVal += "\n"
-    return rVal
+    r_val = ""
+    for qid, kws in qid_to_kw_dict.items():
+        r_val += f"# qid:{qid}: {kws[0]}"
+        r_val += f"*{kws[1]}\n"
+    r_val += "\n"
+    return r_val
 
 
-def _queriesFromHeader(lines):
+def _queries_from_header(lines: JudgmentFile) -> QueryKeywordMap:
     """Parses out mapping between, query id and user keywords
     from header comments, ie:
     # qid:523: First Blood
@@ -274,28 +297,29 @@ def _queriesFromHeader(lines):
     # Regex can be debugged here:
     # http://www.regexpal.com/?fam=96564
     regex = re.compile(r"#\sqid:(\d+?):\s+?(.*)")
-    rVal = {}
+    r_val = {}
     for line in lines:
         if line[0] != "#":
             break
         m = re.match(regex, line)
         try:
             if m:
-                keywordAndWeight = m.group(2).split("*")
-                keyword = keywordAndWeight[0]
+                keyword_and_weight = m.group(2).split("*")
+                keyword = keyword_and_weight[0]
                 weight = 1
-                if len(keywordAndWeight) > 1:
-                    weight = int(keywordAndWeight[-1])
-                rVal[int(m.group(1))] = (keyword, weight)
+                if len(keyword_and_weight) > 1:
+                    weight = int(keyword_and_weight[-1])
+                r_val[int(m.group(1))] = (keyword, weight)
         except ValueError as e:
-            print(e)
-    #    print(f"Recognizing {len(rVal)} queries in: {lines.name}")
-    print(f"Recognizing {len(rVal)} queries")
+            logger.error(f"Error parsing query header: {e}")
+    logger.info(f"Recognizing {len(r_val)} queries")
 
-    return rVal
+    return r_val
 
 
-def _judgmentsFromBody(lines):
+def _judgments_from_body(
+    lines: Iterator[str],
+) -> Iterator[tuple[int, int, str, list[float]]]:
     """Parses out judgment/grade, query id, docId, and possibly features in line such as:
      4  qid:523   # a01  Grade for Rambo for query Foo
 
@@ -306,52 +330,54 @@ def _judgmentsFromBody(lines):
     # Regex can be debugged here:
     # http://www.regexpal.com/?fam=96565
     regex = re.compile(r"^(\d+)\s+qid:(\d+)\s+#\s+(\w+).*")
-    trainRegex = re.compile(r"^(\d+)\s+qid:(\d+)\s+1:\d+.+#\s+(\w+).*")
-    ftrRegex = re.compile(r"(\d+):([.\d]+)\s")
+    train_regex = re.compile(r"^(\d+)\s+qid:(\d+)\s+1:\d+.+#\s+(\w+).*")
+    ftr_regex = re.compile(r"(\d+):([.\d]+)\s")
     for line in lines:
         m = re.match(regex, line)
         if m:
             yield int(m.group(1)), int(m.group(2)), m.group(3), []
         else:
-            m = re.match(trainRegex, line)
+            m = re.match(train_regex, line)
             if m:
                 grade = int(m.group(1))
                 qid = int(m.group(2))
-                docId = m.group(3)
-                ftrMatches = re.finditer(ftrRegex, line)
+                doc_id = m.group(3)
+                ftr_matches = re.finditer(ftr_regex, line)
 
                 features = {}
-                ftrSize = 0
+                ftr_size = 0
 
-                for m in ftrMatches:
-                    ftrIdx = int(m.group(1)) - 1
-                    if ftrIdx + 1 > ftrSize:
-                        ftrSize = ftrIdx + 1
-                    ftrScore = float(m.group(2))
-                    features[ftrIdx] = ftrScore
+                for m in ftr_matches:
+                    ftr_idx = int(m.group(1)) - 1
+                    if ftr_idx + 1 > ftr_size:
+                        ftr_size = ftr_idx + 1
+                    ftr_score = float(m.group(2))
+                    features[ftr_idx] = ftr_score
 
-                featuresList = [None] * ftrSize
-                for ftrIdx, value in features.items():
-                    featuresList[ftrIdx] = value
+                features_list: list[float | None] = [None] * ftr_size
+                for ftr_idx, value in features.items():
+                    features_list[ftr_idx] = value
 
-                for featureVal in featuresList:
-                    if featureVal is None:
+                for feature_val in features_list:
+                    if feature_val is None:
                         raise ValueError(
                             "Missing Features Detected When Parsing Training Set"
                         )
 
-                yield grade, qid, docId, featuresList
+                yield grade, qid, doc_id, cast(list[float], features_list)
 
             pass
             # print(f"Not Recognized as Judgment {line}")
 
 
-def _judgment_rows(f, qidToKeywords):
+def _judgment_rows(
+    f: JudgmentFile, qid_to_keywords: QueryKeywordMap
+) -> Iterator[Judgment]:
     """Parse judgment rows from file body and yield Judgment objects.
 
     Args:
         f: File-like object to read from.
-        qidToKeywords: Dictionary mapping query IDs to (keywords, weight) tuples.
+        qid_to_keywords: Dictionary mapping query IDs to (keywords, weight) tuples.
 
     Yields:
         Judgment: Judgment objects parsed from the file.
@@ -359,65 +385,74 @@ def _judgment_rows(f, qidToKeywords):
     Raises:
         ValueError: If judgments are not sorted by qid in the file.
     """
-    lastQid = -1
-    for grade, qid, docId, features in _judgmentsFromBody(f):
-        if qid < lastQid:
+    last_qid = -1
+    for grade, qid, doc_id, features in _judgments_from_body(f):
+        if qid < last_qid:
             raise ValueError("Judgments not sorted by qid in file")
-        # if lastQid != qid and qid % 100 == 0:
+        # if last_qid != qid and qid % 100 == 0:
         #     print(f"Parsing QID {qid}")
         yield Judgment(
             grade=grade,
             qid=qid,
-            keywords=qidToKeywords[qid][0],
-            weight=qidToKeywords[qid][1],
-            docId=docId,
+            keywords=qid_to_keywords[qid][0],
+            weight=qid_to_keywords[qid][1],
+            doc_id=doc_id,
             features=features,
         )
-        lastQid = qid
+        last_qid = qid
 
 
-def judgments_from_file(f):
+def judgments_from_file(f: JudgmentFile) -> Iterator[Judgment]:
     """Read judgments from a SVMRank File
     f is a file object
     """
-    qidToKeywords = _queriesFromHeader(f)
-    yield from _judgment_rows(f, qidToKeywords)
+    qid_to_keywords = _queries_from_header(f)
+    yield from _judgment_rows(f, qid_to_keywords)
 
 
-def judgments_to_file(f, judgmentsList):
+def judgments_to_file(f: JudgmentFile, judgments_list: list[Judgment]) -> None:
     """Write judgments from a SVMRank File
     f is a file object
     """
     # TODO - consider if a groupby approach would work instead of needing everything in memory
-    judgToQid = _judgments_by_qid(judgmentsList)  # Pretty hideously slow stuff
-    fileHeader = _queriesToHeader(
-        {qid: (judgs[0].keywords, judgs[0].weight) for qid, judgs in judgToQid.items()}
+    judg_to_qid = _judgments_by_qid(judgments_list)  # Pretty hideously slow stuff
+    file_header = _queries_to_header(
+        {
+            qid: (judgs[0].keywords, judgs[0].weight)
+            for qid, judgs in judg_to_qid.items()
+        }
     )
-    judgByQid = sorted(judgmentsList, key=lambda j: j.qid)
-    f.write(fileHeader)
-    for judg in judgByQid:
-        f.write(judg.toRanklibFormat() + "\n")
+    judg_by_qid = sorted(judgments_list, key=lambda j: j.qid)
+    f.write(file_header)
+    for judg in judg_by_qid:
+        f.write(judg.to_ranklib_format() + "\n")
 
 
-def _judgments_by_qid(judgments):
+def _judgments_by_qid(
+    judgments: list[Judgment],
+) -> dict[int, list[Judgment]]:
     """Create a dictionary of qid->judgments
     Prefer itertools groupby"""
-    rVal = {}
+    r_val = {}
     for judgment in judgments:
         try:
-            rVal[judgment.qid].append(judgment)
+            r_val[judgment.qid].append(judgment)
         except KeyError:
-            rVal[judgment.qid] = [judgment]
-    return rVal
+            r_val[judgment.qid] = [judgment]
+    return r_val
 
 
-def judgments_by_qid(judgments):
+def judgments_by_qid(
+    judgments: list[Judgment],
+) -> dict[int, list[Judgment]]:
     """Create a dictionary of qid->judgments
     Public wrapper for _judgments_by_qid"""
     return _judgments_by_qid(judgments)
 
 
-def judgments_to_nparray(judgments):
+def judgments_to_nparray(
+    judgments: list[Judgment],
+) -> tuple[Any, Any]:
     """Return
     - features - num samples x num features
     - predictors - num samples x grade, qid
@@ -434,7 +469,7 @@ def judgments_to_nparray(judgments):
     return features, predictors
 
 
-def judgments_to_dataframe(judgments, unnest=True):
+def judgments_to_dataframe(judgments: list[Judgment], unnest: bool = True) -> Any:
     """Convert a list of judgments to a pandas DataFrame.
 
     Args:
@@ -493,7 +528,7 @@ def judgments_to_dataframe(judgments, unnest=True):
     return dat
 
 
-def judgments_dataframe_to_long(judgments_df):
+def judgments_dataframe_to_long(judgments_df: Any) -> Any:
     """Convert a wide-format judgments DataFrame to long format.
 
     Transforms feature columns (features0, features1, etc.) into rows,
@@ -512,7 +547,9 @@ def judgments_dataframe_to_long(judgments_df):
     ).reset_index()
 
 
-def duplicateJudgmentsByWeight(judgmentsByQid):
+def duplicate_judgments_by_weight(
+    judgments_by_qid: dict[int, list[Judgment]],
+) -> dict[int, list[Judgment]]:
     """Duplicate judgments based on their weight.
 
     For each query with weight > 1, creates additional copies of all judgments
@@ -520,48 +557,49 @@ def duplicateJudgmentsByWeight(judgmentsByQid):
     the training data for queries with higher weights.
 
     Args:
-        judgmentsByQid: Dictionary mapping query IDs to lists of Judgment objects.
+        judgments_by_qid: Dictionary mapping query IDs to lists of Judgment objects.
 
     Returns:
         dict: Dictionary mapping query IDs to lists of Judgment objects,
             with duplicated queries added for weights > 1.
     """
 
-    def copyJudgments(srcJudgments):
+    def copy_judgments(src_judgments: list[Judgment]) -> list[Judgment]:
         """Create a deep copy of a list of judgments.
 
         Args:
-            srcJudgments: List of Judgment objects to copy.
+            src_judgments: List of Judgment objects to copy.
 
         Returns:
             list: New list containing copied Judgment objects.
         """
-        destJudgments = []
-        for judg in srcJudgments:
-            destJudgments.append(
+        dest_judgments = []
+        for judg in src_judgments:
+            dest_judgments.append(
                 Judgment(
                     grade=judg.grade,
                     qid=judg.qid,
                     keywords=judg.keywords,
                     weight=judg.weight,
-                    docId=judg.docId,
+                    doc_id=judg.docId,
                 )
             )
-        return destJudgments
+        return dest_judgments
 
-    rVal = {}
-    maxQid = 0
-    for qid, _judgments in judgmentsByQid.items():
-        maxQid = qid
-    for qid, judgments in judgmentsByQid.items():
-        rVal[qid] = judgments
+    r_val = {}
+    max_qid = 0
+    for qid, _judgments in judgments_by_qid.items():
+        max_qid = qid
+    for qid, judgments in judgments_by_qid.items():
+        r_val[qid] = judgments
         if qid % 100 == 0:
-            print(f"Duping {qid}")
+            logger.debug(f"Duping {qid}")
         if judgments[0].weight > 1:
             for _i in range(judgments[0].weight - 1):
-                rVal[maxQid] = copyJudgments(judgments)
-                for judg in judgments:
-                    judg.qid = maxQid
-                maxQid += 1
+                copied_judgments = copy_judgments(judgments)
+                r_val[max_qid] = copied_judgments
+                for judg in copied_judgments:
+                    judg.qid = max_qid
+                max_qid += 1
 
-    return rVal
+    return r_val

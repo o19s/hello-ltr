@@ -61,11 +61,13 @@ def test_bayesian_optimization_patterns():
         assert len(cdf) == 100
         assert isinstance(ppf, (float, np.floating))
 
-    return run_pattern_test(
+    errors = run_pattern_test(
         "Bayesian optimization patterns",
         _test,
         success_msg="scipy.stats.norm operations (PDF, CDF, PPF)",
     )
+    assert not errors, f"Test failed with errors: {errors}"
+    return errors
 
 
 def test_lambda_mart_patterns():
@@ -106,11 +108,13 @@ def test_lambda_mart_patterns():
         assert len(grouped_sum) == 2
         assert len(grouped_mean) == 2
 
-    return run_pattern_test(
+    errors = run_pattern_test(
         "Lambda-MART patterns",
         _test,
         success_msg="Lambda-MART DataFrame and DecisionTree patterns",
     )
+    assert not errors, f"Test failed with errors: {errors}"
+    return errors
 
 
 def test_svmrank_patterns():
@@ -135,19 +139,19 @@ def test_svmrank_patterns():
         features_scaled = np.asarray(scaler.transform(features))
 
         # Pattern: Pairwise transform (simplified)
-        GRADE = 0
-        QID = 1
+        grade = 0
+        qid = 1
         transformed_features = []
         transformed_predictors = []
 
         for i in range(len(features)):
             for j in range(len(features)):
                 if (
-                    predictors[i][GRADE] != predictors[j][GRADE]
-                    and predictors[i][QID] == predictors[j][QID]
+                    predictors[i][grade] != predictors[j][grade]
+                    and predictors[i][qid] == predictors[j][qid]
                 ):
                     transformed_predictors.append(
-                        [predictors[i][GRADE] - predictors[j][GRADE]]
+                        [predictors[i][grade] - predictors[j][grade]]
                     )
                     transformed_features.append(features[i, :] - features[j, :])
 
@@ -156,17 +160,19 @@ def test_svmrank_patterns():
 
         # Pattern: LinearSVC
         if len(transformed_predictors) > 0:
-            model = svm.LinearSVC(max_iter=1000)
+            model = svm.LinearSVC(max_iter=1000, dual="auto")
             model.fit(transformed_features, transformed_predictors.ravel())
             assert hasattr(model, "coef_")
 
         assert features_scaled.shape == features.shape
 
-    return run_pattern_test(
+    errors = run_pattern_test(
         "SVM-Rank patterns",
         _test,
         success_msg="SVM-Rank StandardScaler and LinearSVC patterns",
     )
+    assert not errors, f"Test failed with errors: {errors}"
+    return errors
 
 
 def test_dataframe_patterns():
@@ -225,11 +231,13 @@ def test_dataframe_patterns():
         assert len(df_copy) == len(df)
         assert "new_col" in df_copy.columns
 
-    return run_pattern_test(
+    errors = run_pattern_test(
         "DataFrame patterns",
         _test,
         success_msg="DataFrame creation and groupby patterns",
     )
+    assert not errors, f"Test failed with errors: {errors}"
+    return errors
 
 
 def test_judgments_module_patterns():
@@ -297,11 +305,13 @@ def test_judgments_module_patterns():
         assert len(df) == 3
         assert "features" in df.columns
 
-    return run_pattern_test(
+    errors = run_pattern_test(
         "judgments.py patterns",
         _test,
         success_msg="judgments.py array and DataFrame conversion patterns",
     )
+    assert not errors, f"Test failed with errors: {errors}"
+    return errors
 
 
 def main():

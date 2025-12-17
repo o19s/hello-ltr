@@ -5,8 +5,11 @@ This module provides classes and functions for working with MS MARCO
 and evaluating rankings using metrics like Reciprocal Rank.
 """
 
+from __future__ import annotations
+
 import csv
 import gzip
+from collections.abc import Iterator
 
 
 class QRel:
@@ -21,7 +24,7 @@ class QRel:
         keywords: Query keywords/text.
     """
 
-    def __init__(self, qid, docid, keywords):
+    def __init__(self, qid: str, docid: str, keywords: str | None) -> None:
         """Initialize a QRel object.
 
         Args:
@@ -29,11 +32,11 @@ class QRel:
             docid: Relevant document ID.
             keywords: Query keywords/text.
         """
-        self.qid = qid
-        self.docid = docid
-        self.keywords = keywords
+        self.qid: str = qid
+        self.docid: str = docid
+        self.keywords: str | None = keywords
 
-    def eval_rr(self, doc_ranking):
+    def eval_rr(self, doc_ranking: list[str]) -> float:
         """Evaluate document ranking using Reciprocal Rank metric.
 
         Calculates 1/rank where rank is the position of the relevant document
@@ -54,9 +57,9 @@ class QRel:
 
     @staticmethod
     def read_qrels(
-        qrels_fname="data/msmarco-doctrain-qrels.tsv.gz",
-        queries_fname="data/msmarco-doctrain-queries.tsv.gz",
-    ):
+        qrels_fname: str = "data/msmarco-doctrain-qrels.tsv.gz",
+        queries_fname: str = "data/msmarco-doctrain-queries.tsv.gz",
+    ) -> Iterator[QRel]:
         """Read QRel objects from MS MARCO qrels and queries files.
 
         Args:
@@ -80,11 +83,17 @@ class QRel:
                 if qid in qids_to_keywords:
                     keywords = qids_to_keywords[qid]
                 else:
-                    print(f"Missing keywords for {qid}")
+                    # Import here to avoid circular dependency
+                    from ltr.logger import get_logger
+
+                    logger = get_logger(__name__)
+                    logger.warning(f"Missing keywords for {qid}")
                 yield QRel(qid=row[0], docid=row[2], keywords=keywords)
 
     @staticmethod
-    def get_keyword_lookup(fname="data/msmarco-doctrain-queries.tsv.gz"):
+    def get_keyword_lookup(
+        fname: str = "data/msmarco-doctrain-queries.tsv.gz",
+    ) -> dict[str, str]:
         """Build a dictionary mapping query IDs to keywords.
 
         Args:
@@ -100,7 +109,7 @@ class QRel:
                 qids_to_keywords[row[0]] = row[1]
         return qids_to_keywords
 
-    def __str__(self):
+    def __str__(self) -> str:
         """Generate string representation of the QRel.
 
         Returns:

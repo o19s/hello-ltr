@@ -4,12 +4,19 @@ This module provides functions for downloading files from URLs
 with support for resuming downloads and force re-downloading.
 """
 
+from __future__ import annotations
+
+from collections.abc import Iterable
 from os import path
 
 import requests
 
+from ltr.logger import get_logger
 
-def download_one(uri, dest="data/", force=False):
+logger = get_logger(__name__)
+
+
+def download_one(uri: str, dest: str = "data/", force: bool = False) -> None:
     """Download a single file from a URI to a destination directory.
 
     Args:
@@ -40,19 +47,21 @@ def download_one(uri, dest="data/", force=False):
     filepath = os.path.join(dest, filename)
     if path.exists(filepath):
         if not force:
-            print(filepath + " already exists")
+            logger.info(f"{filepath} already exists")
             return
-        print("exists but force=True, Downloading anyway")
+        logger.info("File exists but force=True, downloading anyway")
 
     with open(filepath, "wb") as out:
-        print(f"GET {uri}")
+        logger.info(f"GET {uri}")
         resp = requests.get(uri, stream=True)
         for chunk in resp.iter_content(chunk_size=1024):
             if chunk:
                 out.write(chunk)
 
 
-def download(uris, dest="data/", force=False):
+def download(
+    uris: list[str] | Iterable[str], dest: str = "data/", force: bool = False
+) -> None:
     """Download multiple files from URIs to a destination directory.
 
     Args:

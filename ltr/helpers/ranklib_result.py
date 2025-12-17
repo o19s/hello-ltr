@@ -4,7 +4,11 @@ This module provides classes and functions for parsing RankLib training output
 and representing training results, including cross-validation results.
 """
 
+from __future__ import annotations
+
 import re
+
+from ltr.types import FeatureImpactMap
 
 
 class RanklibResult:
@@ -21,19 +25,25 @@ class RanklibResult:
         kcvTrainAvg: Average training metric across all folds (None if not KCV).
     """
 
-    def __init__(self, trainingLogs, foldResults, kcvTestAvg, kcvTrainAvg):
+    def __init__(
+        self,
+        training_logs: list[TrainingLog],
+        fold_results: list[FoldResult],
+        kcv_test_avg: float | None,
+        kcv_train_avg: float | None,
+    ) -> None:
         """Initialize a RanklibResult.
 
         Args:
-            trainingLogs: List of TrainingLog objects, one per training run.
-            foldResults: List of FoldResult objects, one per cross-validation fold.
-            kcvTestAvg: Average test metric across all folds (None if not KCV).
-            kcvTrainAvg: Average training metric across all folds (None if not KCV).
+            training_logs: List of TrainingLog objects, one per training run.
+            fold_results: List of FoldResult objects, one per cross-validation fold.
+            kcv_test_avg: Average test metric across all folds (None if not KCV).
+            kcv_train_avg: Average training metric across all folds (None if not KCV).
         """
-        self.trainingLogs = trainingLogs
-        self.foldResults = foldResults
-        self.kcvTrainAvg = kcvTrainAvg
-        self.kcvTestAvg = kcvTestAvg
+        self.trainingLogs: list[TrainingLog] = training_logs
+        self.foldResults: list[FoldResult] = fold_results
+        self.kcvTrainAvg: float | None = kcv_train_avg
+        self.kcvTestAvg: float | None = kcv_test_avg
 
 
 class TrainingLog:
@@ -46,21 +56,27 @@ class TrainingLog:
         trainMetricVal: Final training metric value.
     """
 
-    def __init__(self, rounds, impacts, trainMetricName, trainMetricVal):
+    def __init__(
+        self,
+        rounds: list[float],
+        impacts: FeatureImpactMap,
+        train_metric_name: str | None,
+        train_metric_val: float,
+    ) -> None:
         """Initialize a TrainingLog.
 
         Args:
             rounds: List of metric values for each training round.
             impacts: Dictionary mapping feature IDs to error reduction values.
-            trainMetricName: Name of the training metric (e.g., "DCG@10").
-            trainMetricVal: Final training metric value.
+            train_metric_name: Name of the training metric (e.g., "DCG@10").
+            train_metric_val: Final training metric value.
         """
-        self.impacts = impacts
-        self.rounds = rounds
-        self.trainMetricName = trainMetricName
-        self.trainMetricVal = trainMetricVal
+        self.impacts: FeatureImpactMap = impacts
+        self.rounds: list[float] = rounds
+        self.trainMetricName: str | None = train_metric_name
+        self.trainMetricVal: float = train_metric_val
 
-    def metric(self):
+    def metric(self) -> float:
         """Get the training metric value.
 
         Returns:
@@ -84,34 +100,34 @@ class FoldResult:
         testMetric: Test metric value for this fold.
     """
 
-    def __init__(self, foldId, trainMetric, testMetric):
+    def __init__(self, fold_id: str, train_metric: float, test_metric: float) -> None:
         """Initialize a FoldResult.
 
         Args:
-            foldId: Fold number/identifier.
-            trainMetric: Training metric value for this fold.
-            testMetric: Test metric value for this fold.
+            fold_id: Fold number/identifier.
+            train_metric: Training metric value for this fold.
+            test_metric: Test metric value for this fold.
         """
-        self.foldNum = foldId
-        self.trainMetric = trainMetric
-        self.testMetric = testMetric
+        self.foldNum: str = fold_id
+        self.trainMetric: float = train_metric
+        self.testMetric: float = test_metric
 
 
-impactRe = re.compile(r" Feature (\d+) reduced error (.*)")
-roundsRe = re.compile(r"(\d+)\s+\| (\d+)")
-foldsRe = re.compile(r"^Fold (\d+)\s+\|(.*)\|(.*)")
-avgRe = re.compile(r"^Avg.\s+\|(.*)\|(.*)")
-trainMetricRe = re.compile(r"(.*@.*) on training data: (.*)")
+IMPACT_RE = re.compile(r" Feature (\d+) reduced error (.*)")
+ROUNDS_RE = re.compile(r"(\d+)\s+\| (\d+)")
+FOLDS_RE = re.compile(r"^Fold (\d+)\s+\|(.*)\|(.*)")
+AVG_RE = re.compile(r"^Avg.\s+\|(.*)\|(.*)")
+TRAIN_METRIC_RE = re.compile(r"(.*@.*) on training data: (.*)")
 
 
-def parse_training_log(rawResult):
+def parse_training_log(raw_result: str) -> RanklibResult:
     """Parse raw RankLib training output into structured result objects.
 
     Extracts feature impacts, training rounds, cross-validation fold results,
     and average metrics from RankLib's text output.
 
     Args:
-        rawResult: Raw text output from RankLib training command.
+        raw_result: Raw text output from RankLib training command.
 
     Returns:
         RanklibResult: Parsed result object containing:
@@ -120,24 +136,24 @@ def parse_training_log(rawResult):
             - kcvTestAvg: Average test metric (None if not KCV)
             - kcvTrainAvg: Average training metric (None if not KCV)
     """
-    lines = rawResult.split("\n")
+    lines = raw_result.split("\n")
     # Fold 1	|   0.9396	|  0.8764
     train = False
     logs = []
     folds = []
     impacts = {}
     rounds = []
-    trainMetricName = None
-    trainMetricVal = 0.0
-    kcvTestAvg = kcvTrainAvg = None
+    train_metric_name = None
+    train_metric_val = 0.0
+    kcv_test_avg = kcv_train_avg = None
     for line in lines:
         if "Training starts..." in line:
             if train:
                 log = TrainingLog(
                     rounds=rounds,
                     impacts=impacts,
-                    trainMetricName=trainMetricName,
-                    trainMetricVal=trainMetricVal,
+                    train_metric_name=train_metric_name,
+                    train_metric_val=train_metric_val,
                 )
                 logs.append(log)
             impacts = {}
@@ -145,48 +161,48 @@ def parse_training_log(rawResult):
             train = True
 
         if train:
-            m = re.match(impactRe, line)
+            m = re.match(IMPACT_RE, line)
             if m:
-                ftrId = m.group(1)
+                ftr_id = m.group(1)
                 error = float(m.group(2))
-                impacts[ftrId] = error
-            m = re.match(roundsRe, line)
+                impacts[ftr_id] = error
+            m = re.match(ROUNDS_RE, line)
             if m:
                 values = line.split("|")
-                metricTrain = float(values[1])
-                rounds.append(metricTrain)
-            m = re.match(trainMetricRe, line)
+                metric_train = float(values[1])
+                rounds.append(metric_train)
+            m = re.match(TRAIN_METRIC_RE, line)
             if m:
-                trainMetricVal = float(m.group(2))
-                trainMetricName = m.group(1)
+                train_metric_val = float(m.group(2))
+                train_metric_name = m.group(1)
 
-        m = re.match(foldsRe, line)
+        m = re.match(FOLDS_RE, line)
         if m:
-            foldId = m.group(1)
-            trainMetric = float(m.group(2))
-            testMetric = float(m.group(3))
+            fold_id = m.group(1)
+            train_metric = float(m.group(2))
+            test_metric = float(m.group(3))
             folds.append(
                 FoldResult(
-                    foldId=foldId, testMetric=testMetric, trainMetric=trainMetric
+                    fold_id=fold_id, train_metric=train_metric, test_metric=test_metric
                 )
             )
-        m = re.match(avgRe, line)
+        m = re.match(AVG_RE, line)
         if m:
-            kcvTrainAvg = float(m.group(1))
-            kcvTestAvg = float(m.group(2))
+            kcv_train_avg = float(m.group(1))
+            kcv_test_avg = float(m.group(2))
 
     if train:
         log = TrainingLog(
             rounds=rounds,
             impacts=impacts,
-            trainMetricName=trainMetricName,
-            trainMetricVal=trainMetricVal,
+            train_metric_name=train_metric_name,
+            train_metric_val=train_metric_val,
         )
         logs.append(log)
 
     return RanklibResult(
-        trainingLogs=logs,
-        foldResults=folds,
-        kcvTrainAvg=kcvTrainAvg,
-        kcvTestAvg=kcvTestAvg,
+        training_logs=logs,
+        fold_results=folds,
+        kcv_test_avg=kcv_test_avg,
+        kcv_train_avg=kcv_train_avg,
     )

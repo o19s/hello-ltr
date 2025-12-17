@@ -5,10 +5,19 @@ on conversion data, penalizing clicks that don't lead to conversions while
 accounting for action costs.
 """
 
-from collections import Counter
+from __future__ import annotations
+
+from collections import defaultdict
+
+from ltr.clickmodels.session import Session
+from ltr.types import AttractivenessMap, CostMap, QueryDocPair
 
 
-def conv_aug_attracts(attracts, sessions, costs):
+def conv_aug_attracts(
+    attracts: AttractivenessMap,
+    sessions: list[Session],
+    costs: CostMap,
+) -> AttractivenessMap:
     """Adjust attractiveness values based on conversion data.
 
     Rescans sessions using click-derived attractiveness, but penalizes
@@ -26,8 +35,8 @@ def conv_aug_attracts(attracts, sessions, costs):
         dict: Dictionary mapping (query, doc_id) tuples to adjusted attractiveness
             values based on conversion data.
     """
-    satisfacts: Counter[tuple[str, str]] = Counter()  # type: ignore[type-arg]
-    counts = Counter()
+    satisfacts: defaultdict[QueryDocPair, float] = defaultdict(lambda: 0.0)
+    counts: defaultdict[QueryDocPair, int] = defaultdict(lambda: 0)
     for session in sessions:
         for _rank, doc in enumerate(session.docs):
             attract = attracts[(session.query, doc.doc_id)]
@@ -49,7 +58,8 @@ def conv_aug_attracts(attracts, sessions, costs):
                 counts[(session.query, doc.doc_id)] += 1
                 satisfacts[(session.query, doc.doc_id)] += attract * costs[doc.doc_id]
 
+    result: AttractivenessMap = {}
     for (query_id, doc_id), count in counts.items():
-        satisfacts[(query_id, doc_id)] = satisfacts[(query_id, doc_id)] / count  # type: ignore[assignment]
+        result[(query_id, doc_id)] = satisfacts[(query_id, doc_id)] / count
 
-    return satisfacts
+    return result

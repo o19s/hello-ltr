@@ -16,6 +16,8 @@ Usage:
     python tests/investigate_fast_failures.py --threshold 0.005  # Custom threshold (default 0.005s)
 """
 
+from __future__ import annotations
+
 import argparse
 import json
 import subprocess
@@ -338,9 +340,7 @@ def main():
     print("Running tests...\n")
 
     # Run tests and collect results
-    test_results, total_time = run_pytest_with_detailed_output(
-        test_path, parallel=args.parallel
-    )
+    test_results, _ = run_pytest_with_detailed_output(test_path, parallel=args.parallel)
 
     # Check cache
     cached_times = check_pytest_cache()

@@ -20,5 +20,5 @@ client = SolrClient()
 corpus = "http://es-learn-to-rank.labs.o19s.com/tmdb.json"
 download([corpus], dest="data/")
 
-movies = indexable_movies(movies="data/tmdb.json")
+movies = indexable_movies(movies_path="data/tmdb.json")
 rebuild(client, index="tmdb", doc_src=movies)

@@ -5,8 +5,13 @@ release years, creating synthetic training sets with different preferences
 (classic movies vs. latest movies).
 """
 
+from ltr.client.base_client import BaseClient
+from ltr.logger import get_logger
 
-def get_classic_rating(year):
+logger = get_logger(__name__)
+
+
+def get_classic_rating(year: int) -> int:
     """Get relevance rating for classic movie preference.
 
     Older movies receive higher ratings, with the highest rating (4) for
@@ -35,7 +40,7 @@ def get_classic_rating(year):
         return 4
 
 
-def get_latest_rating(year):
+def get_latest_rating(year: int) -> int:
     """Get relevance rating for latest movie preference.
 
     Newer movies receive higher ratings, with the highest rating (4) for
@@ -65,11 +70,11 @@ def get_latest_rating(year):
 
 
 def synthesize(
-    client,
-    featureSet="release",
-    latestTrainingSetOut="data/latest-training.txt",
-    classicTrainingSetOut="data/classic-training.txt",
-):
+    client: BaseClient,
+    feature_set: str = "release",
+    latest_training_set_out: str = "data/latest-training.txt",
+    classic_training_set_out: str = "data/classic-training.txt",
+) -> None:
     """Synthesize training sets with different year-based preferences.
 
     Generates two training sets from the same documents:
@@ -78,10 +83,10 @@ def synthesize(
 
     Args:
         client: Search client instance.
-        featureSet: Name of the feature set to use for logging (default: "release").
-        latestTrainingSetOut: Output file path for latest-preference training set
+        feature_set: Name of the feature set to use for logging (default: "release").
+        latest_training_set_out: Output file path for latest-preference training set
             (default: "data/latest-training.txt").
-        classicTrainingSetOut: Output file path for classic-preference training set
+        classic_training_set_out: Output file path for classic-preference training set
             (default: "data/classic-training.txt").
 
     Returns:
@@ -90,54 +95,54 @@ def synthesize(
     Note:
         Uses the first feature value (release year) from logged features to
         determine relevance ratings. Documents with rating 0 may be filtered out
-        if NO_ZERO is set to True.
+        if no_zero is set to True.
     """
     from ltr.judgments import Judgment, judgments_to_file
 
-    NO_ZERO = False
+    no_zero = False
 
-    resp = client.log_query("tmdb", "release", None)
+    resp = client.log_query("tmdb", feature_set, None, {})
 
     # A classic film fan
     judgments = []
-    print("Generating 'classic' biased judgments:")
+    logger.info("Generating 'classic' biased judgments:")
     for hit in resp:
         rating = get_classic_rating(hit["ltr_features"][0])
 
-        if rating == 0 and NO_ZERO:
+        if rating == 0 and no_zero:
             continue
 
         judgments.append(
             Judgment(
                 qid=1,
-                docId=hit["id"],
+                doc_id=hit["id"],
                 grade=rating,
                 features=hit["ltr_features"],
                 keywords="",
             )
         )
 
-    with open(classicTrainingSetOut, "w") as out:
+    with open(classic_training_set_out, "w") as out:
         judgments_to_file(out, judgments)
 
     # A current film fan
     judgments = []
-    print("Generating 'recent' biased judgments:")
+    logger.info("Generating 'recent' biased judgments:")
     for hit in resp:
         rating = get_latest_rating(hit["ltr_features"][0])
 
-        if rating == 0 and NO_ZERO:
+        if rating == 0 and no_zero:
             continue
 
         judgments.append(
             Judgment(
                 qid=1,
-                docId=hit["id"],
+                doc_id=hit["id"],
                 grade=rating,
                 features=hit["ltr_features"],
                 keywords="",
             )
         )
 
-    with open(latestTrainingSetOut, "w") as out:
+    with open(latest_training_set_out, "w") as out:
         judgments_to_file(out, judgments)

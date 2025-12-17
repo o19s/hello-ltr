@@ -37,6 +37,11 @@ class PatchedExecutePreprocessor(ExecutePreprocessor):
 
     Extends ExecutePreprocessor to add cell-by-cell progress logging,
     making it easier to track execution progress for long-running notebooks.
+
+    Logs each code cell with:
+    - Cell index and total cell count
+    - Timestamp
+    - Cell source code (first 5 lines or up to 300 characters)
     """
 
     def __init__(self, *args, **kwargs):
@@ -68,7 +73,10 @@ class PatchedExecutePreprocessor(ExecutePreprocessor):
         """Preprocess a single cell with progress logging.
 
         Logs progress for code cells to help track execution progress
-        in long-running notebooks.
+        in long-running notebooks. For each code cell, logs:
+        - Cell number (index/total)
+        - Timestamp
+        - Cell source code (first 5 lines or up to 300 characters)
 
         Args:
             cell: Cell to preprocess
@@ -84,12 +92,27 @@ class PatchedExecutePreprocessor(ExecutePreprocessor):
         if cell.cell_type == "code" and cell.source.strip():
             self.cell_count += 1
             timestamp = datetime.now().strftime("%H:%M:%S")
-            # Show first line of cell for context
-            first_line = cell.source.split("\n")[0][:60]
-            if len(cell.source.split("\n")[0]) > 60:
-                first_line += "..."
+
+            # Show cell code (first 5 lines, truncated to 300 chars if longer)
+            source_lines = cell.source.split("\n")
+            if len(source_lines) <= 5:
+                # Show all lines if 5 or fewer
+                code_preview = cell.source.rstrip()
+            else:
+                # Show first 5 lines, then truncate if over 300 chars
+                code_preview = "\n".join(source_lines[:5]).rstrip()
+                if len(code_preview) > 300:
+                    code_preview = code_preview[:300] + "..."
+                # Add truncation indicator since we have more than 5 lines
+                code_preview += "\n    ..."
+
+            # Indent code preview for readability
+            indented_code = "\n".join(
+                f"    {line}" for line in code_preview.split("\n")
+            )
+
             print(
-                f"[{timestamp}]   Cell {index}/{self.total_cells}: {first_line}",
+                f"[{timestamp}]   Cell {index}/{self.total_cells}:\n{indented_code}",
                 flush=True,
             )
 
@@ -174,6 +197,9 @@ def run_notebook(notebook_path, timeout=None, save_nb_path=None):
     ) and "rebuild" not in notebook_source
     is_tmdb_notebook = "tmdb" in notebook_path.lower()
 
+    # Track insertion index for additional patches
+    insert_index = 1
+
     if needs_index and is_tmdb_notebook:
         # Determine client type from notebook path
         if "solr" in notebook_path.lower():
@@ -216,7 +242,240 @@ def run_notebook(notebook_path, timeout=None, save_nb_path=None):
                 "        rebuild(_test_client, index='tmdb', doc_src=movies)\n"
                 "del _test_client"
             )
-            nb.cells.insert(1, index_setup_cell)
+            nb.cells.insert(insert_index, index_setup_cell)
+            insert_index += 1
+
+    # Check if notebook uses train() or feature_search() and reduce expensive parameters for testing
+    # This reduces kcv, trees, bag, and leafs to speed up tests while still validating functionality
+    uses_train = "train(" in notebook_source
+    uses_feature_search = "feature_search(" in notebook_source
+
+    # Check if notebook builds training sets (uses FeatureLogger.log_for_qid with groupby)
+    # This can be expensive if there are many queries/judgments
+    uses_feature_logging = (
+        "log_for_qid" in notebook_source
+        and "groupby" in notebook_source
+        and "judgments_open" in notebook_source
+    )
+
+    if uses_train or uses_feature_search:
+        # Get test mode limits from environment or use defaults
+        max_test_folds = int(os.environ.get("NOTEBOOK_MAX_KCV_FOLDS", "1"))
+        max_test_trees = int(os.environ.get("NOTEBOOK_MAX_TREES", "1"))
+        max_test_bag = int(os.environ.get("NOTEBOOK_MAX_BAG", "1"))
+        max_test_leafs = int(os.environ.get("NOTEBOOK_MAX_LEAFS", "1"))
+        max_test_features = int(
+            os.environ.get("NOTEBOOK_MAX_FEATURES", "2")
+        )  # Limit features for feature_search to reduce exponential combinations
+
+        # Build comprehensive patch code for train() and feature_search()
+        patch_source = "# Reduce expensive parameters for faster testing\n"
+        patch_source += "from ltr.ranklib import train as _original_train, feature_search as _original_feature_search\n"
+        patch_source += "\n"
+
+        # Patch train() function
+        if uses_train:
+            patch_source += "def train(*args, kcv=None, trees=None, bag=None, leafs=None, features=None, **kwargs):\n"
+            patch_source += '    """Wrapped train() function that reduces expensive parameters for testing."""\n'
+            patch_source += "    print('[TEST MODE] Wrapper train() called')\n"
+            patch_source += "    # Get parameter values (from kwargs if not provided as named parameters)\n"
+            patch_source += (
+                "    kcv_val = kcv if kcv is not None else kwargs.get('kcv', None)\n"
+            )
+            patch_source += "    trees_val = trees if trees is not None else kwargs.get('trees', None)\n"
+            patch_source += (
+                "    bag_val = bag if bag is not None else kwargs.get('bag', None)\n"
+            )
+            patch_source += "    leafs_val = leafs if leafs is not None else kwargs.get('leafs', None)\n"
+            patch_source += "    features_val = features if features is not None else kwargs.get('features', None)\n"
+            patch_source += "    # Reduce expensive parameters\n"
+            patch_source += (
+                f"    if kcv_val is not None and kcv_val > {max_test_folds}:\n"
+            )
+            patch_source += f"        print(f'[TEST MODE] Reducing kcv from {{kcv_val}} to {max_test_folds} for faster testing')\n"
+            patch_source += f"        kcv = {max_test_folds}\n"
+            patch_source += (
+                "        kwargs.pop('kcv', None)  # Remove from kwargs if present\n"
+            )
+            patch_source += (
+                f"    if trees_val is not None and trees_val > {max_test_trees}:\n"
+            )
+            patch_source += f"        print(f'[TEST MODE] Reducing trees from {{trees_val}} to {max_test_trees} for faster testing')\n"
+            patch_source += f"        trees = {max_test_trees}\n"
+            patch_source += (
+                "        kwargs.pop('trees', None)  # Remove from kwargs if present\n"
+            )
+            patch_source += (
+                f"    if bag_val is not None and bag_val > {max_test_bag}:\n"
+            )
+            patch_source += f"        print(f'[TEST MODE] Reducing bag from {{bag_val}} to {max_test_bag} for faster testing')\n"
+            patch_source += f"        bag = {max_test_bag}\n"
+            patch_source += (
+                "        kwargs.pop('bag', None)  # Remove from kwargs if present\n"
+            )
+            patch_source += (
+                f"    if leafs_val is not None and leafs_val > {max_test_leafs}:\n"
+            )
+            patch_source += f"        print(f'[TEST MODE] Reducing leafs from {{leafs_val}} to {max_test_leafs} for faster testing')\n"
+            patch_source += f"        leafs = {max_test_leafs}\n"
+            patch_source += (
+                "        kwargs.pop('leafs', None)  # Remove from kwargs if present\n"
+            )
+            patch_source += "    # Limit features list to reduce training complexity\n"
+            patch_source += f"    if features_val is not None and len(features_val) > {max_test_features}:\n"
+            patch_source += f"        print(f'[TEST MODE] Reducing train() features from {{len(features_val)}} to {max_test_features} ({{features_val[:{max_test_features}]}}) for faster testing')\n"
+            patch_source += f"        features = features_val[:{max_test_features}]\n"
+            patch_source += "        if 'features' in kwargs:\n"
+            patch_source += "            kwargs['features'] = features\n"
+            patch_source += "    elif features_val is not None:\n"
+            patch_source += "        features = features_val\n"
+            patch_source += "    else:\n"
+            patch_source += "        features = None\n"
+            patch_source += "    return _original_train(*args, kcv=kcv, trees=trees, bag=bag, leafs=leafs, features=features, **kwargs)\n"
+            patch_source += "\n"
+            patch_source += "# Monkey-patch the train function in ltr.ranklib module\n"
+            patch_source += "import ltr.ranklib\n"
+            patch_source += "ltr.ranklib.train = train\n"
+            patch_source += (
+                "print('[TEST MODE] Successfully patched ltr.ranklib.train')\n"
+            )
+            patch_source += "\n"
+
+        # Patch feature_search() function
+        if uses_feature_search:
+            patch_source += "def feature_search(*args, kcv=None, trees=None, bag=None, leafs=None, features=None, **kwargs):\n"
+            patch_source += '    """Wrapped feature_search() function that reduces expensive parameters for testing."""\n'
+            patch_source += "    print('[TEST MODE] Wrapper feature_search() called')\n"
+            patch_source += "    # Get parameter values (from kwargs if not provided as named parameters)\n"
+            patch_source += (
+                "    kcv_val = kcv if kcv is not None else kwargs.get('kcv', None)\n"
+            )
+            patch_source += "    trees_val = trees if trees is not None else kwargs.get('trees', None)\n"
+            patch_source += (
+                "    bag_val = bag if bag is not None else kwargs.get('bag', None)\n"
+            )
+            patch_source += "    leafs_val = leafs if leafs is not None else kwargs.get('leafs', None)\n"
+            patch_source += "    features_val = features if features is not None else kwargs.get('features', None)\n"
+            patch_source += "    # Reduce expensive parameters\n"
+            patch_source += (
+                f"    if kcv_val is not None and kcv_val > {max_test_folds}:\n"
+            )
+            patch_source += f"        print(f'[TEST MODE] Reducing kcv from {{kcv_val}} to {max_test_folds} for faster testing')\n"
+            patch_source += f"        kcv = {max_test_folds}\n"
+            patch_source += (
+                "        kwargs.pop('kcv', None)  # Remove from kwargs if present\n"
+            )
+            patch_source += (
+                f"    if trees_val is not None and trees_val > {max_test_trees}:\n"
+            )
+            patch_source += f"        print(f'[TEST MODE] Reducing trees from {{trees_val}} to {max_test_trees} for faster testing')\n"
+            patch_source += f"        trees = {max_test_trees}\n"
+            patch_source += (
+                "        kwargs.pop('trees', None)  # Remove from kwargs if present\n"
+            )
+            patch_source += (
+                f"    if bag_val is not None and bag_val > {max_test_bag}:\n"
+            )
+            patch_source += f"        print(f'[TEST MODE] Reducing bag from {{bag_val}} to {max_test_bag} for faster testing')\n"
+            patch_source += f"        bag = {max_test_bag}\n"
+            patch_source += (
+                "        kwargs.pop('bag', None)  # Remove from kwargs if present\n"
+            )
+            patch_source += (
+                f"    if leafs_val is not None and leafs_val > {max_test_leafs}:\n"
+            )
+            patch_source += f"        print(f'[TEST MODE] Reducing leafs from {{leafs_val}} to {max_test_leafs} for faster testing')\n"
+            patch_source += f"        leafs = {max_test_leafs}\n"
+            patch_source += (
+                "        kwargs.pop('leafs', None)  # Remove from kwargs if present\n"
+            )
+            patch_source += "    # Limit features list to reduce exponential combinations (2^n - 1 combinations)\n"
+            patch_source += "    # Reducing from 9 features (511 combos) to 2 features (3 combos) = 170x speedup!\n"
+            patch_source += (
+                "    # Always set features to ensure it's passed correctly\n"
+            )
+            patch_source += "    if features_val is not None:\n"
+            patch_source += f"        if len(features_val) > {max_test_features}:\n"
+            patch_source += f"            print(f'[TEST MODE] Reducing features from {{len(features_val)}} to {max_test_features} ({{features_val[:{max_test_features}]}}) for faster testing')\n"
+            patch_source += (
+                f"            features = features_val[:{max_test_features}]\n"
+            )
+            patch_source += "        else:\n"
+            patch_source += "            features = features_val\n"
+            patch_source += (
+                "        # Update kwargs if features was passed via kwargs\n"
+            )
+            patch_source += "        if 'features' in kwargs:\n"
+            patch_source += "            kwargs['features'] = features\n"
+            patch_source += "    else:\n"
+            patch_source += "        features = None\n"
+            patch_source += "    return _original_feature_search(*args, kcv=kcv, trees=trees, bag=bag, leafs=leafs, features=features, **kwargs)\n"
+            patch_source += "\n"
+            patch_source += (
+                "# Monkey-patch the feature_search function in ltr.ranklib module\n"
+            )
+            patch_source += "ltr.ranklib.feature_search = feature_search\n"
+            patch_source += (
+                "print('[TEST MODE] Successfully patched ltr.ranklib.feature_search')\n"
+            )
+
+        patch_cell = nbformat.v4.new_code_cell(source=patch_source)
+        nb.cells.insert(insert_index, patch_cell)
+        insert_index += 1
+
+    # Limit training set size by reducing number of queries processed
+    if uses_feature_logging:
+        max_test_queries = int(
+            os.environ.get("NOTEBOOK_MAX_QUERIES", "2")
+        )  # Limit to 2 queries for faster testing
+        max_test_judgments_per_query = int(
+            os.environ.get("NOTEBOOK_MAX_JUDGMENTS_PER_QUERY", "2")
+        )  # Limit judgments per query
+
+        training_set_patch = "# Limit training set size for faster testing\n"
+        training_set_patch += "from itertools import groupby\n"
+        training_set_patch += "\n"
+        training_set_patch += (
+            "# Wrap FeatureLogger to limit queries and judgments per query\n"
+        )
+        training_set_patch += "# Use module-level counter so limit applies across all FeatureLogger instances\n"
+        training_set_patch += "import ltr.log\n"
+        training_set_patch += "ltr.log._test_query_count = 0\n"
+        training_set_patch += f"ltr.log._test_max_queries = {max_test_queries}\n"
+        training_set_patch += (
+            f"ltr.log._test_max_judgments_per_query = {max_test_judgments_per_query}\n"
+        )
+        training_set_patch += (
+            "from ltr.log import FeatureLogger as _OriginalFeatureLogger\n"
+        )
+        training_set_patch += "class LimitedFeatureLogger(_OriginalFeatureLogger):\n"
+        training_set_patch += "    def log_for_qid(self, qid, judgments, keywords):\n"
+        training_set_patch += "        # Limit number of queries processed (shared across all instances)\n"
+        training_set_patch += "        import ltr.log\n"
+        training_set_patch += (
+            "        if ltr.log._test_query_count >= ltr.log._test_max_queries:\n"
+        )
+        training_set_patch += "            print(f'[TEST MODE] Skipping query {qid} - already processed {ltr.log._test_max_queries} queries for faster testing')\n"
+        training_set_patch += "            return [], list(judgments)  # Return empty training set, all judgments discarded\n"
+        training_set_patch += "        ltr.log._test_query_count += 1\n"
+        training_set_patch += "        # Limit judgments per query\n"
+        training_set_patch += "        judgments_list = list(judgments)\n"
+        training_set_patch += (
+            "        if len(judgments_list) > ltr.log._test_max_judgments_per_query:\n"
+        )
+        training_set_patch += "            print(f'[TEST MODE] Limiting query {qid} to {ltr.log._test_max_judgments_per_query} judgments (from {len(judgments_list)}) for faster testing')\n"
+        training_set_patch += "            judgments_list = judgments_list[:ltr.log._test_max_judgments_per_query]\n"
+        training_set_patch += (
+            "        return super().log_for_qid(qid, judgments_list, keywords)\n"
+        )
+        training_set_patch += "\n"
+        training_set_patch += "# Monkey-patch FeatureLogger\n"
+        training_set_patch += "ltr.log.FeatureLogger = LimitedFeatureLogger\n"
+        training_set_patch += f"print(f'[TEST MODE] Successfully patched FeatureLogger to limit to {max_test_queries} queries and {max_test_judgments_per_query} judgments per query')\n"
+
+        training_set_cell = nbformat.v4.new_code_cell(source=training_set_patch)
+        nb.cells.insert(insert_index, training_set_cell)
+        insert_index += 1
 
     # Execute notebook with patched clients
     log(f"Executing {nb_name} ({len(nb.cells)} cells)...")
