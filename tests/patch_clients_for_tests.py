@@ -260,6 +260,12 @@ def patch_clients_for_test_ports():
 
         solr_client_module.SolrClient.__init__ = patched_solr_init
 
+        # Update the reference in ltr.client module
+        import ltr.client
+
+        if hasattr(ltr.client, "SolrClient"):
+            ltr.client.SolrClient = solr_client_module.SolrClient
+
     # Patch ElasticClient
     if elasticsearch_port:
         original_init = elastic_client_module.ElasticClient.__init__
@@ -282,6 +288,12 @@ def patch_clients_for_test_ports():
                 self.es = Elasticsearch(f"http://{self.host}:{elasticsearch_port}")
 
         elastic_client_module.ElasticClient.__init__ = patched_elastic_init
+
+        # Update the reference in ltr.client module
+        import ltr.client
+
+        if hasattr(ltr.client, "ElasticClient"):
+            ltr.client.ElasticClient = elastic_client_module.ElasticClient
 
         # Patch ElasticClient timing methods for test environments
         # Test environments may be slower, so increase delays and retries
@@ -365,6 +377,15 @@ def patch_clients_for_test_ports():
                 self.opensearch = OpenSearch(f"http://{self.host}:{opensearch_port}")
 
         opensearch_client_module.OpenSearchClient.__init__ = patched_opensearch_init
+
+        # CRITICAL FIX: Update the reference in ltr.client module
+        # When we reload opensearch_client_module, it creates a NEW OpenSearchClient class.
+        # But ltr.client.__init__ already imported the OLD class, so we need to update that reference.
+        # This ensures that `import ltr.client as client; client.OpenSearchClient()` uses the patched version.
+        import ltr.client
+
+        if hasattr(ltr.client, "OpenSearchClient"):
+            ltr.client.OpenSearchClient = opensearch_client_module.OpenSearchClient
 
         # Patch OpenSearchClient timing methods for test environments
         # Test environments may be slower, so increase delays and retries

@@ -520,7 +520,7 @@ The project uses extensive type aliases for consistency. See [`TYPE_ALIASES_GUID
 
 ### Type Checking
 
-**Note:** For detailed type checking configuration and current status, see [`TEST_INFRASTRUCTURE_REVIEW.md#type-checking`](TEST_INFRASTRUCTURE_REVIEW.md#type-checking).
+**Note:** For detailed type checking configuration and current status, see [`CODEBASE_REVIEW.md`](CODEBASE_REVIEW.md) section 5.1 (Test Infrastructure Components - Type Checking in Tests).
 
 - **Tool**: Pyright (configured in `standard` mode)
 - **Coverage**: All library code, excludes notebooks
@@ -605,7 +605,7 @@ The project uses extensive type aliases for consistency. See [`TYPE_ALIASES_GUID
 
 ## Testing Architecture
 
-**Note:** For comprehensive testing documentation, see [`tests/README.md`](tests/README.md) for test suite details and [`TEST_INFRASTRUCTURE_REVIEW.md`](TEST_INFRASTRUCTURE_REVIEW.md) for infrastructure status and improvements.
+**Note:** For comprehensive testing documentation, see [`tests/README.md`](tests/README.md) for test suite details and [`CODEBASE_REVIEW.md`](CODEBASE_REVIEW.md) section 5.1 for infrastructure status and improvements.
 
 ### Test Structure
 
@@ -628,7 +628,7 @@ tests/
 - **Docker**: Isolated search engine instances (per-worker containers)
 - **Pytest**: Test framework with fixtures
 - **Parallel Execution**: pytest-xdist with 12 workers
-- **Coverage**: pytest-cov (32.24% overall coverage - see [`TEST_INFRASTRUCTURE_REVIEW.md#test-health-metrics`](TEST_INFRASTRUCTURE_REVIEW.md#appendix-b-metrics-to-track) for details)
+- **Coverage**: pytest-cov (32.24% overall coverage - see [`CODEBASE_REVIEW.md`](CODEBASE_REVIEW.md) section 5.1 for details)
 
 ---
 
@@ -655,6 +655,7 @@ See `CODEBASE_REVIEW.md` for detailed technical debt items, including:
 
 ## References
 
+- **Architecture Decision Records**: See `adr/README.md` for historical architectural decisions
 - **Codebase Review**: See `CODEBASE_REVIEW.md` for detailed code analysis
 - **Test Documentation**: See `tests/README.md` for testing architecture
 - **User Guide**: See `README.md` for usage instructions
@@ -663,5 +664,5 @@ See `CODEBASE_REVIEW.md` for detailed technical debt items, including:
 ---
 
 **Document Version**: 1.0  
-**Last Updated**: December 2025
+**Last Updated**: December 19, 2025
 

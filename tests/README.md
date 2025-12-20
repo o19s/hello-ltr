@@ -1797,7 +1797,14 @@ If a notebook should not be tested automatically:
 - Currently, unit tests are in `tests/` root (e.g., `test_judg_list.py`)
 
 **Guidelines:**
-1. **Follow pytest conventions**:
+1. **Follow AAA Pattern (Arrange-Act-Assert)**:
+   
+   All tests should follow the AAA pattern for clarity and maintainability:
+   - **Arrange**: Set up test data and conditions
+   - **Act**: Execute the code under test
+   - **Assert**: Verify the results
+   
+   **Basic Example:**
    ```python
    def test_feature_name():
        """Test description."""
@@ -1810,6 +1817,48 @@ If a notebook should not be tested automatically:
        # Assert
        assert result == expected_value
    ```
+   
+   **Real Example from test_judg_list.py:**
+   ```python
+   def test_string_io_read(self):
+       """Test reading and parsing sorted judgments from StringIO."""
+       # Arrange
+       judgment_list = clean_jl("""
+                   # qid:1: rambo*1
+                   # qid:2: rocky ii*1
+                   4	qid:1	 # 1234	rambo
+                   3	qid:1	 # 5670	rambo
+                   1	qid:2	 # 9876	rocky ii""")
+       judg_string_io = StringIO(judgment_list)
+       
+       # Act
+       judgments_by_qid = {}
+       with judgments_reader(judg_string_io) as judg_list:
+           for qid, query_judgments in groupby(judg_list, key=lambda j: j.qid):
+               judgments_by_qid[qid] = list(query_judgments)
+       
+       # Assert
+       self.assertEqual(len(judgments_by_qid), 2, "Should have judgments for 2 queries")
+       self.assertEqual(
+           sum(len(judgments) for judgments in judgments_by_qid.values()),
+           3,
+           "Should have 3 total judgments",
+       )
+       # ... more assertions ...
+   ```
+   
+   **Benefits of AAA Pattern:**
+   - ✅ Clear separation of concerns (setup vs execution vs verification)
+   - ✅ Easier to read and understand test intent
+   - ✅ Easier to debug (know exactly where setup ends and execution begins)
+   - ✅ Consistent structure across all tests
+   - ✅ Better error messages (descriptive assertion messages)
+   
+   **Common Anti-Patterns to Avoid:**
+   - ❌ Mixing assertions within the Act section
+   - ❌ Performing setup operations in the Assert section
+   - ❌ Combining multiple concerns in a single section
+   - ❌ Using print statements instead of assertions
 
 2. **Use descriptive test names**:
    - Good: `test_judgment_list_parses_valid_format()`
@@ -1836,6 +1885,18 @@ If a notebook should not be tested automatically:
    - Invalid inputs
    - Boundary conditions
    - Error handling
+   
+   **Example with AAA pattern:**
+   ```python
+   def test_invalid_input_raises_error(self):
+       """Test that invalid input raises appropriate error."""
+       # Arrange
+       invalid_data = None
+       
+       # Act & Assert
+       with self.assertRaises(ValueError):
+           process_data(invalid_data)
+   ```
 
 ### Improving Test Infrastructure
 
@@ -1877,11 +1938,13 @@ If a notebook should not be tested automatically:
 
 When reviewing test contributions, check:
 
+- [ ] Tests follow AAA pattern (Arrange-Act-Assert) with clear section separation
 - [ ] Tests are properly isolated (no shared state)
 - [ ] Test names are descriptive
 - [ ] Tests cover happy path and error cases
 - [ ] No hardcoded values (use fixtures/constants)
 - [ ] Proper cleanup (fixtures handle teardown)
+- [ ] Assertions have descriptive error messages
 - [ ] Documentation updated (README, docstrings)
 - [ ] Ignored notebooks have detailed comments
 - [ ] New markers documented in `pytest.ini`
@@ -1917,19 +1980,23 @@ When reporting test failures or issues:
 5. **Check for known issues**:
    - Review this troubleshooting section
    - Check GitHub issues
-   - Review `TEST_INFRASTRUCTURE_REVIEW.md`
+   - Review `CODEBASE_REVIEW.md` section 5.1 (Test Infrastructure)
 
 ### Best Practices
 
 **Do:**
+- ✅ **Follow AAA Pattern**: Always structure tests with clear Arrange-Act-Assert sections
 - ✅ Write tests before fixing bugs (TDD when possible)
 - ✅ Keep tests fast and focused
 - ✅ Use meaningful assertions with clear error messages
+- ✅ Separate test setup from execution from verification
 - ✅ Document why tests are skipped/ignored
 - ✅ Clean up test data and resources
 - ✅ Test error conditions, not just happy paths
 
 **Don't:**
+- ❌ Mix assertions within the Act section (separate concerns)
+- ❌ Perform setup operations in the Assert section
 - ❌ Write tests that depend on external services (use Docker)
 - ❌ Write tests that depend on execution order
 - ❌ Ignore notebooks without documenting why
@@ -1943,7 +2010,7 @@ If you need help with tests:
 
 1. **Check documentation**:
    - This README
-   - `TEST_INFRASTRUCTURE_REVIEW.md`
+   - `CODEBASE_REVIEW.md` section 5.1 (Test Infrastructure)
    - Pytest documentation: https://docs.pytest.org/
 
 2. **Review existing tests**:
@@ -1988,6 +2055,6 @@ If you're used to the old `run_most_nbs.py` commands, here are the pytest equiva
 
 - [Pytest Documentation](https://docs.pytest.org/)
 - [pytest.ini](../pytest.ini) - Pytest configuration
-- [TEST_INFRASTRUCTURE_REVIEW.md](../TEST_INFRASTRUCTURE_REVIEW.md) - Infrastructure review
+- [CODEBASE_REVIEW.md](../CODEBASE_REVIEW.md) section 5.1 - Test Infrastructure review
 - [PYTEST_EVALUATION.md](PYTEST_EVALUATION.md) - Migration evaluation
 

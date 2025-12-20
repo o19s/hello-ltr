@@ -10,20 +10,14 @@ import re
 from ltr.client.base_client import BaseClient
 from ltr.logger import get_logger
 from ltr.types import JSONDict
+from ltr.validation import (
+    sanitize_for_solr_query,
+    validate_index_name,
+    validate_keywords,
+    validate_model_name,
+)
 
 logger = get_logger(__name__)
-
-base_es_query: JSONDict = {
-    "size": 5,
-    "query": {
-        "sltr": {
-            "params": {
-                "keywords": "",
-            },
-            "model": "",
-        }
-    },
-}
 
 
 def es_ltr_query(keywords: str, model_name: str) -> JSONDict:
@@ -36,17 +30,30 @@ def es_ltr_query(keywords: str, model_name: str) -> JSONDict:
     Returns:
         dict: Elasticsearch/OpenSearch query dictionary with LTR parameters.
 
+    Raises:
+        ValidationError: If keywords or model_name are invalid.
+
     Note:
-        Modifies the global base_es_query dictionary. The keywordsList parameter
-        is added for compatibility with TSQ (Term Statistics Query).
+        The keywordsList parameter is added for compatibility with TSQ
+        (Term Statistics Query).
     """
-    base_es_query["query"]["sltr"]["params"]["keywords"] = keywords
-    base_es_query["query"]["sltr"]["params"]["keywordsList"] = [
-        keywords
-    ]  # Needed by TSQ for now
-    base_es_query["query"]["sltr"]["model"] = model_name
-    logger.debug(f"ES LTR query: {json.dumps(base_es_query)}")
-    return base_es_query
+    keywords = validate_keywords(keywords)
+    model_name = validate_model_name(model_name)
+
+    query: JSONDict = {
+        "size": 5,
+        "query": {
+            "sltr": {
+                "params": {
+                    "keywords": keywords,
+                    "keywordsList": [keywords],  # Needed by TSQ for now
+                },
+                "model": model_name,
+            }
+        },
+    }
+    logger.debug(f"ES LTR query: {json.dumps(query)}")
+    return query
 
 
 def solr_ltr_query(keywords: str, model_name: str) -> JSONDict:
@@ -62,11 +69,22 @@ def solr_ltr_query(keywords: str, model_name: str) -> JSONDict:
             - rows: Number of results to return
             - q: LTR query with model and external feature information (EFI)
 
+    Raises:
+        ValidationError: If keywords or model_name are invalid.
+
     Note:
         The keywords are sanitized (special characters removed) and fuzzy
         matching is applied by appending '~' to each keyword.
+        Model name is validated and sanitized to prevent query injection.
         TODO: Parse params and add efi dynamically instead of adding manually to query.
     """
+    keywords = validate_keywords(keywords)
+    model_name = validate_model_name(model_name)
+
+    # Sanitize model_name for use in query string (prevents injection)
+    sanitized_model_name = sanitize_for_solr_query(model_name)
+
+    # Sanitize keywords for fuzzy matching (remove special chars)
     keywords = re.sub(r"([^\s\w]|_)+", "", keywords)
     fuzzy_keywords = " ".join([x + "~" for x in keywords.split(" ")])
 
@@ -74,7 +92,7 @@ def solr_ltr_query(keywords: str, model_name: str) -> JSONDict:
         "fl": "*,score",
         "rows": 5,
         "q": (
-            f"{{!ltr reRankDocs=30000 model={model_name} "
+            f"{{!ltr reRankDocs=30000 model={sanitized_model_name} "
             f'efi.keywords="{keywords}" efi.fuzzy_keywords="{fuzzy_keywords}"}}'
         ),
     }
@@ -107,11 +125,19 @@ def search(
     Returns:
         None: Results are printed to stdout.
 
+    Raises:
+        ValidationError: If keywords, model_name, or index are invalid.
+
     Example:
         >>> from ltr.client.elastic_client import ElasticClient
         >>> client = ElasticClient()
         >>> search(client, "action movie", "my_model", index="tmdb")
     """
+    # Validate all inputs
+    keywords = validate_keywords(keywords)
+    model_name = validate_model_name(model_name)
+    index = validate_index_name(index)
+
     if client.name() == "elastic" or client.name() == "opensearch":
         results = client.query(index, es_ltr_query(keywords, model_name))
     else:

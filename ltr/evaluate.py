@@ -4,14 +4,18 @@ This module provides functions for running RRE evaluations using Docker
 and displaying evaluation results in Jupyter notebooks.
 """
 
+from __future__ import annotations
+
 import json
 import shlex
 import subprocess
+from typing import Literal
 
 import plotly.graph_objs as go
 from plotly.offline import init_notebook_mode, iplot
 
 from ltr.logger import get_logger
+from ltr.types import JSONDict
 
 logger = get_logger(__name__)
 
@@ -53,7 +57,7 @@ def quiet_run(cmd: str) -> None:
     )
 
 
-def evaluate(mode: str) -> None:
+def evaluate(mode: Literal["elastic", "solr", "opensearch"]) -> None:
     """Run RRE (Ranking Relevance Evaluation) using Docker.
 
     Builds a Docker image, runs the evaluation, and copies results to the
@@ -125,18 +129,18 @@ def rre_table() -> None:
     init_notebook_mode(connected=True)
 
     with open("data/rre-evaluation.json") as src:
-        report = json.load(src)
-        metrics = report["metrics"]
+        report: JSONDict = json.load(src)
+        metrics: JSONDict = report["metrics"]
 
-    experiments = ["baseline", "classic", "latest"]
-    precisions = []
-    recalls = []
-    errs = []
+    experiments: list[str] = ["baseline", "classic", "latest"]
+    precisions: list[float] = []
+    recalls: list[float] = []
+    errs: list[float] = []
 
     for exp in experiments:
-        precisions.append(metrics["P"]["versions"][exp]["value"])
-        recalls.append(metrics["R"]["versions"][exp]["value"])
-        errs.append(metrics["ERR@30"]["versions"][exp]["value"])
+        precisions.append(float(metrics["P"]["versions"][exp]["value"]))
+        recalls.append(float(metrics["R"]["versions"][exp]["value"]))
+        errs.append(float(metrics["ERR@30"]["versions"][exp]["value"]))
 
     trace = go.Table(
         header={

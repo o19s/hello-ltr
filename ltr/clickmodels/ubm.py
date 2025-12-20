@@ -10,7 +10,10 @@ from __future__ import annotations
 from collections import Counter, defaultdict
 
 from ltr.clickmodels.session import Session, build
+from ltr.logger import get_logger
 from ltr.types import QueryDocPair, UBMRankPair
+
+logger = get_logger(__name__)
 
 
 class Model:
@@ -127,7 +130,10 @@ def update_examines(sessions: list[Session], model: Model) -> None:
                 new_rank_probs[(last_click, rank)] += 1
                 counts[(last_click, rank)] += 1
                 if last_click == -1 and rank == 3:
-                    print(counts[(last_click, rank)])
+                    logger.debug(
+                        "Count for (last_click=-1, rank=3): %d",
+                        counts[(last_click, rank)],
+                    )
 
                 last_click = rank
             else:
@@ -148,7 +154,10 @@ def update_examines(sessions: list[Session], model: Model) -> None:
                 new_rank_probs[(last_click, rank)] += numerator / denominator
                 counts[(last_click, rank)] += 1
                 if last_click == -1 and rank == 3:
-                    print(counts[(last_click, rank)])
+                    logger.debug(
+                        "Count for (last_click=-1, rank=3): %d",
+                        counts[(last_click, rank)],
+                    )
 
     for (last_click, click), count in counts.items():
         model.ranks[(last_click, click)] = new_rank_probs[(last_click, click)] / count

@@ -10,6 +10,8 @@ from __future__ import annotations
 import os
 import shlex
 import subprocess
+import tempfile
+from itertools import combinations
 from typing import Any
 
 from ltr import download
@@ -34,7 +36,6 @@ def check_for_rankymcrankface() -> str:
         system temp directory.
     """
     ranky_url = "http://es-learn-to-rank.labs.o19s.com/RankyMcRankFace.jar"
-    import tempfile
 
     tempdir = tempfile.gettempdir()
     download([ranky_url], dest=tempdir, force=False)
@@ -54,8 +55,6 @@ def write_training_set(training_set: list[Judgment]) -> str:
         The file is created in the system temp directory and will be
         cleaned up automatically by the OS.
     """
-    import tempfile
-
     from .judgments import judgments_to_file
 
     tempdir = tempfile.gettempdir()
@@ -116,8 +115,6 @@ def train_model(
     cmd = f"java -jar {ranky_loc} -ranker {ranker} -shrinkage {shrinkage} -metric2t {metric2t} -tree {trees} -bag {bag} -leaf {leafs} -frate {frate} -srate {srate} -train {training_set_path} -save {out} "
 
     if features is not None:
-        import tempfile
-
         features_file = os.path.join(tempfile.gettempdir(), "features.txt")
         with open(features_file, "w") as f:
             f.write("\n".join([str(feature) for feature in features]))
@@ -313,8 +310,6 @@ def feature_search(
         which can be computationally expensive for large feature sets.
         Failed training attempts for specific combinations are skipped with a warning.
     """
-    from itertools import combinations
-
     # Check for common camelCase parameter name mistakes
     camel_case_mappings = {
         "featureSet": "feature_set",

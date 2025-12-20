@@ -32,7 +32,7 @@ def _is_slow_notebook(notebook_path: str) -> bool:
     return any(pattern.lower() in notebook_path_lower for pattern in SLOW_PATTERNS)
 
 
-# List of failing tests from NOTEBOOK_TEST_RESULTS.md
+# List of failing tests from CODEBASE_REVIEW.md section 5.3
 # Ordered: fast tests first, slow tests last (will timeout after 5 minutes)
 # Slow patterns: "netfix", "bayesian-optimization", "bigger bot", "lambda-mart"
 FAILING_TESTS = [

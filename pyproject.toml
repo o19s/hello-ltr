@@ -86,6 +86,9 @@ dependencies = [
     "ruff>=0.14.9",
     "pre-commit>=3.0.0",
     "pyright>=1.1.0",
+    # Type stubs for third-party libraries
+    "types-requests>=2.31.0",
+    "types-urllib3>=1.26.0",
 ]
 
 [tool.setuptools]
@@ -146,6 +149,7 @@ exclude = [
     "*.egg-info",
     "htmlcov",
     ".pytest_cache",
+    "stubs",  # Type stub files may not follow PEP 8 naming (must match third-party APIs)
 ]
 
 [tool.ruff.lint]
@@ -176,6 +180,10 @@ unfixable = []
 # Allow unused variables when underscore-prefixed
 dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 
+# Per-file ignores for type stubs (must match third-party API naming)
+[tool.ruff.lint.per-file-ignores]
+"stubs/**/*.pyi" = ["N801"]
+
 [tool.ruff.format]
 # Ruff formatter configuration
 quote-style = "double"
@@ -190,7 +198,7 @@ split-on-trailing-comma = true
 
 [tool.pyright]
 # Pyright type checking configuration
-include = ["ltr", "rre", "utils", "tests"]
+include = ["ltr", "rre", "utils", "tests", "stubs"]
 exclude = [
     "**/__pycache__",
     "**/node_modules",
@@ -203,8 +211,10 @@ exclude = [
     "**/.pytest_cache",
     "**/notebooks"
 ]
+# Stub path for custom type stubs
+stubPath = "stubs"
 reportMissingImports = true
-reportMissingTypeStubs = false
+reportMissingTypeStubs = "warning"
 reportUnusedImport = "warning"
 reportUnusedClass = "warning"
 reportUnusedFunction = "warning"

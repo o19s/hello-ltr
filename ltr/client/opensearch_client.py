@@ -120,9 +120,14 @@ class OpenSearchClient(BaseClient):
 
         Args:
             configs_dir: Directory containing OpenSearch configuration files
-                (default: current directory).
+                (default: current directory, or NOTEBOOK_CONFIGS_DIR env var if set).
         """
         self.docker: bool = os.environ.get("LTR_DOCKER") is not None
+        # Use NOTEBOOK_CONFIGS_DIR environment variable if set (for notebook tests)
+        # Otherwise use the provided configs_dir parameter
+        notebook_configs_dir = os.environ.get("NOTEBOOK_CONFIGS_DIR")
+        if configs_dir == "." and notebook_configs_dir:
+            configs_dir = notebook_configs_dir
         self.configs_dir: str = configs_dir  # location of elastic configs
 
         if self.docker:
@@ -216,6 +221,38 @@ class OpenSearchClient(BaseClient):
                 "{index}_settings.json" in the configs_dir directory.
         """
         cfg_json_path = os.path.join(self.configs_dir, f"{index}_settings.json")
+
+        # If the config file doesn't exist at the specified path, try common alternative locations
+        # This handles cases where tests run from project root but configs are in notebook directories
+        if not os.path.exists(cfg_json_path):
+            # Try to find the project root by looking for pyproject.toml
+            project_root = os.getcwd()
+            search_dir = project_root
+            # Navigate up to project root if we're in a subdirectory (max 10 levels)
+            for _ in range(10):
+                if os.path.exists(os.path.join(search_dir, "pyproject.toml")):
+                    project_root = search_dir
+                    break
+                parent = os.path.dirname(search_dir)
+                if parent == search_dir:  # Reached filesystem root
+                    break
+                search_dir = parent
+
+            # Try standard notebook locations relative to project root
+            possible_paths = [
+                os.path.join(
+                    project_root, f"notebooks/opensearch/{index}/{index}_settings.json"
+                ),
+                os.path.join(
+                    project_root,
+                    f"notebooks/elasticsearch/{index}/{index}_settings.json",
+                ),
+            ]
+            for alt_path in possible_paths:
+                if os.path.exists(alt_path):
+                    cfg_json_path = alt_path
+                    break
+
         with open(cfg_json_path) as src:
             settings = json.load(src)
             resp = self.opensearch.indices.create(index=index, body=settings)

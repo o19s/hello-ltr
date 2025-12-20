@@ -179,3 +179,82 @@ Key points:
 - Naming violations are automatically checked by ruff in CI/CD
 
 For a complete audit of existing violations and their justifications, see [`NAMING_CONVENTIONS_VIOLATIONS.md`](NAMING_CONVENTIONS_VIOLATIONS.md).
+
+### Quality Check Script
+
+The project includes a quality check script for validating code and notebooks:
+
+**Script:** `tests/check_quality.sh`
+
+**Features:**
+- Comprehensive quality checks for code and notebooks
+- Can run all checks or filter by type
+- Supports auto-fixing issues
+
+**Options:**
+- `--fix`: Auto-fix issues where possible
+- `--notebooks-only`: Only check notebooks
+- `--code-only`: Only check Python code
+
+**Checks Performed:**
+1. Ruff linting (Python code and notebooks)
+2. Ruff formatting (Python code and notebooks)
+3. Notebook output stripping verification (`nbstripout --check`)
+
+**Usage Examples:**
+```bash
+# Check everything
+./tests/check_quality.sh
+
+# Check and auto-fix
+./tests/check_quality.sh --fix
+
+# Check only notebooks
+./tests/check_quality.sh --notebooks-only
+
+# Check only Python code
+./tests/check_quality.sh --code-only
+```
+
+**Exit Codes:**
+- `0`: All checks passed
+- `1`: One or more checks failed
+
+### Daily Development Workflow
+
+**Typical workflow:**
+```bash
+# Pre-commit hooks run automatically on git commit
+git commit -m "feat: add new feature"
+
+# Skip hooks when needed
+git commit -m "wip: work in progress [skip lint]"
+SKIP=ruff git commit -m "quick fix"
+git commit --no-verify -m "emergency fix"
+
+# Run quality checks manually
+./tests/check_quality.sh
+./tests/check_quality.sh --fix
+```
+
+### CI/CD
+
+The project uses GitHub Actions for continuous integration. For detailed CI/CD documentation, see [`.github/README.md`](.github/README.md).
+
+**What's automated:**
+- ✅ Naming convention enforcement (PEP 8)
+- ✅ Unit/integration test execution
+- ✅ Code coverage reporting
+- ✅ Dependency update automation (Dependabot)
+
+## Documentation
+
+For comprehensive documentation, see:
+
+- **[Architecture Documentation](ARCHITECTURE.md)** - System architecture, design patterns, and component overview
+- **[Architecture Decision Records](adr/README.md)** - Historical record of key architectural decisions
+- **[Codebase Review](CODEBASE_REVIEW.md)** - Complete code quality and security analysis
+- **[CI/CD Documentation](.github/README.md)** - GitHub Actions workflows and Dependabot configuration
+- **[Type Aliases Guide](TYPE_ALIASES_GUIDE.md)** - Type system documentation and usage
+- **[Test Suite Documentation](tests/README.md)** - Testing infrastructure and usage
+- **[Naming Conventions](NAMING_CONVENTIONS.md)** - Code style guidelines

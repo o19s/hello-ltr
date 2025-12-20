@@ -61,7 +61,7 @@ class TestEvaluate:
         """Test evaluate raises ValueError for invalid mode."""
         # Act & Assert
         with pytest.raises(ValueError, match="is not a supported value"):
-            evaluate("invalid_mode")
+            evaluate("invalid_mode")  # type: ignore[arg-type]
 
     def test_evaluate_builds_docker_image(self):
         """Test evaluate builds Docker image with correct path."""

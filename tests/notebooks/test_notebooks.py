@@ -225,7 +225,7 @@ def test_notebook_executes_without_errors(
         notebook_runner: Fixture providing notebook execution function
         request: Pytest request object for accessing fixtures dynamically
     """
-    # Request container fixtures based on engine (for per-worker containers)
+    # Arrange: Request container fixtures based on engine (for per-worker containers)
     # This ensures containers are started when USE_WORKER_CONTAINERS=true
     if engine == "solr":
         request.getfixturevalue("solr_container")
@@ -234,15 +234,15 @@ def test_notebook_executes_without_errors(
     elif engine == "opensearch":
         request.getfixturevalue("opensearch_container")
 
-    # Log execution start (matches existing test output style)
+    # Arrange: Log execution start (matches existing test output style)
     log(f"\n{'='*60}")
     log(f"Running: {notebook_path}")
     log(f"{'='*60}")
 
-    # Execute notebook using the runner fixture
+    # Act: Execute notebook using the runner fixture
     result = notebook_runner(notebook_path)
 
-    # Check for errors and format output
+    # Assert: Check for errors and format output
     if result["errors"]:
         error_msg = format_error_output(notebook_path, result["errors"])
         pytest.fail(error_msg, pytrace=False)

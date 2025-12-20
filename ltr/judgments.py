@@ -99,7 +99,7 @@ class JudgmentsReader:
         """
         return self.kw_with_weight[qid][0]
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator[Judgment]:
         """Make JudgmentsReader iterable.
 
         Returns:
@@ -131,7 +131,9 @@ def judgments_open(
 
 
 @contextmanager
-def judgments_open(path: str | None = None, mode: str = "r"):
+def judgments_open(
+    path: str | None = None, mode: str = "r"
+) -> Iterator[JudgmentsReader | JudgmentsWriter]:
     """Work with judgments from the filesystem,
     either in a read or write mode"""
     if path is None:
@@ -503,7 +505,7 @@ def judgments_to_dataframe(judgments: list[Judgment], unnest: bool = True) -> An
     dat = pd.DataFrame(ret)
 
     # https://stackoverflow.com/questions/53218931/how-to-unnest-explode-a-column-in-a-pandas-dataframe
-    def unnesting(df, explode):
+    def unnesting(df: Any, explode: list[str]) -> Any:
         """Expand nested list columns into separate columns.
 
         Args:

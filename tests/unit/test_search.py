@@ -5,11 +5,15 @@ Tests cover:
 - es_ltr_query function
 - solr_ltr_query function
 - search function for different clients
+- Input validation
 """
 
 from unittest.mock import Mock
 
+import pytest
+
 from ltr.search import es_ltr_query, search, solr_ltr_query, tmdb_fields
+from ltr.validation import ValidationError
 
 
 class TestEsLtrQuery:
@@ -39,6 +43,27 @@ class TestEsLtrQuery:
         assert query["size"] == 5
         assert "query" in query
         assert "sltr" in query["query"]
+
+    def test_es_ltr_query_creates_new_dict(self):
+        """Test es_ltr_query creates new dictionary (not mutating global)."""
+        # Act - create two queries
+        query1 = es_ltr_query("keywords1", "model1")
+        query2 = es_ltr_query("keywords2", "model2")
+        # Assert - each query should have its own values
+        assert (
+            query1["query"]["sltr"]["params"]["keywords"] == "keywords1"
+        ), "First query should have first keywords"
+        assert (
+            query1["query"]["sltr"]["model"] == "model1"
+        ), "First query should have first model"
+        assert (
+            query2["query"]["sltr"]["params"]["keywords"] == "keywords2"
+        ), "Second query should have second keywords"
+        assert (
+            query2["query"]["sltr"]["model"] == "model2"
+        ), "Second query should have second model"
+        # Verify queries are independent (not same object)
+        assert query1 is not query2, "Queries should be different objects"
 
 
 class TestSolrLtrQuery:
@@ -152,3 +177,48 @@ class TestSearch:
         # Assert
         call_args = mock_client.query.call_args
         assert call_args[0][0] == "tmdb"
+
+
+class TestSearchValidation:
+    """Test input validation in search functions."""
+
+    def test_es_ltr_query_validates_keywords(self):
+        """Test es_ltr_query validates keywords."""
+        with pytest.raises(ValidationError, match="cannot be empty"):
+            es_ltr_query("", "model")
+
+    def test_es_ltr_query_validates_model_name(self):
+        """Test es_ltr_query validates model name."""
+        with pytest.raises(ValidationError, match="Invalid model name"):
+            es_ltr_query("keywords", "invalid model name")
+
+    def test_solr_ltr_query_validates_keywords(self):
+        """Test solr_ltr_query validates keywords."""
+        with pytest.raises(ValidationError, match="cannot be empty"):
+            solr_ltr_query("", "model")
+
+    def test_solr_ltr_query_validates_model_name(self):
+        """Test solr_ltr_query validates and sanitizes model name."""
+        with pytest.raises(ValidationError, match="Invalid model name"):
+            solr_ltr_query("keywords", "invalid model name")
+
+    def test_search_validates_keywords(self):
+        """Test search validates keywords."""
+        mock_client = Mock()
+        mock_client.name.return_value = "elastic"
+        with pytest.raises(ValidationError, match="cannot be empty"):
+            search(mock_client, "", "model")
+
+    def test_search_validates_model_name(self):
+        """Test search validates model name."""
+        mock_client = Mock()
+        mock_client.name.return_value = "elastic"
+        with pytest.raises(ValidationError, match="Invalid model name"):
+            search(mock_client, "keywords", "invalid model name")
+
+    def test_search_validates_index(self):
+        """Test search validates index name."""
+        mock_client = Mock()
+        mock_client.name.return_value = "elastic"
+        with pytest.raises(ValidationError, match="Invalid index name"):
+            search(mock_client, "keywords", "model", index="Invalid Index")

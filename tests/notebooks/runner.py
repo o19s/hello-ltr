@@ -181,7 +181,8 @@ def run_notebook(notebook_path, timeout=None, save_nb_path=None):
     # project_root should be the parent of 'tests' directory, not the tests directory itself
     project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
     patch_cell = nbformat.v4.new_code_cell(
-        source=f"import sys; import os; sys.path.insert(0, r'{project_root}'); "
+        source=f"import sys; "
+        f"sys.path.insert(0, r'{project_root}'); "
         "from tests.patch_clients_for_tests import patch_clients_for_test_ports, patch_requests_for_test_ports; "
         "patch_clients_for_test_ports(); patch_requests_for_test_ports()"
     )
@@ -198,35 +199,12 @@ def run_notebook(notebook_path, timeout=None, save_nb_path=None):
     if is_es_notebook:
         # Determine relative path from project root to notebook directory
         notebook_dir_rel = os.path.relpath(notebook_dir, project_root)
-        configs_patch_cell = nbformat.v4.new_code_cell(
-            source=(
-                "# Patch ElasticClient and OpenSearchClient to use notebook's configs_dir\n"
-                "import importlib\n"
-                "from ltr.client import elastic_client, opensearch_client\n"
-                "\n"
-                "# Store original __init__ methods\n"
-                "_original_elastic_init = elastic_client.ElasticClient.__init__\n"
-                "_original_opensearch_init = opensearch_client.OpenSearchClient.__init__\n"
-                "\n"
-                "def _patched_elastic_init(self, configs_dir=None):\n"
-                "    # If configs_dir not provided, use notebook's directory\n"
-                f"    if configs_dir is None:\n"
-                f"        configs_dir = r'{notebook_dir_rel}'\n"
-                "    _original_elastic_init(self, configs_dir=configs_dir)\n"
-                "\n"
-                "def _patched_opensearch_init(self, configs_dir=None):\n"
-                "    # If configs_dir not provided, use notebook's directory\n"
-                f"    if configs_dir is None:\n"
-                f"        configs_dir = r'{notebook_dir_rel}'\n"
-                "    _original_opensearch_init(self, configs_dir=configs_dir)\n"
-                "\n"
-                "# Apply patches\n"
-                "elastic_client.ElasticClient.__init__ = _patched_elastic_init\n"
-                "opensearch_client.OpenSearchClient.__init__ = _patched_opensearch_init\n"
-            )
-        )
-        nb.cells.insert(1, configs_patch_cell)
-        insert_index = 2
+
+        # Set environment variable for the notebook's config directory
+        # This is used by the OpenSearchClient and ElasticClient when configs_dir is not specified
+        # The clients will check this env var and use it as the default configs_dir
+        os.environ["NOTEBOOK_CONFIGS_DIR"] = notebook_dir_rel
+        insert_index = 1
     else:
         insert_index = 1
 

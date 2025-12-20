@@ -10,7 +10,7 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-# List of failing tests from NOTEBOOK_TEST_RESULTS.md
+# List of failing tests from CODEBASE_REVIEW.md section 5.3
 FAILING_TESTS = [
     # OpenSearch Notebooks (13 failures)
     "./notebooks/opensearch/tmdb/hello-ltr (OpenSearch).ipynb",
