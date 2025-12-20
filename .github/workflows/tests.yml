@@ -5,11 +5,19 @@ on:
     branches: [ main, master, develop ]
   pull_request:
     branches: [ main, master, develop ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read
 
 jobs:
   test:
     name: Run Tests
     runs-on: ubuntu-latest
+    
+    env:
+      PYTHON_VERSION: "3.9"
     
     services:
       # Docker service for running containers in tests
@@ -24,21 +32,11 @@ jobs:
           - 2376:2376
     
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v4
+      - name: Set up Python environment
+        id: setup
+        uses: ./.github/actions/setup-python
         with:
-          version: "latest"
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.9"
-
-      - name: Install dependencies
-        run: uv sync
+          python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -97,7 +95,13 @@ jobs:
             junit-integration.xml
           retention-days: 30
 
+      - name: Calculate build time
+        uses: ./.github/actions/calculate-build-time
+        with:
+          start_time: ${{ steps.setup.outputs.start_time }}
+
       - name: Publish coverage summary
+        if: always()
         run: |
           echo "## Coverage Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY

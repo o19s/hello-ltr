@@ -219,6 +219,10 @@ class OpenSearchClient(BaseClient):
         Args:
             index: Index name to create. The configuration file should be named
                 "{index}_settings.json" in the configs_dir directory.
+
+        Raises:
+            FileNotFoundError: If the configuration file cannot be found.
+            RuntimeError: If index creation fails (HTTP status >= 400).
         """
         cfg_json_path = os.path.join(self.configs_dir, f"{index}_settings.json")
 
@@ -317,6 +321,9 @@ class OpenSearchClient(BaseClient):
 
         Args:
             index: Index name (unused, kept for API compatibility).
+
+        Raises:
+            RuntimeError: If LTR store initialization fails (HTTP status >= 400).
         """
         resp = requests.delete(self.opensearch_ep)
         resp_msg(
@@ -343,22 +350,6 @@ class OpenSearchClient(BaseClient):
             RuntimeError: If the index doesn't exist or feature set creation fails.
         """
         # Check if index exists before attempting to create feature set
-        if not self.check_index_exists(index):
-            raise RuntimeError(
-                f"Cannot create feature set '{name}': index '{index}' does not exist. "
-                f"Please create the index first using create_index('{index}')."
-            )
-        """Create a feature set in OpenSearch LTR.
-
-        Args:
-            index: Index name (used for validation - index must exist).
-            name: Name of the feature set to create.
-            ftr_config: Feature set configuration dictionary.
-
-        Raises:
-            RuntimeError: If the index does not exist or feature set creation fails.
-        """
-        # Check if index exists before creating feature set
         # OpenSearch LTR validates feature sets against indices, so the index must exist
         if not self.check_index_exists(index):
             raise RuntimeError(
@@ -522,6 +513,9 @@ class OpenSearchClient(BaseClient):
 
         Returns:
             str: Name of the feature at the specified index.
+
+        Raises:
+            ValueError: If config is a list instead of a dictionary.
         """
         if isinstance(config, list):
             raise ValueError("OpenSearchClient.get_feature_name requires a dict config")
@@ -555,6 +549,7 @@ class OpenSearchClient(BaseClient):
 
         Raises:
             RuntimeError: If the feature set is not usable after retries.
+            ValueError: If the response contains an error or has an invalid structure.
         """
         query_params = params.copy() if params else {}
         query_body = {
@@ -812,6 +807,9 @@ class OpenSearchClient(BaseClient):
             index: Index name (unused, kept for API compatibility).
             model_name: Name of the model to create.
             model_payload: RankLib model definition string.
+
+        Raises:
+            RuntimeError: If model creation or verification fails (see submit_model).
         """
         params = {
             "model": {
@@ -835,6 +833,9 @@ class OpenSearchClient(BaseClient):
             index: Index name (unused, kept for API compatibility).
             model_name: Name of the model to create.
             model_payload: XGBoost model definition (JSON format).
+
+        Raises:
+            RuntimeError: If model creation or verification fails (see submit_model).
         """
         params = {
             "model": {
@@ -856,6 +857,9 @@ class OpenSearchClient(BaseClient):
         Uses OpenSearch's rescore functionality to apply an LTR model to
         re-rank search results.
 
+        Includes retry logic to handle cases where models are not immediately
+        available after creation.
+
         Args:
             index: Index name to query.
             model: Name of the LTR model to use for rescoring.
@@ -865,6 +869,10 @@ class OpenSearchClient(BaseClient):
         Returns:
             list: List of document dictionaries with scores, transformed to
                 a format consistent with Solr.
+
+        Raises:
+            RuntimeError: If the model is not available after retries.
+            ValueError: If the response contains an error or has an invalid structure.
         """
         params = {
             "query": query,
@@ -877,10 +885,108 @@ class OpenSearchClient(BaseClient):
             "size": 1000,
         }
 
-        resp = self.opensearch.search(index=index, body=params)
-        # resp_msg(msg="Searching {} - {}".format(index, str(query)[:20]), resp=SearchResp(resp))
+        # Retry logic for model timing issues
+        max_retries = 5
+        retry_delay = 0.5  # 500ms initial delay
+        resp = None
+        for attempt in range(max_retries):
+            try:
+                resp = self.opensearch.search(index=index, body=params)
+                # Check for "Unknown model" errors before validation
+                if "error" in resp:
+                    error_str = str(resp.get("error", ""))
+                    if (
+                        "Unknown model" in error_str
+                        or "IllegalArgumentException" in error_str
+                    ):
+                        if attempt < max_retries - 1:
+                            logger.debug(
+                                f"Model '{model}' not yet available (attempt {attempt + 1}/{max_retries}), retrying..."
+                            )
+                            time.sleep(retry_delay)
+                            retry_delay *= 1.5
+                            continue
+                        else:
+                            raise RuntimeError(
+                                f"Model '{model}' is not available after {max_retries} attempts. "
+                                f"Error: {error_str}. This may indicate a timing issue with the OpenSearch LTR plugin "
+                                f"or the model was not successfully created."
+                            )
+                # No error, proceed with validation
+                self._validate_search_response(resp, operation="model query")
+                break
+            except RequestError as e:
+                # OpenSearch client raises RequestError for API errors
+                # Check if it's an "Unknown model" error
+                error_str = str(e)
+                # Check both error and info attributes for error details
+                error_info = getattr(e, "info", {})
+                error_attr = getattr(e, "error", "")
+                error_reason = ""
 
-        self._validate_search_response(resp, operation="model query")
+                # Try to extract error reason from info dict
+                if isinstance(error_info, dict):
+                    error_detail = error_info.get("error", {})
+                    if isinstance(error_detail, dict):
+                        error_reason = error_detail.get("reason", "")
+
+                # Also check error attribute directly (might be a string)
+                if isinstance(error_attr, str):
+                    error_reason = error_reason or error_attr
+
+                # Check if it's an "Unknown model" error
+                is_unknown_model_error = (
+                    "Unknown model" in error_str
+                    or "Unknown model" in error_reason
+                    or "IllegalArgumentException" in error_str
+                    or "IllegalArgumentException" in error_reason
+                )
+
+                if is_unknown_model_error:
+                    if attempt < max_retries - 1:
+                        logger.debug(
+                            f"Model '{model}' not yet available (attempt {attempt + 1}/{max_retries}), retrying..."
+                        )
+                        time.sleep(retry_delay)
+                        retry_delay *= 1.5
+                        continue
+                    else:
+                        raise RuntimeError(
+                            f"Model '{model}' is not available after {max_retries} attempts. "
+                            f"Error: {error_reason or error_str}. This may indicate a timing issue with the OpenSearch LTR plugin "
+                            f"or the model was not successfully created."
+                        )
+                # Re-raise other RequestError exceptions
+                raise
+            except ValueError as e:
+                # _validate_search_response raises ValueError for invalid responses
+                # Check if it's an "Unknown model" error
+                error_str = str(e)
+                if (
+                    "Unknown model" in error_str
+                    or "IllegalArgumentException" in error_str
+                ):
+                    if attempt < max_retries - 1:
+                        logger.debug(
+                            f"Model '{model}' not yet available (attempt {attempt + 1}/{max_retries}), retrying..."
+                        )
+                        time.sleep(retry_delay)
+                        retry_delay *= 1.5
+                        continue
+                    else:
+                        raise RuntimeError(
+                            f"Model '{model}' is not available after {max_retries} attempts. "
+                            f"Error: {error_str}. This may indicate a timing issue with the OpenSearch LTR plugin "
+                            f"or the model was not successfully created."
+                        )
+                # Re-raise other ValueError exceptions
+                raise
+
+        # Ensure resp was set (should always be set if we reach here)
+        if resp is None:
+            raise RuntimeError(
+                f"Model query for '{model}' failed: no response received after {max_retries} attempts"
+            )
 
         # Transform to consistent format between ES/Solr
         matches = []
@@ -901,6 +1007,9 @@ class OpenSearchClient(BaseClient):
         Returns:
             list: List of document dictionaries with scores, transformed to
                 a format consistent with Solr.
+
+        Raises:
+            ValueError: If the response contains an error or has an invalid structure.
         """
         logger.debug(f"OpenSearch query: {query}")
         resp = self.opensearch.search(index=index, body=query)

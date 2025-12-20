@@ -37,3 +37,6 @@ notebook_test_analysis*.json
 *_failing_tests.log
 *_batch*.log
 test_run_output.log
+
+# adrs, until reviewed
+adr/

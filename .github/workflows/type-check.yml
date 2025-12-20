@@ -1,0 +1,38 @@
+name: Type Check
+
+on:
+  push:
+    branches: [ main, master, develop ]
+  pull_request:
+    branches: [ main, master, develop ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  type-check:
+    name: Type Check with Pyright
+    runs-on: ubuntu-latest
+
+    env:
+      PYTHON_VERSION: "3.9"
+
+    steps:
+      - name: Set up Python environment
+        id: setup
+        uses: ./.github/actions/setup-python
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Run Pyright type checking
+        run: |
+          uv run pyright ltr/ rre/ utils/ tests/
+        continue-on-error: false
+
+      - name: Calculate build time
+        uses: ./.github/actions/calculate-build-time
+        with:
+          start_time: ${{ steps.setup.outputs.start_time }}
+

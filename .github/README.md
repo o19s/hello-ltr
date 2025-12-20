@@ -4,20 +4,7 @@ This directory contains GitHub Actions workflows and Dependabot configuration fo
 
 ## Workflows
 
-### Lint Naming Conventions (`.github/workflows/lint-naming.yml`)
-
-**Purpose:** Enforces PEP 8 naming conventions across the codebase.
-
-**Triggers:**
-- Push to `main`, `master`, or `develop` branches
-- Pull requests to `main`, `master`, or `develop` branches
-
-**What it does:**
-- Runs on Ubuntu latest with Python 3.9
-- Uses `uv` for dependency management
-- Checks PEP 8 naming conventions with Ruff (`--select N`)
-- Validates both Python code (`ltr/`, `rre/`, `utils/`, `tests/`, `*.py`) and notebooks (`notebooks/`)
-- Fails on naming violations (`continue-on-error: false`)
+All workflows can be manually triggered via `workflow_dispatch` in the GitHub Actions UI.
 
 ### Tests (`.github/workflows/tests.yml`)
 
@@ -26,6 +13,7 @@ This directory contains GitHub Actions workflows and Dependabot configuration fo
 **Triggers:**
 - Push to `main`, `master`, or `develop` branches
 - Pull requests to `main`, `master`, or `develop` branches
+- Manual trigger (`workflow_dispatch`)
 
 **What it does:**
 - Runs on Ubuntu latest with Python 3.9
@@ -36,11 +24,66 @@ This directory contains GitHub Actions workflows and Dependabot configuration fo
 - Generates coverage reports (XML, HTML, terminal)
 - Uploads coverage to Codecov
 - Uploads coverage HTML and test results as artifacts (30-day retention)
-- Publishes coverage summary to GitHub Actions summary
+- Publishes coverage summary and build time to GitHub Actions summary
 
 **Artifacts:**
 - `coverage-report`: HTML coverage report
 - `test-results`: JUnit XML test results
+
+### Type Check (`.github/workflows/type-check.yml`)
+
+**Purpose:** Runs static type checking with Pyright.
+
+**Triggers:**
+- Push to `main`, `master`, or `develop` branches
+- Pull requests to `main`, `master`, or `develop` branches
+- Manual trigger (`workflow_dispatch`)
+
+**What it does:**
+- Runs on Ubuntu latest with Python 3.9
+- Uses `uv` for dependency management
+- Runs Pyright type checking on all Python code
+- Tracks and reports build time
+
+### Full Linting (`.github/workflows/lint-full.yml`)
+
+**Purpose:** Runs comprehensive linting and formatting checks with Ruff.
+
+**Triggers:**
+- Push to `main`, `master`, or `develop` branches
+- Pull requests to `main`, `master`, or `develop` branches
+- Manual trigger (`workflow_dispatch`)
+
+**What it does:**
+- Runs on Ubuntu latest with Python 3.9
+- Uses `uv` for dependency management
+- Runs full Ruff linting checks (all rules, including PEP 8 naming conventions)
+- Checks Ruff formatting on Python code and notebooks
+- Validates both Python code (`ltr/`, `rre/`, `utils/`, `tests/`, `*.py`) and notebooks (`notebooks/`)
+- Tracks and reports build time
+
+**Note:** This workflow replaces the previous `lint-naming.yml` workflow, as it covers all linting rules including naming conventions.
+
+### Security Scan (`.github/workflows/security-scan.yml`)
+
+**Purpose:** Scans code and dependencies for security vulnerabilities.
+
+**Triggers:**
+- Push to `main`, `master`, or `develop` branches
+- Pull requests to `main`, `master`, or `develop` branches
+- Manual trigger (`workflow_dispatch`)
+- Scheduled: Weekly on Mondays at 09:00 UTC
+
+**What it does:**
+- Runs on Ubuntu latest with Python 3.9
+- Uses `uv` for dependency management
+- Runs Bandit security scan on Python code
+- Runs pip-audit to check for vulnerable dependencies
+- Uploads security scan reports as artifacts (30-day retention)
+- Tracks and reports build time
+
+**Artifacts:**
+- `security-reports`: JSON reports from Bandit and pip-audit
 
 ## Dependabot
 
@@ -75,8 +118,13 @@ Developer commits → Pre-commit hooks run locally
                   ↓
 Push to GitHub → GitHub Actions triggered
                ↓
-Lint checks run (Ruff --select N)
-Tests run (unit + integration with coverage)
+┌─────────────────────────────────────────┐
+│  Parallel Workflow Execution:          │
+│  • Full Linting (Ruff all rules + format)│
+│  • Type Check (Pyright)                 │
+│  • Tests (unit + integration + coverage)│
+│  • Security Scan (Bandit + pip-audit)  │
+└─────────────────────────────────────────┘
                ↓
 Pass: Merge allowed
 Fail: Fix required
@@ -88,19 +136,22 @@ Fail: Fix required
 - **Coverage reports:** Download the `coverage-report` artifact or view on Codecov (if configured)
 - **Test results:** Download the `test-results` artifact or view in the workflow summary
 
-## Future Enhancements
+## Build Time Tracking
 
-**High Priority:**
-- Security scanning (Bandit, pip-audit)
-- Full linting checks (not just naming)
-- Type checking in CI
+All workflows now track and report build times:
+- Build time is calculated from workflow start to completion
+- Displayed in GitHub Actions step summary
+- Can be measured via `measure_dev_metrics.py` script
+
+## Future Enhancements
 
 **Medium Priority:**
 - Docker image building and publishing
-- More comprehensive linting (full ruff check, formatting checks)
-
-**Low Priority:**
 - Performance benchmarks
 - Documentation building and deployment
+
+**Low Priority:**
 - Release automation
+- Matrix testing across Python versions
+- Cross-platform testing (Windows, macOS)
 

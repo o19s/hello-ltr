@@ -14,6 +14,7 @@ from unittest.mock import Mock, mock_open, patch
 
 import pytest
 
+from ltr.judgments import Judgment
 from ltr.ranklib import (
     check_for_rankymcrankface,
     feature_search,
@@ -76,10 +77,22 @@ class TestTrainModel:
         mock_check.return_value = "/tmp/ranky.jar"
         mock_write.return_value = "/tmp/training.txt"
         mock_result = Mock()
+        mock_result.returncode = 0  # Success
         mock_result.stdout = "Training log output"
+        mock_result.stderr = None
         mock_subprocess.return_value = mock_result
-        mock_parse.return_value = Mock()
-        training_set = []
+        mock_parsed_result = Mock()
+        mock_parsed_result.trainingLogs = [Mock()]  # Non-empty logs
+        mock_parse.return_value = mock_parsed_result
+        # Create minimal valid training set (2 judgments with features)
+        training_set = [
+            Judgment(
+                grade=3, qid=1, keywords="test", doc_id="doc1", features=[1.0, 2.0, 3.0]
+            ),
+            Judgment(
+                grade=2, qid=1, keywords="test", doc_id="doc2", features=[4.0, 5.0, 6.0]
+            ),
+        ]
         # Act
         result = train_model(training_set, "/tmp/model.txt")
         # Assert
@@ -118,10 +131,22 @@ class TestTrainModel:
         mock_check.return_value = "/tmp/ranky.jar"
         mock_write.return_value = "/tmp/training.txt"
         mock_result = Mock()
+        mock_result.returncode = 0  # Success
         mock_result.stdout = "Training log output"
+        mock_result.stderr = None
         mock_subprocess.return_value = mock_result
-        mock_parse.return_value = Mock()
-        training_set = []
+        mock_parsed_result = Mock()
+        mock_parsed_result.trainingLogs = [Mock()]  # Non-empty logs
+        mock_parse.return_value = mock_parsed_result
+        # Create minimal valid training set (2 judgments with features)
+        training_set = [
+            Judgment(
+                grade=3, qid=1, keywords="test", doc_id="doc1", features=[1.0, 2.0, 3.0]
+            ),
+            Judgment(
+                grade=2, qid=1, keywords="test", doc_id="doc2", features=[4.0, 5.0, 6.0]
+            ),
+        ]
         features = [1, 2, 3]
         # Act
         train_model(training_set, "/tmp/model.txt", features=features)
@@ -144,10 +169,22 @@ class TestTrainModel:
         mock_check.return_value = "/tmp/ranky.jar"
         mock_write.return_value = "/tmp/training.txt"
         mock_result = Mock()
+        mock_result.returncode = 0  # Success
         mock_result.stdout = "Training log output"
+        mock_result.stderr = None
         mock_subprocess.return_value = mock_result
-        mock_parse.return_value = Mock()
-        training_set = []
+        mock_parsed_result = Mock()
+        mock_parsed_result.trainingLogs = [Mock()]  # Non-empty logs
+        mock_parse.return_value = mock_parsed_result
+        # Create minimal valid training set (2 judgments with features)
+        training_set = [
+            Judgment(
+                grade=3, qid=1, keywords="test", doc_id="doc1", features=[1.0, 2.0, 3.0]
+            ),
+            Judgment(
+                grade=2, qid=1, keywords="test", doc_id="doc2", features=[4.0, 5.0, 6.0]
+            ),
+        ]
         # Act
         train_model(training_set, "/tmp/model.txt", kcv=5)
         # Assert
@@ -180,11 +217,20 @@ class TestTrain:
 
     @patch("ltr.ranklib.save_model")
     @patch("ltr.ranklib.train_model")
-    def test_train_success(self, mock_train_model, mock_save_model):
+    @patch("ltr.ranklib._validate_training_prerequisites")
+    def test_train_success(self, mock_validate, mock_train_model, mock_save_model):
         """Test train function with successful training."""
         # Arrange
         mock_client = Mock()
-        training_set = []
+        # Create minimal valid training set (2 judgments with features)
+        training_set = [
+            Judgment(
+                grade=3, qid=1, keywords="test", doc_id="doc1", features=[1.0, 2.0, 3.0]
+            ),
+            Judgment(
+                grade=2, qid=1, keywords="test", doc_id="doc2", features=[4.0, 5.0, 6.0]
+            ),
+        ]
         mock_result = Mock()
         mock_result.trainingLogs = [Mock()]  # Non-empty logs
         mock_train_model.return_value = mock_result
@@ -196,11 +242,20 @@ class TestTrain:
         assert result == mock_result
 
     @patch("ltr.ranklib.train_model")
-    def test_train_fails_with_no_logs(self, mock_train_model):
+    @patch("ltr.ranklib._validate_training_prerequisites")
+    def test_train_fails_with_no_logs(self, mock_validate, mock_train_model):
         """Test train raises RuntimeError when no training logs."""
         # Arrange
         mock_client = Mock()
-        training_set = []
+        # Create minimal valid training set (2 judgments with features)
+        training_set = [
+            Judgment(
+                grade=3, qid=1, keywords="test", doc_id="doc1", features=[1.0, 2.0, 3.0]
+            ),
+            Judgment(
+                grade=2, qid=1, keywords="test", doc_id="doc2", features=[4.0, 5.0, 6.0]
+            ),
+        ]
         mock_result = Mock()
         mock_result.trainingLogs = []  # Empty logs
         mock_train_model.return_value = mock_result
@@ -210,11 +265,22 @@ class TestTrain:
 
     @patch("ltr.ranklib.save_model")
     @patch("ltr.ranklib.train_model")
-    def test_train_with_kcv_skips_save(self, mock_train_model, mock_save_model):
+    @patch("ltr.ranklib._validate_training_prerequisites")
+    def test_train_with_kcv_skips_save(
+        self, mock_validate, mock_train_model, mock_save_model
+    ):
         """Test train skips save_model when kcv is used."""
         # Arrange
         mock_client = Mock()
-        training_set = []
+        # Create minimal valid training set (2 judgments with features)
+        training_set = [
+            Judgment(
+                grade=3, qid=1, keywords="test", doc_id="doc1", features=[1.0, 2.0, 3.0]
+            ),
+            Judgment(
+                grade=2, qid=1, keywords="test", doc_id="doc2", features=[4.0, 5.0, 6.0]
+            ),
+        ]
         mock_result = Mock()
         mock_result.trainingLogs = [Mock()]
         mock_train_model.return_value = mock_result

@@ -1,0 +1,53 @@
+name: Full Linting
+
+on:
+  push:
+    branches: [ main, master, develop ]
+  pull_request:
+    branches: [ main, master, develop ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  lint-full:
+    name: Full Ruff Linting and Formatting Checks
+    runs-on: ubuntu-latest
+
+    env:
+      PYTHON_VERSION: "3.9"
+
+    steps:
+      - name: Set up Python environment
+        id: setup
+        uses: ./.github/actions/setup-python
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Run Ruff linting on Python files
+        run: |
+          uv run ruff check ltr/ rre/ utils/ tests/ *.py
+        continue-on-error: false
+
+      - name: Run Ruff linting on notebooks
+        run: |
+          uv run ruff check notebooks/
+        continue-on-error: false
+
+      - name: Check Ruff formatting on Python files
+        run: |
+          uv run ruff format --check ltr/ rre/ utils/ tests/ *.py
+        continue-on-error: false
+
+      - name: Check Ruff formatting on notebooks
+        run: |
+          uv run ruff format --check notebooks/
+        continue-on-error: false
+
+      - name: Calculate build time
+        uses: ./.github/actions/calculate-build-time
+        with:
+          start_time: ${{ steps.setup.outputs.start_time }}
+

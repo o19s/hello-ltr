@@ -103,12 +103,45 @@ def train_model(
         RanklibResult: Object containing training logs and metrics.
 
     Raises:
+        ValueError: If the training set is empty, has no judgments with features,
+            or has insufficient data (less than 2 judgments with features).
         RuntimeError: If RankLib execution fails or produces no training logs.
 
     Note:
         RandomForest-specific parameters (frate, srate) are only used when
         ranker=8. For LambdaMART (ranker=6), these parameters are ignored.
     """
+
+    # Validate training set before proceeding
+    if not training_set:
+        raise ValueError(
+            "Training set is empty. Cannot train a model without training data. "
+            "Ensure you have created judgments and logged features before training."
+        )
+
+    # Check if training set has features
+    judgments_with_features = [j for j in training_set if j.has_features()]
+    if not judgments_with_features:
+        raise ValueError(
+            "No judgments in the training set have features. "
+            "Features must be logged before training. "
+            "Use log_query() or FeatureLogger to log features for your judgments."
+        )
+
+    # Check if training set has sufficient data
+    if len(judgments_with_features) < 2:
+        raise ValueError(
+            f"Training set has only {len(judgments_with_features)} judgment(s) with features. "
+            "At least 2 judgments with features are required for training."
+        )
+
+    # Check for consistent feature counts
+    feature_counts = {len(j.features) for j in judgments_with_features if j.features}
+    if len(feature_counts) > 1:
+        logger.warning(
+            f"Training set has inconsistent feature counts: {feature_counts}. "
+            "This may cause training issues. Ensure all judgments have the same number of features."
+        )
 
     ranky_loc = check_for_rankymcrankface()
     training_set_path = write_training_set(training_set)
@@ -124,13 +157,77 @@ def train_model(
         cmd += f" -kcv {kcv} "
 
     logger.info(f"Running RankLib command: {cmd}")
-    result = subprocess.run(
+    process_result = subprocess.run(
         shlex.split(cmd),
         capture_output=True,
         text=True,
         check=False,
-    ).stdout
-    return parse_training_log(result)
+    )
+
+    # Check if RankLib execution failed
+    if process_result.returncode != 0:
+        error_msg = process_result.stderr or process_result.stdout or "Unknown error"
+        # Convert to string if it's not already (handles Mock objects in tests)
+        error_msg_str = str(error_msg) if not isinstance(error_msg, str) else error_msg
+        error_preview = error_msg_str[:500] if error_msg_str else "Unknown error"
+
+        # Provide more helpful error messages based on common issues
+        if "FileNotFoundException" in error_msg_str or "No such file" in error_msg_str:
+            raise RuntimeError(
+                f"RankLib training failed: Could not find training data file. "
+                f"This may indicate the training set file was not created properly. "
+                f"Return code: {process_result.returncode}. "
+                f"Error: {error_preview}"
+            )
+        elif "ParseException" in error_msg_str or "parse" in error_msg_str.lower():
+            raise RuntimeError(
+                f"RankLib training failed: Training data format error. "
+                f"The training set may be malformed or contain invalid data. "
+                f"Check that all judgments have valid features and ratings. "
+                f"Return code: {process_result.returncode}. "
+                f"Error: {error_preview}"
+            )
+        elif len(training_set) == 0:
+            raise RuntimeError(
+                f"RankLib training failed: Empty training set. "
+                f"Ensure you have created judgments and logged features before training. "
+                f"Return code: {process_result.returncode}. "
+                f"Error: {error_preview}"
+            )
+        else:
+            raise RuntimeError(
+                f"RankLib training failed with return code {process_result.returncode}. "
+                f"Error output: {error_preview}. "
+                f"Common causes: invalid training data, missing features, or RankLib configuration issues."
+            )
+
+    # Parse training logs
+    parsed_result = parse_training_log(process_result.stdout)
+
+    # If no training logs were parsed, raise an error
+    if len(parsed_result.trainingLogs) == 0:
+        error_context = (
+            "RankLib did not produce any training logs. "
+            "This may indicate an error in the training data or RankLib execution. "
+            "Common causes:\n"
+            "  1. Empty or invalid training set\n"
+            "  2. Missing or invalid features in judgments\n"
+            "  3. Insufficient training data (need at least 2 judgments with features)\n"
+            "  4. RankLib configuration issues (invalid parameters)"
+        )
+        if process_result.stderr:
+            error_msg = process_result.stderr[:500]
+            raise RuntimeError(f"{error_context}\n\nStderr output: {error_msg}")
+        elif process_result.stdout:
+            stdout_preview = (
+                process_result.stdout[:500] if process_result.stdout else "No output"
+            )
+            raise RuntimeError(f"{error_context}\n\nStdout output: {stdout_preview}")
+        else:
+            # Even without stderr, no training logs is an error condition
+            raise RuntimeError(error_context)
+
+    return parsed_result
 
 
 def save_model(
@@ -152,6 +249,67 @@ def save_model(
     with open(model_file) as src:
         definition = src.read()
         client.submit_ranklib_model(feature_set, index, model_name, definition)
+
+
+def _validate_training_prerequisites(
+    client: BaseClient,
+    feature_set: str,
+    index: str,
+    training_set: list[Judgment],
+) -> None:
+    """Validate that prerequisites for training are met.
+
+    Checks that:
+    - Feature set exists and is accessible
+    - Training set has data with features
+    - Index exists (implicitly checked via feature set)
+
+    Args:
+        client: Search client instance.
+        feature_set: Name of the feature set to validate.
+        index: Index name (for error messages).
+        training_set: Training set to validate.
+
+    Raises:
+        RuntimeError: If prerequisites are not met, with helpful error messages.
+        ValueError: If training set is invalid.
+    """
+    # Validate feature set exists
+    try:
+        client.feature_set(index=index, name=feature_set)
+        logger.debug(f"Feature set '{feature_set}' validated successfully")
+    except RuntimeError as e:
+        raise RuntimeError(
+            f"Cannot train model: Feature set '{feature_set}' not found or not accessible. "
+            f"This usually means:\n"
+            f"  1. The feature set hasn't been created yet - run client.create_featureset() first\n"
+            f"  2. The feature set was created in a different index\n"
+            f"  3. There was an error creating the feature set\n\n"
+            f"Original error: {e}\n\n"
+            f"To fix: Ensure you run cells in this order:\n"
+            f"  1. client.create_index('{index}')\n"
+            f"  2. client.create_featureset(index='{index}', name='{feature_set}', ftr_config=...)\n"
+            f"  3. Log features using log_query() or FeatureLogger\n"
+            f"  4. Train model using train()"
+        ) from e
+
+    # Validate training set
+    if not training_set:
+        raise ValueError(
+            "Cannot train model: Training set is empty. "
+            "Ensure you have:\n"
+            "  1. Created judgments\n"
+            "  2. Logged features using log_query() or FeatureLogger\n"
+            "  3. Passed the judgments with features to train()"
+        )
+
+    judgments_with_features = [j for j in training_set if j.has_features()]
+    if not judgments_with_features:
+        raise ValueError(
+            "Cannot train model: No judgments in the training set have features. "
+            "Features must be logged before training. "
+            "Use log_query() or FeatureLogger.log_for_qid() to log features for your judgments."
+        )
 
 
 def train(
@@ -199,7 +357,8 @@ def train(
         RanklibResult: Object containing training logs and metrics.
 
     Raises:
-        RuntimeError: If training fails or produces no training logs.
+        RuntimeError: If the feature set is not found or training fails or produces no training logs.
+        ValueError: If the training set is empty or has no judgments with features.
         TypeError: If camelCase parameter names are used (e.g., featureSet instead of feature_set).
     """
     # Check for common camelCase parameter name mistakes
@@ -224,6 +383,9 @@ def train(
             f"Valid parameters are: model_name, feature_set, index, features, kcv, metric2t, "
             f"leafs, trees, frate, srate, bag, ranker, shrinkage"
         )
+
+    # Validate prerequisites before training
+    _validate_training_prerequisites(client, feature_set, index, training_set)
 
     model_file = f"data/{model_name}_model.txt"
     ranklib_result = train_model(

@@ -523,7 +523,7 @@ The project uses extensive type aliases for consistency. See [`TYPE_ALIASES_GUID
 **Note:** For detailed type checking configuration and current status, see [`CODEBASE_REVIEW.md`](CODEBASE_REVIEW.md) section 5.1 (Test Infrastructure Components - Type Checking in Tests).
 
 - **Tool**: Pyright (configured in `standard` mode)
-- **Coverage**: All library code, excludes notebooks
+- **Coverage**: All library code and Python files in notebooks (excludes `.ipynb` files)
 - **Status**: 0 errors, 2 warnings (library-related)
 - **Current State**: No type annotations in most code (gradual addition needed)
 

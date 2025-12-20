@@ -198,7 +198,7 @@ split-on-trailing-comma = true
 
 [tool.pyright]
 # Pyright type checking configuration
-include = ["ltr", "rre", "utils", "tests", "stubs"]
+include = ["ltr", "rre", "utils", "tests", "stubs", "notebooks"]
 exclude = [
     "**/__pycache__",
     "**/node_modules",
@@ -209,7 +209,7 @@ exclude = [
     "**/*.egg-info",
     "**/htmlcov",
     "**/.pytest_cache",
-    "**/notebooks"
+    "**/*.ipynb"
 ]
 # Stub path for custom type stubs
 stubPath = "stubs"

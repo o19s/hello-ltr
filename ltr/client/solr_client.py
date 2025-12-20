@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import os
 import re
+import time
 from collections.abc import Callable, Iterable, Iterator
 
 import requests
@@ -115,6 +116,9 @@ class SolrClient(BaseClient):
 
         Args:
             index: Core name to create. A configset with the same name must exist.
+
+        Raises:
+            RuntimeError: If core creation fails (HTTP status >= 400).
         """
         params = {
             "action": "CREATE",
@@ -185,6 +189,9 @@ class SolrClient(BaseClient):
 
         Args:
             index: Core name to reset LTR for.
+
+        Raises:
+            RuntimeError: If model or feature store deletion fails (HTTP status >= 400).
         """
         models = self.get_models(index)
         for model in models:
@@ -247,6 +254,9 @@ class SolrClient(BaseClient):
 
         Returns:
             str: Name of the feature at the specified index.
+
+        Raises:
+            ValueError: If config is a dictionary instead of a list.
         """
         if isinstance(config, dict):
             raise ValueError("SolrClient.get_feature_name requires a list config")
@@ -275,6 +285,10 @@ class SolrClient(BaseClient):
         Returns:
             list: List of document dictionaries, each with an added "ltr_features"
                 field containing the logged feature values.
+
+        Raises:
+            RuntimeError: If the feature set is not usable after retries, if no response
+                is received after all retries, or if the response structure is invalid.
         """
         query_params = params.copy() if params else {}
         efi_options = []
@@ -291,14 +305,60 @@ class SolrClient(BaseClient):
             "rows": 1000,
             "wt": "json",
         }
-        resp = requests.post(f"{self.solr_base_ep}/{index}/select", data=solr_params)
-        # resp_msg(msg='Searching {}'.format(index), resp=resp)
-        resp_json = resp.json()
 
-        # Check for error responses
-        if "error" in resp_json:
-            error_msg = resp_json.get("error", {}).get("msg", "Unknown Solr error")
-            raise RuntimeError(f"Solr log_query failed: {error_msg}")
+        # Retry logic for feature set timing issues
+        # Solr LTR may need time to index feature sets after creation
+        max_retries = 5
+        retry_delay = 0.2  # 200ms initial delay
+        resp_json = None
+
+        for attempt in range(max_retries):
+            resp = requests.post(
+                f"{self.solr_base_ep}/{index}/select", data=solr_params
+            )
+            # resp_msg(msg='Searching {}'.format(index), resp=resp)
+            resp_json = resp.json()
+
+            # Check for error responses
+            if "error" in resp_json:
+                error_detail = resp_json.get("error", {})
+                error_msg = error_detail.get("msg", "Unknown Solr error")
+
+                # Check if it's a feature set timing issue
+                # Common errors: "Unknown featureset", feature store not ready
+                if (
+                    "Unknown featureset" in error_msg
+                    or "featureset" in error_msg.lower()
+                    or "feature store" in error_msg.lower()
+                    or (
+                        "store" in error_msg.lower()
+                        and "not found" in error_msg.lower()
+                    )
+                ):
+                    if attempt < max_retries - 1:
+                        # Feature set may not be ready yet, retry
+                        time.sleep(retry_delay)
+                        retry_delay *= 1.5  # Gradual backoff
+                        continue
+                    else:
+                        raise RuntimeError(
+                            f"Solr log_query failed after {max_retries} attempts. "
+                            f"Feature set '{featureset}' may not be ready for queries yet. "
+                            f"Error: {error_msg}. "
+                            f"Try waiting a moment and using the feature set again, or verify "
+                            f"the feature set was created successfully."
+                        )
+                else:
+                    # Non-timing error, raise immediately
+                    raise RuntimeError(f"Solr log_query failed: {error_msg}")
+            else:
+                # No error, break out of retry loop
+                break
+
+        if resp_json is None:
+            raise RuntimeError(
+                f"Solr log_query failed: no response received after {max_retries} attempts"
+            )
 
         # Validate response structure
         if "response" not in resp_json:
@@ -359,6 +419,9 @@ class SolrClient(BaseClient):
             index: Core name to create the model in.
             model_name: Name of the model to create.
             model_payload: Model configuration dictionary.
+
+        Raises:
+            RuntimeError: If model creation or deletion fails (HTTP status >= 400).
         """
         url = f"{self.solr_base_ep}/{index}/schema/model-store"
         resp = requests.delete(f"{url}/{model_name}")
@@ -380,6 +443,9 @@ class SolrClient(BaseClient):
             index: Core name to create the model in.
             model_name: Name of the model to create.
             model_payload: RankLib model definition string.
+
+        Raises:
+            RuntimeError: If feature store retrieval or model submission fails.
         """
         resp = requests.get(
             f"{self.solr_base_ep}/{index}/schema/feature-store/{featureset}"
@@ -419,7 +485,9 @@ class SolrClient(BaseClient):
             list: List of document dictionaries with scores.
 
         Raises:
+            TypeError: If query is not a dictionary.
             ValueError: If query dict does not contain a "q" key.
+            RuntimeError: If the Solr response indicates an error or has unexpected structure.
         """
         # Extract query string from QueryParams dict
         # Solr's model_query expects a query string in the "q" parameter
@@ -743,6 +811,9 @@ class SolrClient(BaseClient):
             tuple: A tuple containing:
                 - mapping: List of dictionaries with feature names
                 - raw_feature_set: Full feature store configuration list
+
+        Raises:
+            RuntimeError: If the feature store retrieval fails (HTTP status >= 400).
         """
         resp = requests.get(f"{self.solr_base_ep}/{index}/schema/feature-store/{name}")
         resp_msg(msg=f"Feature Set {name}...", resp=resp)

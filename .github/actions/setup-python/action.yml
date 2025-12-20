@@ -1,0 +1,40 @@
+name: 'Setup Python Environment'
+description: 'Sets up Python, uv, and records start time for build duration tracking'
+inputs:
+  python-version:
+    description: 'Python version to use'
+    required: false
+    default: '3.9'
+  uv-version:
+    description: 'uv version to use'
+    required: false
+    default: 'latest'
+outputs:
+  start_time:
+    description: 'Start time timestamp for build duration calculation'
+    value: ${{ steps.start_time.outputs.start_time }}
+runs:
+  using: 'composite'
+  steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Record start time
+      id: start_time
+      shell: bash
+      run: echo "start_time=$(date +%s)" >> $GITHUB_OUTPUT
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v4
+      with:
+        version: ${{ inputs.uv-version }}
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Install dependencies
+      shell: bash
+      run: uv sync
+
