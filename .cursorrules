@@ -4,3 +4,4 @@
 - Always use pyproject.toml, not requirements.txt.
 - Instead of creating separate documents recording fixes, update the original code issue docs.
 - After making any significant change to types, run pyright.
+- Whenever providing hard-coded dates (e.g. when a report was updated) check the current date. You usually get it wrong, often by years.

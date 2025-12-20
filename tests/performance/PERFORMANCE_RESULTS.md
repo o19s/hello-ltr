@@ -17,12 +17,12 @@
 
 ### Slowest Tests (>0.1 seconds)
 
-| Test | Duration | Notes |
-|------|----------|-------|
-| `test_notebook_patterns::test_bayesian_optimization_patterns` | 0.311s | Pattern matching test |
-| `test_notebook_patterns::test_lambda_mart_patterns` | 0.225s | Pattern matching test |
-| `test_package_compatibility::test_matplotlib_operations` | 0.133s | Matplotlib import/operations |
-| `test_package_compatibility::test_imports` | 0.106s | Package import test |
+| Test                                                          | Duration | Notes                        |
+|---------------------------------------------------------------|----------|------------------------------|
+| `test_notebook_patterns::test_bayesian_optimization_patterns` | 0.311s   | Pattern matching test        |
+| `test_notebook_patterns::test_lambda_mart_patterns`           | 0.225s   | Pattern matching test        |
+| `test_package_compatibility::test_matplotlib_operations`      | 0.133s   | Matplotlib import/operations |
+| `test_package_compatibility::test_imports`                    | 0.106s   | Package import test          |
 
 ### Fastest Tests (<0.01 seconds)
 

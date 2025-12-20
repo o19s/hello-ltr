@@ -187,18 +187,65 @@ def run_notebook(notebook_path, timeout=None, save_nb_path=None):
     )
     nb.cells.insert(0, patch_cell)
 
-    # Check if notebook needs index setup (uses reset_ltr or create_featureset but not rebuild)
+    # Patch configs_dir for Elasticsearch/OpenSearch notebooks
+    # This ensures clients can find settings files when running from project root during tests
+    notebook_dir = os.path.dirname(notebook_path)
+    is_es_notebook = (
+        "elasticsearch" in notebook_path.lower()
+        or "opensearch" in notebook_path.lower()
+    ) and ("tmdb" in notebook_path.lower() or "osc-blog" in notebook_path.lower())
+
+    if is_es_notebook:
+        # Determine relative path from project root to notebook directory
+        notebook_dir_rel = os.path.relpath(notebook_dir, project_root)
+        configs_patch_cell = nbformat.v4.new_code_cell(
+            source=(
+                "# Patch ElasticClient and OpenSearchClient to use notebook's configs_dir\n"
+                "import importlib\n"
+                "from ltr.client import elastic_client, opensearch_client\n"
+                "\n"
+                "# Store original __init__ methods\n"
+                "_original_elastic_init = elastic_client.ElasticClient.__init__\n"
+                "_original_opensearch_init = opensearch_client.OpenSearchClient.__init__\n"
+                "\n"
+                "def _patched_elastic_init(self, configs_dir=None):\n"
+                "    # If configs_dir not provided, use notebook's directory\n"
+                f"    if configs_dir is None:\n"
+                f"        configs_dir = r'{notebook_dir_rel}'\n"
+                "    _original_elastic_init(self, configs_dir=configs_dir)\n"
+                "\n"
+                "def _patched_opensearch_init(self, configs_dir=None):\n"
+                "    # If configs_dir not provided, use notebook's directory\n"
+                f"    if configs_dir is None:\n"
+                f"        configs_dir = r'{notebook_dir_rel}'\n"
+                "    _original_opensearch_init(self, configs_dir=configs_dir)\n"
+                "\n"
+                "# Apply patches\n"
+                "elastic_client.ElasticClient.__init__ = _patched_elastic_init\n"
+                "opensearch_client.OpenSearchClient.__init__ = _patched_opensearch_init\n"
+            )
+        )
+        nb.cells.insert(1, configs_patch_cell)
+        insert_index = 2
+    else:
+        insert_index = 1
+
+    # Check if notebook needs index setup (uses reset_ltr, create_featureset, or sltr queries)
     # This ensures notebooks that depend on the index have it created if needed
+    # Note: We check for sltr even if rebuild is present, because rebuild might fail
+    # or the notebook's rebuild code might not execute properly in test environment.
+    # The injected code checks if index exists before creating, so it's safe to run.
     notebook_source = " ".join(
         [cell.get("source", "") for cell in nb.cells if cell.get("cell_type") == "code"]
     )
+    # Notebooks that use sltr queries always need the index, even if they have rebuild
+    # because sltr queries will fail if the index doesn't exist
     needs_index = (
-        "reset_ltr" in notebook_source or "create_featureset" in notebook_source
-    ) and "rebuild" not in notebook_source
+        "reset_ltr" in notebook_source
+        or "create_featureset" in notebook_source
+        or "sltr" in notebook_source
+    )
     is_tmdb_notebook = "tmdb" in notebook_path.lower()
-
-    # Track insertion index for additional patches
-    insert_index = 1
 
     if needs_index and is_tmdb_notebook:
         # Determine client type from notebook path
@@ -215,8 +262,34 @@ def run_notebook(notebook_path, timeout=None, save_nb_path=None):
             client_import = None
 
         if client_import:
+            # Check if notebook will rebuild the index itself
+            # If it does, we only create the index if it doesn't exist (don't force rebuild)
+            # This avoids conflicts where we create it, then notebook deletes and fails to recreate
+            notebook_will_rebuild = (
+                "rebuild" in notebook_source and "force=True" in notebook_source
+            )
+
             # Inject index setup code after patch cell
             # This ensures the index exists before notebooks try to use it
+            if notebook_will_rebuild:
+                # Notebook will rebuild, so only create if missing (don't force)
+                # This avoids the scenario where we create it, notebook deletes it, then fails to recreate
+                rebuild_strategy = (
+                    "if not _test_client.check_index_exists('tmdb'):\n"
+                    "            movies = indexable_movies(movies_path=data_file)\n"
+                    "            rebuild(_test_client, index='tmdb', doc_src=movies, force=False)\n"
+                    "            print('[TEST] Created tmdb index (notebook will rebuild it)')\n"
+                    "        else:\n"
+                    "            print('[TEST] Index exists, notebook will rebuild it')"
+                )
+            else:
+                # Notebook won't rebuild, so ensure index exists (force rebuild for clean state)
+                rebuild_strategy = (
+                    "movies = indexable_movies(movies_path=data_file)\n"
+                    "        rebuild(_test_client, index='tmdb', doc_src=movies, force=True)\n"
+                    "        print('[TEST] Successfully created/rebuilt tmdb index')"
+                )
+
             index_setup_cell = nbformat.v4.new_code_cell(
                 source=f"{client_import}\n"
                 "import os\n"
@@ -225,21 +298,24 @@ def run_notebook(notebook_path, timeout=None, save_nb_path=None):
                 "from ltr.index import rebuild\n"
                 "\n"
                 "# Ensure tmdb index exists for notebooks that need it\n"
+                "# This runs before the notebook's own rebuild code to ensure the index exists\n"
                 "_test_client = Client()\n"
-                "if not _test_client.check_index_exists('tmdb'):\n"
-                "    # Download data if it doesn't exist\n"
-                "    data_file = 'data/tmdb.json'\n"
-                "    if not os.path.exists(data_file):\n"
-                "        try:\n"
-                "            corpus = 'http://es-learn-to-rank.labs.o19s.com/tmdb.json'\n"
-                "            download([corpus], dest='data/')\n"
-                "        except Exception as e:\n"
-                "            print(f'Warning: Could not download data: {{e}}')\n"
-                "            print('Index creation skipped - notebook may fail if data is required')\n"
-                "    # Create index if data file exists\n"
-                "    if os.path.exists(data_file):\n"
-                "        movies = indexable_movies(movies=data_file)\n"
-                "        rebuild(_test_client, index='tmdb', doc_src=movies)\n"
+                "# Download data if it doesn't exist\n"
+                "data_file = 'data/tmdb.json'\n"
+                "if not os.path.exists(data_file):\n"
+                "    try:\n"
+                "        corpus = 'http://es-learn-to-rank.labs.o19s.com/tmdb.json'\n"
+                "        download([corpus], dest='data/')\n"
+                "    except Exception as e:\n"
+                "        print(f'[TEST] Warning: Could not download data: {{e}}')\n"
+                "        print('[TEST] Index creation skipped - notebook may fail if data is required')\n"
+                "# Create index if data file exists\n"
+                "if os.path.exists(data_file):\n"
+                "    try:\n"
+                f"        {rebuild_strategy}\n"
+                "    except Exception as e:\n"
+                "        print(f'[TEST] Warning: Could not create index: {{e}}')\n"
+                "        print('[TEST] Notebook may fail if index is required')\n"
                 "del _test_client"
             )
             nb.cells.insert(insert_index, index_setup_cell)

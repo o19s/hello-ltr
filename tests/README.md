@@ -544,6 +544,10 @@ def test_solr_client_initializes_with_localhost():
 - Environment validation (Docker, ports, packages, disk space)
 - Health check functionality
 
+**Code Coverage:**
+- Overall coverage: **32.24%** (measured December 2025)
+- Coverage report: `htmlcov/index.html` (generated after running tests with `--cov`)
+
 ### Test Fixtures
 
 Fixtures are defined in `tests/conftest.py` and provide reusable test setup and teardown.

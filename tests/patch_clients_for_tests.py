@@ -283,6 +283,66 @@ def patch_clients_for_test_ports():
 
         elastic_client_module.ElasticClient.__init__ = patched_elastic_init
 
+        # Patch ElasticClient timing methods for test environments
+        # Test environments may be slower, so increase delays and retries
+        original_reset_ltr = elastic_client_module.ElasticClient.reset_ltr
+        original_create_featureset = (
+            elastic_client_module.ElasticClient.create_featureset
+        )
+
+        def patched_reset_ltr(self, index: str) -> None:
+            """Patched reset_ltr with longer delay for test environments."""
+            original_reset_ltr(self, index)
+            # Add extra delay in test environments (original has 200ms, we add 300ms more)
+            time.sleep(0.3)
+
+        def patched_create_featureset(self, index: str, name: str, ftr_config):
+            """Patched create_featureset with additional retries for test environments."""
+            try:
+                # Call original method (which has 5 retries)
+                original_create_featureset(self, index, name, ftr_config)
+            except RuntimeError as e:
+                # If original failed due to timing, add extra retries
+                error_str = str(e)
+                if (
+                    "not usable in queries" in error_str
+                    or "Unknown featureset" in error_str
+                ):
+                    # Feature set exists but not ready - add extra retries
+                    max_additional_retries = 5
+                    for attempt in range(max_additional_retries):
+                        try:
+                            test_params = {
+                                "query": {
+                                    "bool": {
+                                        "filter": [
+                                            {
+                                                "sltr": {
+                                                    "_name": "test_features",
+                                                    "featureset": name,
+                                                    "params": {},
+                                                }
+                                            }
+                                        ]
+                                    }
+                                },
+                                "size": 0,
+                            }
+                            test_resp = self.es.search(index=index, body=test_params)
+                            if "error" not in test_resp:
+                                return  # Feature set is ready
+                        except Exception:
+                            pass
+                        if attempt < max_additional_retries - 1:
+                            time.sleep(0.5)  # 500ms delay between retries
+                    # Still not ready after extra retries, re-raise original error
+                raise
+
+        elastic_client_module.ElasticClient.reset_ltr = patched_reset_ltr
+        elastic_client_module.ElasticClient.create_featureset = (
+            patched_create_featureset
+        )
+
     # Patch OpenSearchClient
     if opensearch_port:
         original_init = opensearch_client_module.OpenSearchClient.__init__
@@ -305,6 +365,74 @@ def patch_clients_for_test_ports():
                 self.opensearch = OpenSearch(f"http://{self.host}:{opensearch_port}")
 
         opensearch_client_module.OpenSearchClient.__init__ = patched_opensearch_init
+
+        # Patch OpenSearchClient timing methods for test environments
+        # Test environments may be slower, so increase delays and retries
+        original_reset_ltr_opensearch = (
+            opensearch_client_module.OpenSearchClient.reset_ltr
+        )
+        original_create_featureset_opensearch = (
+            opensearch_client_module.OpenSearchClient.create_featureset
+        )
+
+        def patched_reset_ltr_opensearch(self, index: str) -> None:
+            """Patched reset_ltr with longer delay for test environments."""
+            original_reset_ltr_opensearch(self, index)
+            # Add extra delay in test environments (original has 200ms, we add 300ms more)
+            time.sleep(0.3)
+
+        def patched_create_featureset_opensearch(
+            self, index: str, name: str, ftr_config
+        ):
+            """Patched create_featureset with additional retries for test environments."""
+            try:
+                # Call original method (which has 5 retries)
+                original_create_featureset_opensearch(self, index, name, ftr_config)
+            except RuntimeError as e:
+                # If original failed due to timing, add extra retries
+                error_str = str(e)
+                if (
+                    "not usable in queries" in error_str
+                    or "Unknown featureset" in error_str
+                ):
+                    # Feature set exists but not ready - add extra retries
+                    max_additional_retries = 5
+                    for attempt in range(max_additional_retries):
+                        try:
+                            test_params = {
+                                "query": {
+                                    "bool": {
+                                        "filter": [
+                                            {
+                                                "sltr": {
+                                                    "_name": "test_features",
+                                                    "featureset": name,
+                                                    "params": {},
+                                                }
+                                            }
+                                        ]
+                                    }
+                                },
+                                "size": 0,
+                            }
+                            test_resp = self.opensearch.search(
+                                index=index, body=test_params
+                            )
+                            if "error" not in test_resp:
+                                return  # Feature set is ready
+                        except Exception:
+                            pass
+                        if attempt < max_additional_retries - 1:
+                            time.sleep(0.5)  # 500ms delay between retries
+                    # Still not ready after extra retries, re-raise original error
+                raise
+
+        opensearch_client_module.OpenSearchClient.reset_ltr = (
+            patched_reset_ltr_opensearch
+        )
+        opensearch_client_module.OpenSearchClient.create_featureset = (
+            patched_create_featureset_opensearch
+        )
 
     # Mark patching as done and store ports
     _patching_state["done"] = True

@@ -34,10 +34,45 @@ import pytest
 from ..nb_test_config import NotebookTestConfig
 from ..test_config import IGNORED_NOTEBOOKS, TEST_PATHS
 
+# Known slow notebook patterns (notebooks that typically take > 60 seconds)
+# These match the patterns defined in tests/conftest.py
+SLOW_PATTERNS = [
+    "netfix",
+    "bayesian-optimization",
+    "bigger bot",
+    "lambda-mart",
+    "feature_search",
+    "evaluation",
+]
+
+
+def _is_slow_notebook(notebook_path: str) -> bool:
+    """
+    Check if a notebook matches known slow patterns.
+
+    Args:
+        notebook_path: Path to the notebook file
+
+    Returns:
+        bool: True if notebook matches slow patterns
+    """
+    if not notebook_path:
+        return False
+    notebook_path_lower = notebook_path.lower()
+    return any(pattern.lower() in notebook_path_lower for pattern in SLOW_PATTERNS)
+
 
 def collect_notebooks():
     """
     Collect all notebooks to test.
+
+    Notebooks are ordered to optimize test execution:
+    1. Setup notebooks run first
+    2. hello-ltr notebooks run before dependent notebooks
+    3. Fast notebooks run before slow notebooks (slow notebooks run last)
+
+    Slow notebooks are identified by matching patterns in SLOW_PATTERNS
+    (e.g., "lambda-mart", "bigger bot", "netfix", "bayesian-optimization").
 
     Returns:
         List of tuples: (notebook_path, notebook_type, engine)
@@ -74,10 +109,15 @@ def collect_notebooks():
             notebooks.append((config.setup, "setup", engine))
 
         # Add test notebooks (excluding ignored)
-        # Sort to ensure hello-ltr notebooks run before dependent notebooks
+        # Sort: hello-ltr notebooks first, then fast notebooks, then slow notebooks last
         test_notebooks = [nb for nb in config.notebooks if nb not in IGNORED_NOTEBOOKS]
-        # Sort: hello-ltr notebooks first, then others
-        test_notebooks.sort(key=lambda x: (0 if "hello-ltr" in x.lower() else 1, x))
+        test_notebooks.sort(
+            key=lambda x: (
+                0 if "hello-ltr" in x.lower() else 1,  # hello-ltr first
+                1 if _is_slow_notebook(x) else 0,  # slow notebooks last
+                x,  # then alphabetical
+            )
+        )
         for nb in test_notebooks:
             notebooks.append((nb, "test", engine))
 
