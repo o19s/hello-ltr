@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from ltr.exceptions import ClientError
 from ltr.logger import get_logger
 
 logger = get_logger(__name__)
@@ -38,4 +39,7 @@ def resp_msg(
     else:
         logger.info(f"{msg} [Status: {rsc}]")
     if rsc >= 400 and rsc not in ignore and throw:
-        raise RuntimeError(resp.text)
+        raise ClientError(
+            f"HTTP {rsc} error: {resp.text}",
+            operation=msg,
+        )

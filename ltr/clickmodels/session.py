@@ -6,7 +6,7 @@ in click model analysis, including click and conversion tracking.
 
 from __future__ import annotations
 
-from typing import Any
+from collections.abc import Hashable
 
 from ltr.types import SessionTuple, SessionTupleList
 
@@ -20,17 +20,17 @@ class Doc:
         conversion: Boolean indicating whether a conversion occurred (default: False).
     """
 
-    def __init__(self, click: bool, doc_id: Any, conversion: bool = False) -> None:
+    def __init__(self, click: bool, doc_id: Hashable, conversion: bool = False) -> None:
         """Initialize a Doc.
 
         Args:
             click: Boolean indicating whether this document was clicked.
-            doc_id: Document identifier.
+            doc_id: Document identifier (must be hashable, e.g., str or int).
             conversion: Boolean indicating whether a conversion occurred
                 (default: False).
         """
         self.click: bool = click
-        self.doc_id: Any = doc_id
+        self.doc_id: Hashable = doc_id
         self.conversion: bool = conversion
 
     def __repr__(self) -> str:
@@ -67,20 +67,20 @@ class Session:
         ValueError: If the same document appears multiple times in the results.
     """
 
-    def __init__(self, query: Any, docs: list[Doc]) -> None:
+    def __init__(self, query: Hashable, docs: list[Doc]) -> None:
         """Initialize a Session.
 
         Args:
-            query: Query string or query ID.
+            query: Query string or query ID (must be hashable, e.g., str or int).
             docs: List of Doc objects in rank order.
 
         Raises:
             ValueError: If the same document appears multiple times in the results.
         """
-        self.query: Any = query
+        self.query: Hashable = query
         self.docs: list[Doc] = docs
         # Check if docs are unique
-        docset = set()
+        docset: set[Hashable] = set()
         for doc in docs:
             if doc.doc_id in docset:
                 raise ValueError(
@@ -125,7 +125,7 @@ def build_one(sess_tuple: SessionTuple) -> Session:
         Session: Session object constructed from the tuple data.
     """
     query = sess_tuple[0]
-    docs = []
+    docs: list[Doc] = []
     for doc_tuple in sess_tuple[1]:
         conversion = False
         if len(doc_tuple) > 2:
@@ -143,7 +143,7 @@ def build(sess_tuples: SessionTupleList) -> list[Session]:
     Returns:
         list: List of Session objects.
     """
-    sesss = []
+    sesss: list[Session] = []
     for sess_tup in sess_tuples:
         sesss.append(build_one(sess_tup))
     return sesss

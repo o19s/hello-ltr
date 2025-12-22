@@ -10,7 +10,8 @@ Tests cover:
 - Feature extraction
 """
 
-from ltr.client.elastic_client import BulkResp, ElasticResp, SearchResp
+from ltr.client.elastic_client import ElasticResp
+from ltr.client.responses import BulkResp, SearchResp
 
 
 class TestElasticClientInitialization:

@@ -1,5 +1,7 @@
 # Naming Conventions Guide
 
+**Last Updated:** December 21, 2025
+
 This document outlines the naming conventions used in this project. All code should follow PEP 8 naming conventions unless explicitly documented exceptions apply.
 
 ## Standard PEP 8 Naming Conventions
@@ -102,12 +104,12 @@ Naming conventions are enforced automatically:
    uv run ruff check --select N notebooks/
    ```
 
-2. **CI/CD Pipeline**: GitHub Actions workflow (`.github/workflows/lint-naming.yml`) runs on every push and pull request
+2. **CI/CD Pipeline**: GitHub Actions workflow (`.github/workflows/lint-full.yml`) runs on every push and pull request, including naming convention checks via Ruff
 
 ### Violation Handling
 
 - **New violations**: Will cause CI/CD to fail. Fix violations before merging.
-- **Existing violations**: Documented in `NAMING_CONVENTIONS_VIOLATIONS.md` with reasoning
+- **Existing violations**: Documented in this document (see [Intentional Violations](#intentional-violations) section) with reasoning
 - **Suppressing violations**: Use `# noqa: N803` (or appropriate code) with a comment explaining why
 
 ## Best Practices
@@ -172,9 +174,10 @@ max_batch_size = 1000  # ❌ (unless it's a module-level variable, not a constan
 
 ## Related Documentation
 
-- **Violations Audit**: See `NAMING_CONVENTIONS_VIOLATIONS.md` for a complete list of existing violations and their justifications
+- **Violations**: All intentional violations are documented in the [Intentional Violations](#intentional-violations) section above
 - **PEP 8**: [Python Enhancement Proposal 8](https://peps.python.org/pep-0008/)
 - **Ruff Documentation**: [Ruff Naming Rules](https://docs.astral.sh/ruff/rules/#pep8-naming-n)
+- **CI/CD Workflow**: See `.github/workflows/lint-full.yml` for automated enforcement
 
 ## Questions?
 

@@ -15,6 +15,11 @@ Retry Logic:
 - Automatically retries network requests on connection errors, timeouts, and 5xx errors
 - Uses exponential backoff: 0.1s, 0.2s, 0.4s delays
 - Maximum 3 retry attempts per request
+- Note: Client methods already have comprehensive retry logic, so this only handles
+  direct requests library calls that bypass client methods
+
+Configuration:
+- TEST_RESET_LTR_DELAY: Extra delay after reset_ltr() in test environments (default: 0.3s)
 
 Usage:
     from tests.patch_clients_for_test_ports import patch_clients_for_test_ports, patch_requests_for_test_ports
@@ -30,11 +35,22 @@ Implementation:
 - Patches are applied via importlib.reload to ensure changes take effect
 - Only patches clients when corresponding environment variables are set
 - Adds retry logic with exponential backoff for network operations
+- Simplifies test patching to only handle port changes and minimal timing adjustments
 """
 
 import os
 import sys
 import time
+
+from ltr.helpers.retry import is_opensearch_connection_error, retry_on_connection_error
+from ltr.logger import get_logger
+
+logger = get_logger(__name__)
+
+# Retry configuration constants
+CLIENT_INIT_MAX_RETRIES = 5
+CLIENT_INIT_RETRY_DELAY = 0.5
+REQUESTS_MAX_RETRIES = 3
 
 
 def patch_requests_for_test_ports():
@@ -90,7 +106,7 @@ def patch_requests_for_test_ports():
 
         return any(err_type in exception_str for err_type in error_types)
 
-    def _retry_request(request_func, *args, max_retries=3, **kwargs):
+    def _retry_request(request_func, *args, max_retries=REQUESTS_MAX_RETRIES, **kwargs):
         """
         Execute a request with automatic retry logic for transient failures.
 
@@ -121,7 +137,11 @@ def patch_requests_for_test_ports():
         """Patched request method that rewrites URLs and adds retry logic."""
         url = rewrite_url(url)
         return _retry_request(
-            self._original_request, method, url, max_retries=3, **kwargs
+            self._original_request,
+            method,
+            url,
+            max_retries=REQUESTS_MAX_RETRIES,
+            **kwargs,
         )
 
     requests.Session.request = patched_request  # type: ignore[assignment]
@@ -139,7 +159,7 @@ def patch_requests_for_test_ports():
         return _retry_request(
             requests._original_get,  # type: ignore[attr-defined]
             rewritten_url,
-            max_retries=3,
+            max_retries=REQUESTS_MAX_RETRIES,
             **kwargs,
         )
 
@@ -149,7 +169,7 @@ def patch_requests_for_test_ports():
         return _retry_request(
             requests._original_post,  # type: ignore[attr-defined]
             rewritten_url,
-            max_retries=3,
+            max_retries=REQUESTS_MAX_RETRIES,
             **kwargs,
         )
 
@@ -159,7 +179,7 @@ def patch_requests_for_test_ports():
         return _retry_request(
             requests._original_put,  # type: ignore[attr-defined]
             rewritten_url,
-            max_retries=3,
+            max_retries=REQUESTS_MAX_RETRIES,
             **kwargs,
         )
 
@@ -169,7 +189,7 @@ def patch_requests_for_test_ports():
         return _retry_request(
             requests._original_delete,  # type: ignore[attr-defined]
             rewritten_url,
-            max_retries=3,
+            max_retries=REQUESTS_MAX_RETRIES,
             **kwargs,
         )
 
@@ -210,6 +230,31 @@ def _reload_or_import_module(module_path):
 
 # Track patching state to avoid redundant patching
 _patching_state = {"done": False, "ports": None}
+
+
+def _create_and_test_opensearch_client(host: str, port: str):
+    """Create and test an OpenSearch client connection.
+
+    Creates an OpenSearch client and tests the connection with a simple API call.
+    This function is designed to be used with retry logic for handling transient
+    connection errors during container startup.
+
+    Args:
+        host: OpenSearch hostname
+        port: OpenSearch port number
+
+    Returns:
+        OpenSearch: Configured and tested OpenSearch client
+
+    Raises:
+        Exception: If client creation or connection test fails
+    """
+    from opensearchpy import OpenSearch
+
+    client = OpenSearch(f"http://{host}:{port}")
+    # Test connection with a simple API call
+    client.info()
+    return client
 
 
 def patch_clients_for_test_ports():
@@ -296,64 +341,20 @@ def patch_clients_for_test_ports():
             ltr.client.ElasticClient = elastic_client_module.ElasticClient
 
         # Patch ElasticClient timing methods for test environments
-        # Test environments may be slower, so increase delays and retries
+        # Test environments may be slower, so add extra delay after reset
+        # Note: create_featureset already has comprehensive retry logic, so we don't patch it
         original_reset_ltr = elastic_client_module.ElasticClient.reset_ltr
-        original_create_featureset = (
-            elastic_client_module.ElasticClient.create_featureset
-        )
 
         def patched_reset_ltr(self, index: str) -> None:
             """Patched reset_ltr with longer delay for test environments."""
             original_reset_ltr(self, index)
             # Add extra delay in test environments (original has 200ms, we add 300ms more)
-            time.sleep(0.3)
-
-        def patched_create_featureset(self, index: str, name: str, ftr_config):
-            """Patched create_featureset with additional retries for test environments."""
-            try:
-                # Call original method (which has 5 retries)
-                original_create_featureset(self, index, name, ftr_config)
-            except RuntimeError as e:
-                # If original failed due to timing, add extra retries
-                error_str = str(e)
-                if (
-                    "not usable in queries" in error_str
-                    or "Unknown featureset" in error_str
-                ):
-                    # Feature set exists but not ready - add extra retries
-                    max_additional_retries = 5
-                    for attempt in range(max_additional_retries):
-                        try:
-                            test_params = {
-                                "query": {
-                                    "bool": {
-                                        "filter": [
-                                            {
-                                                "sltr": {
-                                                    "_name": "test_features",
-                                                    "featureset": name,
-                                                    "params": {},
-                                                }
-                                            }
-                                        ]
-                                    }
-                                },
-                                "size": 0,
-                            }
-                            test_resp = self.es.search(index=index, body=test_params)
-                            if "error" not in test_resp:
-                                return  # Feature set is ready
-                        except Exception:
-                            pass
-                        if attempt < max_additional_retries - 1:
-                            time.sleep(0.5)  # 500ms delay between retries
-                    # Still not ready after extra retries, re-raise original error
-                raise
+            # This can be configured via TEST_RESET_LTR_DELAY env var (default: 0.3s)
+            extra_delay = float(os.environ.get("TEST_RESET_LTR_DELAY", "0.3"))
+            if extra_delay > 0:
+                time.sleep(extra_delay)
 
         elastic_client_module.ElasticClient.reset_ltr = patched_reset_ltr
-        elastic_client_module.ElasticClient.create_featureset = (
-            patched_create_featureset
-        )
 
     # Patch OpenSearchClient
     if opensearch_port:
@@ -371,10 +372,28 @@ def patch_clients_for_test_ports():
             """
             original_init(self, configs_dir)
             if not self.docker:  # Only patch non-docker connections
+                # Validate that opensearch_port is set
+                if not opensearch_port:
+                    error_msg = "OPENSEARCH_PORT environment variable not set - cannot patch port"
+                    raise RuntimeError(error_msg)
                 self.opensearch_ep = f"http://{self.host}:{opensearch_port}/_ltr"
-                from opensearchpy import OpenSearch
 
-                self.opensearch = OpenSearch(f"http://{self.host}:{opensearch_port}")
+                # Retry logic for OpenSearch client initialization
+                # Connection errors can occur if container is still starting up
+                try:
+                    self.opensearch = retry_on_connection_error(
+                        lambda: _create_and_test_opensearch_client(
+                            self.host, opensearch_port
+                        ),
+                        max_retries=CLIENT_INIT_MAX_RETRIES,
+                        initial_delay=CLIENT_INIT_RETRY_DELAY,
+                        is_connection_error=is_opensearch_connection_error,
+                    )
+                except RuntimeError as e:
+                    raise RuntimeError(
+                        f"Failed to initialize OpenSearch client after {CLIENT_INIT_MAX_RETRIES} attempts. "
+                        f"OpenSearch container may not be ready. Error: {e}"
+                    ) from e
 
         opensearch_client_module.OpenSearchClient.__init__ = patched_opensearch_init
 
@@ -388,71 +407,23 @@ def patch_clients_for_test_ports():
             ltr.client.OpenSearchClient = opensearch_client_module.OpenSearchClient
 
         # Patch OpenSearchClient timing methods for test environments
-        # Test environments may be slower, so increase delays and retries
+        # Test environments may be slower, so add extra delay after reset
+        # Note: create_featureset already has comprehensive retry logic, so we don't patch it
         original_reset_ltr_opensearch = (
             opensearch_client_module.OpenSearchClient.reset_ltr
-        )
-        original_create_featureset_opensearch = (
-            opensearch_client_module.OpenSearchClient.create_featureset
         )
 
         def patched_reset_ltr_opensearch(self, index: str) -> None:
             """Patched reset_ltr with longer delay for test environments."""
             original_reset_ltr_opensearch(self, index)
             # Add extra delay in test environments (original has 200ms, we add 300ms more)
-            time.sleep(0.3)
-
-        def patched_create_featureset_opensearch(
-            self, index: str, name: str, ftr_config
-        ):
-            """Patched create_featureset with additional retries for test environments."""
-            try:
-                # Call original method (which has 5 retries)
-                original_create_featureset_opensearch(self, index, name, ftr_config)
-            except RuntimeError as e:
-                # If original failed due to timing, add extra retries
-                error_str = str(e)
-                if (
-                    "not usable in queries" in error_str
-                    or "Unknown featureset" in error_str
-                ):
-                    # Feature set exists but not ready - add extra retries
-                    max_additional_retries = 5
-                    for attempt in range(max_additional_retries):
-                        try:
-                            test_params = {
-                                "query": {
-                                    "bool": {
-                                        "filter": [
-                                            {
-                                                "sltr": {
-                                                    "_name": "test_features",
-                                                    "featureset": name,
-                                                    "params": {},
-                                                }
-                                            }
-                                        ]
-                                    }
-                                },
-                                "size": 0,
-                            }
-                            test_resp = self.opensearch.search(
-                                index=index, body=test_params
-                            )
-                            if "error" not in test_resp:
-                                return  # Feature set is ready
-                        except Exception:
-                            pass
-                        if attempt < max_additional_retries - 1:
-                            time.sleep(0.5)  # 500ms delay between retries
-                    # Still not ready after extra retries, re-raise original error
-                raise
+            # This can be configured via TEST_RESET_LTR_DELAY env var (default: 0.3s)
+            extra_delay = float(os.environ.get("TEST_RESET_LTR_DELAY", "0.3"))
+            if extra_delay > 0:
+                time.sleep(extra_delay)
 
         opensearch_client_module.OpenSearchClient.reset_ltr = (
             patched_reset_ltr_opensearch
-        )
-        opensearch_client_module.OpenSearchClient.create_featureset = (
-            patched_create_featureset_opensearch
         )
 
     # Mark patching as done and store ports

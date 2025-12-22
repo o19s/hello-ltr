@@ -1,5 +1,7 @@
 # Type Aliases Guide
 
+**Last Updated:** December 21, 2025
+
 ## Overview
 
 This codebase uses type aliases defined in `ltr/types.py` to improve code readability, maintainability, and consistency. Type aliases are a Python best practice when you have complex or frequently repeated type definitions.
@@ -35,11 +37,23 @@ This codebase uses type aliases defined in `ltr/types.py` to improve code readab
 - `ModelPayload` - `dict[str, Any]` - Model payload dictionary
 - `FeatureSetResult` - `tuple[FeatureList, list[Any]]` - Feature set method return type
 
+### Judgment Types
+- `JudgmentList` - `list[Any]` - List of Judgment objects (uses Any to avoid circular imports)
+- `QueryKeywordMap` - `dict[int, tuple[str, int]]` - Dictionary mapping query IDs to (keywords, weight) tuples
+
 ### Click Model Session Types
-- `DocTuple` - `Union[tuple[Any, bool], tuple[Any, bool, Any]]` - Document tuple
+- `DocTuple` - `Union[tuple[Any, bool], tuple[Any, bool, Any]]` - Document tuple: (doc_id, click) or (doc_id, click, conversion)
 - `DocTupleList` - `list[DocTuple]` - List of document tuples
-- `SessionTuple` - `tuple[Any, DocTupleList]` - Session tuple
+- `SessionTuple` - `tuple[Any, DocTupleList]` - Session tuple: (query, list of doc tuples)
 - `SessionTupleList` - `list[SessionTuple]` - List of session tuples
+
+### Click Model Types
+- `QueryDocPair` - `tuple[str, Any]` - Query-document pair: (query_id, doc_id) tuple used as dictionary keys
+- `AttractivenessMap` - `dict[QueryDocPair, float]` - Dictionary mapping query-document pairs to attractiveness/satisfaction values
+- `CTRByRank` - `dict[int, float]` - Dictionary mapping rank positions to CTR (Click-Through Rate) values
+- `CostMap` - `dict[str, float]` - Dictionary mapping document IDs to cost values
+- `FeatureImpactMap` - `dict[str, float]` - Dictionary mapping feature IDs to impact/importance values
+- `UBMRankPair` - `tuple[int, int]` - UBM rank pair: (last_click_position, current_rank) tuple
 
 ## Usage Examples
 
@@ -94,4 +108,10 @@ Create a new type alias when:
 3. **Document complex aliases** - Add docstrings for non-obvious types
 4. **Keep aliases focused** - One concept per alias
 5. **Don't over-alias** - Simple types like `str` or `int` don't need aliases
+
+## Related Documentation
+
+- **Type System**: See [`ARCHITECTURE.md#type-system`](ARCHITECTURE.md#type-system) for type system overview
+- **Type Checking**: See [`CODEBASE_REVIEW.md`](CODEBASE_REVIEW.md) section 5.1 for type checking configuration and status
+- **Source Code**: See [`ltr/types.py`](ltr/types.py) for the complete type alias definitions
 

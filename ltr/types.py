@@ -6,7 +6,7 @@ readability, maintainability, and consistency across the codebase.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Hashable, Iterable
 from typing import Any, Union
 
 # JSON-like dictionary structures
@@ -64,20 +64,22 @@ QueryKeywordMap = dict[int, tuple[str, int]]
 
 # Click model session types
 """Document tuple: (doc_id, click) or (doc_id, click, conversion)."""
-DocTuple = Union[tuple[Any, bool], tuple[Any, bool, Any]]
+DocTuple = Union[tuple[Hashable, bool], tuple[Hashable, bool, Any]]
 
 """List of document tuples."""
 DocTupleList = list[DocTuple]
 
 """Session tuple: (query, list of doc tuples)."""
-SessionTuple = tuple[Any, DocTupleList]
+SessionTuple = tuple[Hashable, DocTupleList]
 
 """List of session tuples."""
 SessionTupleList = list[SessionTuple]
 
 # Click model types
 """Query-document pair: (query_id, doc_id) tuple used as dictionary keys."""
-QueryDocPair = tuple[str, Any]  # doc_id can be any hashable type (str, int, etc.)
+QueryDocPair = tuple[
+    Hashable, Hashable
+]  # Both query_id and doc_id must be hashable (str, int, etc.)
 
 """Dictionary mapping query-document pairs to attractiveness/satisfaction values."""
 AttractivenessMap = dict[QueryDocPair, float]
@@ -86,7 +88,7 @@ AttractivenessMap = dict[QueryDocPair, float]
 CTRByRank = dict[int, float]
 
 """Dictionary mapping document IDs to cost values."""
-CostMap = dict[str, float]
+CostMap = dict[Hashable, float]
 
 """Dictionary mapping feature IDs to impact/importance values."""
 FeatureImpactMap = dict[str, float]

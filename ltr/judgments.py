@@ -14,6 +14,7 @@ from typing import Any, Literal, TextIO, cast, overload
 
 from ltr.logger import get_logger
 from ltr.types import QueryKeywordMap
+from ltr.validation import ValidationError
 
 logger = get_logger(__name__)
 
@@ -137,7 +138,7 @@ def judgments_open(
     """Work with judgments from the filesystem,
     either in a read or write mode"""
     if path is None:
-        raise ValueError("path cannot be None")
+        raise ValidationError("path cannot be None")
     with open(path, mode) as f:
         f_textio: TextIO = cast(TextIO, f)
         if mode[0] == "r":
@@ -263,14 +264,43 @@ class Judgment:
 
         Note:
             Feature indices are 1-based in RankLib format (0th feature becomes "1:").
+            None, NaN, or invalid feature values are replaced with 0.0 to ensure valid numeric format.
         """
+        import math
+
+        def safe_feature_value(feature: float | None | str) -> float:
+            """Convert feature value to a safe numeric value for RankLib.
+
+            Args:
+                feature: Feature value (may be None, NaN, string "None", or invalid).
+
+            Returns:
+                float: Valid numeric value (0.0 for None/NaN/invalid values).
+            """
+            if feature is None:
+                return 0.0
+            # Explicitly handle string "None" before attempting conversion
+            if isinstance(feature, str) and feature.lower() == "none":
+                return 0.0
+            try:
+                value = float(feature)
+                # Check for NaN
+                if math.isnan(value):
+                    return 0.0
+                return value
+            except (ValueError, TypeError):
+                # Handle other invalid values (fallback)
+                return 0.0
+
         features_as_strs = [
-            f"{idx + 1}:{feature}" for idx, feature in enumerate(self.features)
+            f"{idx + 1}:{safe_feature_value(feature)}"
+            for idx, feature in enumerate(self.features)
         ]
         comment = f"# {self.docId}\t{self.keywords}"
-        return "{}\tqid:{}\t{} {}".format(
+        formatted_line = "{}\tqid:{}\t{} {}".format(
             self.grade, self.qid, "\t".join(features_as_strs), comment
         )
+        return formatted_line
 
 
 def _queries_to_header(qid_to_kw_dict: QueryKeywordMap) -> str:
@@ -333,7 +363,9 @@ def _judgments_from_body(
     # http://www.regexpal.com/?fam=96565
     regex = re.compile(r"^(\d+)\s+qid:(\d+)\s+#\s+(\w+).*")
     train_regex = re.compile(r"^(\d+)\s+qid:(\d+)\s+1:\d+.+#\s+(\w+).*")
-    ftr_regex = re.compile(r"(\d+):([.\d]+)\s")
+    # Updated regex to also match "None" strings (for backward compatibility with old files)
+    # and convert them to 0.0
+    ftr_regex = re.compile(r"(\d+):([.\d]+|None)\s")
     for line in lines:
         m = re.match(regex, line)
         if m:
@@ -353,18 +385,19 @@ def _judgments_from_body(
                     ftr_idx = int(m.group(1)) - 1
                     if ftr_idx + 1 > ftr_size:
                         ftr_size = ftr_idx + 1
-                    ftr_score = float(m.group(2))
+                    # Handle "None" strings by converting to 0.0 (for backward compatibility)
+                    ftr_value_str = m.group(2)
+                    ftr_score = 0.0 if ftr_value_str == "None" else float(ftr_value_str)
                     features[ftr_idx] = ftr_score
 
                 features_list: list[float | None] = [None] * ftr_size
                 for ftr_idx, value in features.items():
                     features_list[ftr_idx] = value
 
-                for feature_val in features_list:
+                # Fill any remaining None values with 0.0 (for backward compatibility)
+                for i, feature_val in enumerate(features_list):
                     if feature_val is None:
-                        raise ValueError(
-                            "Missing Features Detected When Parsing Training Set"
-                        )
+                        features_list[i] = 0.0
 
                 yield grade, qid, doc_id, cast(list[float], features_list)
 
@@ -390,7 +423,7 @@ def _judgment_rows(
     last_qid = -1
     for grade, qid, doc_id, features in _judgments_from_body(f):
         if qid < last_qid:
-            raise ValueError("Judgments not sorted by qid in file")
+            raise ValidationError("Judgments not sorted by qid in file")
         # if last_qid != qid and qid % 100 == 0:
         #     print(f"Parsing QID {qid}")
         yield Judgment(

@@ -62,7 +62,9 @@ def update_attractiveness(sessions: list[Session], model: Model) -> None:
     attractions: defaultdict[QueryDocPair, float] = defaultdict(
         lambda: 0.0
     )  # Track query-doc attractiveness in this round
-    num_sessions = Counter()  # Track num sessions where query-doc appears
+    num_sessions: Counter[QueryDocPair] = (
+        Counter()
+    )  # Track num sessions where query-doc appears
     for session in sessions:
         last_click = -1
         for rank, doc in enumerate(session.docs):
@@ -121,7 +123,7 @@ def update_examines(sessions: list[Session], model: Model) -> None:
         examination probabilities.
     """
     new_rank_probs: defaultdict[UBMRankPair, float] = defaultdict(lambda: 0.0)
-    counts = defaultdict(lambda: 0)
+    counts: defaultdict[UBMRankPair, int] = defaultdict(lambda: 0)
 
     for session in sessions:
         last_click = -1

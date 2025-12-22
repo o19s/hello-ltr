@@ -198,14 +198,17 @@ class TestTrainModel:
 class TestSaveModel:
     """Test save_model function."""
 
+    @patch("os.path.exists")
     @patch("builtins.open", new_callable=mock_open, read_data="model definition")
-    def test_save_model(self, mock_file):
+    def test_save_model(self, mock_file, mock_exists):
         """Test save_model reads file and submits to client."""
         # Arrange
         mock_client = Mock()
+        mock_exists.return_value = True  # File exists
         # Act
         save_model(mock_client, "model1", "/tmp/model.txt", "index1", "featureset1")
         # Assert
+        mock_exists.assert_called_once_with("/tmp/model.txt")
         mock_file.assert_called_once_with("/tmp/model.txt")
         mock_client.submit_ranklib_model.assert_called_once_with(
             "featureset1", "index1", "model1", "model definition"
@@ -244,7 +247,7 @@ class TestTrain:
     @patch("ltr.ranklib.train_model")
     @patch("ltr.ranklib._validate_training_prerequisites")
     def test_train_fails_with_no_logs(self, mock_validate, mock_train_model):
-        """Test train raises RuntimeError when no training logs."""
+        """Test train raises ModelError when no training logs."""
         # Arrange
         mock_client = Mock()
         # Create minimal valid training set (2 judgments with features)
@@ -260,7 +263,9 @@ class TestTrain:
         mock_result.trainingLogs = []  # Empty logs
         mock_train_model.return_value = mock_result
         # Act & Assert
-        with pytest.raises(RuntimeError, match="Training failed"):
+        from ltr.exceptions import ModelError
+
+        with pytest.raises(ModelError, match="Training failed"):
             train(mock_client, training_set, "model1", "featureset1", "index1")
 
     @patch("ltr.ranklib.save_model")

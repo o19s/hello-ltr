@@ -1,7 +1,7 @@
 # Architecture Documentation
 
 **Project:** hello-ltr (Learning to Rank tutorial and examples)  
-**Last Updated:** December 2025
+**Last Updated:** December 21, 2025
 
 ---
 
@@ -144,6 +144,18 @@ hello-ltr/
 - Bulk indexing operations
 - Document source handling (iterables, callables)
 
+**`validation.py`**: Input validation and security
+- Index name validation (prevents injection attacks)
+- Model and feature set name validation
+- Keyword validation for search queries
+- Raises `ValidationError` for invalid inputs
+
+**`logger.py`**: Centralized logging configuration
+- Unified logging setup for the entire library
+- Configurable log levels via environment variables
+- Hierarchical logger naming (`ltr.module_name`)
+- Console handler with consistent formatting
+
 #### 3. Click Models (`ltr/clickmodels/`)
 
 **Purpose**: Implement various click models for implicit feedback.
@@ -173,6 +185,7 @@ hello-ltr/
 - `convert.py`: Data format conversions
 - `ranklib_result.py`: RankLib output parsing
 - `solr_escape.py`: Solr query escaping
+- `retry.py`: Retry logic with exponential backoff for transient failures
 - `msmarco/evaluate.py`: MS MARCO dataset evaluation
 
 ---
@@ -402,6 +415,16 @@ client = create_client("elastic", url="http://localhost:9200")
 
 **Example**: `es_ltr_query()` builds Elasticsearch query structure
 
+### 6. Retry Pattern with Exponential Backoff
+
+**Used in**: `ltr/helpers/retry.py`, client operations
+
+**Purpose**: Handle transient failures gracefully
+
+**Pattern**: Retry operations with increasing delays between attempts
+
+**Example**: `retry_on_connection_error()` retries connection failures with exponential backoff
+
 ---
 
 ## Integration Points
@@ -570,6 +593,9 @@ The project uses extensive type aliases for consistency. See [`TYPE_ALIASES_GUID
 - **Lazy Iteration**: Judgments read on-demand
 - **Bulk Operations**: Batch indexing where possible
 - **Connection Reuse**: Client instances reuse HTTP connections
+- **Retry Logic**: Exponential backoff for transient failures (`ltr/helpers/retry.py`)
+  - Handles connection errors, timeouts, and timing-related errors
+  - Configurable retry attempts and backoff multipliers
 
 ### Known Performance Issues
 
@@ -591,15 +617,20 @@ The project uses extensive type aliases for consistency. See [`TYPE_ALIASES_GUID
 ### Current State
 
 - **Credentials**: No hardcoded secrets (uses environment/config)
-- **Input Validation**: Limited (needs improvement)
-- **Query Injection**: Potential risk in string interpolation
+- **Input Validation**: Comprehensive validation module (`ltr/validation.py`)
+  - Index name validation (alphanumeric, underscore, hyphen; max 255 chars)
+  - Model/feature set name validation
+  - Keyword validation (max 10,000 chars)
+  - Prevents injection attacks through strict pattern matching
+- **Query Sanitization**: Solr queries use `solr_escape.py` for escaping special characters
+- **Retry Logic**: Exponential backoff for transient connection errors (`ltr/helpers/retry.py`)
 
 ### Security Recommendations
 
-1. **Input Validation**: Validate all user inputs (index names, model names, keywords)
-2. **Query Sanitization**: Use parameterized queries instead of string interpolation
-3. **Authentication**: Add auth support for production use
-4. **HTTPS**: Use encrypted connections in production
+1. **Authentication**: Add auth support for production use
+2. **HTTPS**: Use encrypted connections in production
+3. **Rate Limiting**: Consider adding rate limits for API calls
+4. **Audit Logging**: Add audit logs for sensitive operations (model submission, index deletion)
 
 ---
 
@@ -663,6 +694,6 @@ See `CODEBASE_REVIEW.md` for detailed technical debt items, including:
 
 ---
 
-**Document Version**: 1.0  
-**Last Updated**: December 19, 2025
+**Document Version**: 1.1  
+**Last Updated**: December 21, 2025
 

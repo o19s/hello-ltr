@@ -1,0 +1,4 @@
+- Check code changes for errors, bugs, bad practices, lost functionality, etc.
+- Have you added appropriate docstrings and typing?
+- Run lint and formatting
+- Have you updated any documents that cover this functionality and require changes?

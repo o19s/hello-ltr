@@ -11,6 +11,9 @@ from collections.abc import Iterable
 
 from ltr.client.base_client import BaseClient
 from ltr.judgments import Judgment
+from ltr.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 class FeatureLogger:
@@ -85,6 +88,11 @@ class FeatureLogger:
             with features attached. Keywords are sanitized to remove special characters
             for Solr compatibility. Missing documents are handled according to the
             drop_missing setting.
+
+        Warning:
+            If drop_missing=True and all judgments for a query are discarded (no features
+            logged), a warning is logged. This typically indicates that documents referenced
+            in the judgments don't exist in the search index.
         """
         features_per_doc = {}
         judgments = list(judgments)
@@ -148,6 +156,19 @@ class FeatureLogger:
                     discarded.append(judgment)
             else:
                 training_set.append(judgment)
-        # print("Discarded %s Keep %s" % (len(discarded), len(training_set)))
+
+        # Warn if all judgments were discarded (common issue: documents don't exist in index)
+        if self.drop_missing and len(discarded) > 0 and len(training_set) == 0:
+            logger.warning(
+                f"All {len(discarded)} judgments for qid {qid} were discarded because features could not be logged. "
+                f"This usually means the documents referenced in the judgments don't exist in index '{self.index}'. "
+                f"Ensure the index is properly set up and contains the documents referenced in your judgments."
+            )
+        elif self.drop_missing and len(discarded) > len(training_set):
+            logger.warning(
+                f"For qid {qid}: {len(discarded)} judgments discarded, {len(training_set)} kept. "
+                f"Some documents may not exist in index '{self.index}'."
+            )
+
         self.logged.extend(training_set)
         return training_set, discarded

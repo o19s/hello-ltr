@@ -46,13 +46,13 @@ def cascade_model(sessions: list[Session]) -> Model:
         Model: Trained Cascade model with attractiveness values for
             query-document pairs.
     """
-    session_counts = Counter()
-    click_counts = Counter()
+    session_counts: Counter[QueryDocPair] = Counter()
+    click_counts: Counter[QueryDocPair] = Counter()
     model = Model()
 
     for session in sessions:
         for doc in session.docs:
-            query_doc_key = (session.query, doc.doc_id)
+            query_doc_key: QueryDocPair = (session.query, doc.doc_id)
             session_counts[query_doc_key] += 1
 
             if doc.click:

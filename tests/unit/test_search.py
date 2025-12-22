@@ -21,8 +21,11 @@ class TestEsLtrQuery:
 
     def test_es_ltr_query_sets_keywords(self):
         """Test es_ltr_query sets keywords correctly."""
+        # Arrange
+        keywords = "test query"
+        model_name = "mymodel"
         # Act
-        query = es_ltr_query("test query", "mymodel")
+        query = es_ltr_query(keywords, model_name)
         # Assert
         assert (
             query["query"]["sltr"]["params"]["keywords"] == "test query"
@@ -36,8 +39,11 @@ class TestEsLtrQuery:
 
     def test_es_ltr_query_uses_base_structure(self):
         """Test es_ltr_query uses base query structure."""
+        # Arrange
+        keywords = "test"
+        model_name = "model"
         # Act
-        query = es_ltr_query("test", "model")
+        query = es_ltr_query(keywords, model_name)
         # Assert
         assert "size" in query
         assert query["size"] == 5
@@ -46,9 +52,14 @@ class TestEsLtrQuery:
 
     def test_es_ltr_query_creates_new_dict(self):
         """Test es_ltr_query creates new dictionary (not mutating global)."""
+        # Arrange
+        keywords1 = "keywords1"
+        model1 = "model1"
+        keywords2 = "keywords2"
+        model2 = "model2"
         # Act - create two queries
-        query1 = es_ltr_query("keywords1", "model1")
-        query2 = es_ltr_query("keywords2", "model2")
+        query1 = es_ltr_query(keywords1, model1)
+        query2 = es_ltr_query(keywords2, model2)
         # Assert - each query should have its own values
         assert (
             query1["query"]["sltr"]["params"]["keywords"] == "keywords1"
@@ -71,31 +82,43 @@ class TestSolrLtrQuery:
 
     def test_solr_ltr_query_removes_special_chars(self):
         """Test solr_ltr_query removes special characters."""
+        # Arrange
+        keywords = "test_query!@#"
+        model_name = "mymodel"
         # Act
-        query = solr_ltr_query("test_query!@#", "mymodel")
+        query = solr_ltr_query(keywords, model_name)
         # Assert
         assert "testquery" in query["q"].lower()
         assert "!@#" not in query["q"]
 
     def test_solr_ltr_query_adds_fuzzy(self):
         """Test solr_ltr_query adds fuzzy operators."""
+        # Arrange
+        keywords = "test query"
+        model_name = "mymodel"
         # Act
-        query = solr_ltr_query("test query", "mymodel")
+        query = solr_ltr_query(keywords, model_name)
         # Assert
         assert "test~" in query["q"]
         assert "query~" in query["q"]
 
     def test_solr_ltr_query_includes_model(self):
         """Test solr_ltr_query includes model name."""
+        # Arrange
+        keywords = "test"
+        model_name = "mymodel"
         # Act
-        query = solr_ltr_query("test", "mymodel")
+        query = solr_ltr_query(keywords, model_name)
         # Assert
         assert "model=mymodel" in query["q"]
 
     def test_solr_ltr_query_has_correct_structure(self):
         """Test solr_ltr_query has correct fields."""
+        # Arrange
+        keywords = "test"
+        model_name = "model"
         # Act
-        query = solr_ltr_query("test", "model")
+        query = solr_ltr_query(keywords, model_name)
         # Assert
         assert "fl" in query
         assert "rows" in query
@@ -184,41 +207,70 @@ class TestSearchValidation:
 
     def test_es_ltr_query_validates_keywords(self):
         """Test es_ltr_query validates keywords."""
+        # Arrange
+        empty_keywords = ""
+        model_name = "model"
+        # Act & Assert
         with pytest.raises(ValidationError, match="cannot be empty"):
-            es_ltr_query("", "model")
+            es_ltr_query(empty_keywords, model_name)
 
     def test_es_ltr_query_validates_model_name(self):
         """Test es_ltr_query validates model name."""
+        # Arrange
+        keywords = "keywords"
+        invalid_model_name = "invalid model name"
+        # Act & Assert
         with pytest.raises(ValidationError, match="Invalid model name"):
-            es_ltr_query("keywords", "invalid model name")
+            es_ltr_query(keywords, invalid_model_name)
 
     def test_solr_ltr_query_validates_keywords(self):
         """Test solr_ltr_query validates keywords."""
+        # Arrange
+        empty_keywords = ""
+        model_name = "model"
+        # Act & Assert
         with pytest.raises(ValidationError, match="cannot be empty"):
-            solr_ltr_query("", "model")
+            solr_ltr_query(empty_keywords, model_name)
 
     def test_solr_ltr_query_validates_model_name(self):
         """Test solr_ltr_query validates and sanitizes model name."""
+        # Arrange
+        keywords = "keywords"
+        invalid_model_name = "invalid model name"
+        # Act & Assert
         with pytest.raises(ValidationError, match="Invalid model name"):
-            solr_ltr_query("keywords", "invalid model name")
+            solr_ltr_query(keywords, invalid_model_name)
 
     def test_search_validates_keywords(self):
         """Test search validates keywords."""
+        # Arrange
         mock_client = Mock()
         mock_client.name.return_value = "elastic"
+        empty_keywords = ""
+        model_name = "model"
+        # Act & Assert
         with pytest.raises(ValidationError, match="cannot be empty"):
-            search(mock_client, "", "model")
+            search(mock_client, empty_keywords, model_name)
 
     def test_search_validates_model_name(self):
         """Test search validates model name."""
+        # Arrange
         mock_client = Mock()
         mock_client.name.return_value = "elastic"
+        keywords = "keywords"
+        invalid_model_name = "invalid model name"
+        # Act & Assert
         with pytest.raises(ValidationError, match="Invalid model name"):
-            search(mock_client, "keywords", "invalid model name")
+            search(mock_client, keywords, invalid_model_name)
 
     def test_search_validates_index(self):
         """Test search validates index name."""
+        # Arrange
         mock_client = Mock()
         mock_client.name.return_value = "elastic"
+        keywords = "keywords"
+        model_name = "model"
+        invalid_index = "Invalid Index"
+        # Act & Assert
         with pytest.raises(ValidationError, match="Invalid index name"):
-            search(mock_client, "keywords", "model", index="Invalid Index")
+            search(mock_client, keywords, model_name, index=invalid_index)

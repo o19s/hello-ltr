@@ -140,4 +140,5 @@ if __name__ == "__main__":
             ],
         ],
     ]
-    print(repr(parse_termvect_namedlist(solr_nl, "body")))
+    # Example usage - uncomment to test:
+    # print(repr(parse_termvect_namedlist(solr_nl, "body")))

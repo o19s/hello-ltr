@@ -107,7 +107,16 @@ def synthesize(
     judgments = []
     logger.info("Generating 'classic' biased judgments:")
     for hit in resp:
-        rating = get_classic_rating(hit["ltr_features"][0])
+        # Ensure all features are numeric (convert None/string "None" to 0.0)
+        features = [
+            0.0
+            if (f is None or (isinstance(f, str) and f.lower() == "none"))
+            else float(f)
+            if isinstance(f, (int, float, str))
+            else 0.0
+            for f in hit["ltr_features"]
+        ]
+        rating = get_classic_rating(int(features[0]))
 
         if rating == 0 and no_zero:
             continue
@@ -117,7 +126,7 @@ def synthesize(
                 qid=1,
                 doc_id=hit["id"],
                 grade=rating,
-                features=hit["ltr_features"],
+                features=features,
                 keywords="",
             )
         )
@@ -129,7 +138,16 @@ def synthesize(
     judgments = []
     logger.info("Generating 'recent' biased judgments:")
     for hit in resp:
-        rating = get_latest_rating(hit["ltr_features"][0])
+        # Ensure all features are numeric (convert None/string "None" to 0.0)
+        features = [
+            0.0
+            if (f is None or (isinstance(f, str) and f.lower() == "none"))
+            else float(f)
+            if isinstance(f, (int, float, str))
+            else 0.0
+            for f in hit["ltr_features"]
+        ]
+        rating = get_latest_rating(int(features[0]))
 
         if rating == 0 and no_zero:
             continue
@@ -139,7 +157,7 @@ def synthesize(
                 qid=1,
                 doc_id=hit["id"],
                 grade=rating,
-                features=hit["ltr_features"],
+                features=features,
                 keywords="",
             )
         )

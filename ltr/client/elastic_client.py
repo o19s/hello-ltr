@@ -10,13 +10,18 @@ import json
 import os
 import time
 from collections.abc import Callable, Iterable
-from typing import Any
 
 import elasticsearch.helpers
 import requests
 from elasticsearch import Elasticsearch
 
+from ltr.exceptions import LTRIndexError, ModelError, QueryError
 from ltr.helpers.handle_resp import resp_msg
+from ltr.helpers.retry import (
+    retry_feature_set_query,
+    retry_model_query,
+    retry_until_true,
+)
 from ltr.logger import get_logger
 from ltr.types import (
     FeatureConfig,
@@ -26,75 +31,24 @@ from ltr.types import (
     ModelPayload,
     QueryParams,
 )
+from ltr.validation import ValidationError
 
 from .base_client import BaseClient
+from .responses import APIResp, BulkResp
 
 logger = get_logger(__name__)
 
+# Retry configuration constants
+DEFAULT_MAX_RETRIES = 3
+DEFAULT_RETRY_DELAY = 0.1  # 100ms delay between retries
+FEATURE_SET_MAX_RETRIES = 5
+FEATURE_SET_RETRY_DELAY = 0.2  # 200ms initial delay
+QUERY_RETRY_DELAY = 0.2  # 200ms delay between query attempts
+MODEL_QUERY_MAX_RETRIES = 5
+MODEL_QUERY_RETRY_DELAY = 0.5  # 500ms initial delay
 
-class ElasticResp:
-    """Response wrapper for Elasticsearch API responses.
-
-    Converts Elasticsearch JSON responses into a format compatible with
-    the resp_msg error handling function.
-
-    Attributes:
-        status_code: HTTP status code (200 for success, 400 for errors).
-        text: JSON-formatted response text (only present on errors).
-    """
-
-    def __init__(self, resp: JSONDict) -> None:
-        """Initialize an ElasticResp wrapper.
-
-        Args:
-            resp: Elasticsearch API response dictionary.
-        """
-        self.status_code: int = 400
-        if "acknowledged" in resp and resp["acknowledged"]:
-            self.status_code = 200
-        else:
-            self.status_code = resp["status"]
-            self.text: str = json.dumps(resp, indent=2)
-
-
-class BulkResp:
-    """Response wrapper for Elasticsearch bulk operation responses.
-
-    Attributes:
-        status_code: HTTP status code (201 if documents indexed, 400 otherwise).
-    """
-
-    def __init__(self, resp: tuple[int, Any]) -> None:
-        """Initialize a BulkResp wrapper.
-
-        Args:
-            resp: Elasticsearch bulk operation response tuple.
-        """
-        self.status_code: int = 400
-        if resp[0] > 0:
-            self.status_code = 201
-
-
-class SearchResp:
-    """Response wrapper for Elasticsearch search responses.
-
-    Attributes:
-        status_code: HTTP status code (200 if hits are found, 400 otherwise).
-        text: JSON-formatted response text (only present on errors).
-    """
-
-    def __init__(self, resp: JSONDict) -> None:
-        """Initialize a SearchResp wrapper.
-
-        Args:
-            resp: Elasticsearch search API response dictionary.
-        """
-        self.status_code: int = 400
-        if "hits" in resp:
-            self.status_code = 200
-        else:
-            self.status_code = resp["status"]
-            self.text: str = json.dumps(resp, indent=2)
+# Alias for backward compatibility
+ElasticResp = APIResp
 
 
 class ElasticClient(BaseClient):
@@ -156,13 +110,17 @@ class ElasticClient(BaseClient):
         if "error" in resp:
             error_detail = resp.get("error", {})
             if isinstance(error_detail, dict):
-                error_msg = error_detail.get("reason", str(error_detail))
+                error_msg: str = error_detail.get("reason", str(error_detail))
             else:
                 error_msg = str(error_detail)
-            raise ValueError(f"Elasticsearch {operation} failed: {error_msg}")
+            raise QueryError(
+                f"Elasticsearch {operation} failed: {error_msg}",
+                client_name="elastic",
+            )
         if "hits" not in resp:
-            raise ValueError(
-                f"Unexpected response structure: missing 'hits' key. Response: {json.dumps(resp, indent=2)[:500]}"
+            raise QueryError(
+                f"Unexpected response structure: missing 'hits' key. Response: {json.dumps(resp, indent=2)[:500]}",
+                client_name="elastic",
             )
 
     def get_host(self) -> str:
@@ -221,6 +179,8 @@ class ElasticClient(BaseClient):
         Raises:
             FileNotFoundError: If the configuration file cannot be found.
             RuntimeError: If index creation fails (HTTP status >= 400).
+            LTRIndexError: If index creation appears to succeed but verification fails
+                (index cannot be found after creation).
         """
         cfg_json_path = os.path.join(self.configs_dir, f"{index}_settings.json")
 
@@ -249,6 +209,14 @@ class ElasticClient(BaseClient):
                 os.path.join(
                     project_root, f"notebooks/opensearch/{index}/{index}_settings.json"
                 ),
+                # Check osc-blog directory for blog index
+                os.path.join(
+                    project_root,
+                    f"notebooks/elasticsearch/osc-blog/{index}_settings.json",
+                ),
+                os.path.join(
+                    project_root, f"notebooks/opensearch/osc-blog/{index}_settings.json"
+                ),
             ]
             for alt_path in possible_paths:
                 if os.path.exists(alt_path):
@@ -259,6 +227,32 @@ class ElasticClient(BaseClient):
             settings = json.load(src)
             resp = self.es.indices.create(index=index, body=settings)
             resp_msg(msg=f"Created index {index}", resp=ElasticResp(resp))
+
+        # Verify index was actually created and is accessible
+        # Elasticsearch may return success but the index might not be immediately available
+        try:
+            retry_until_true(
+                check_func=lambda: self.check_index_exists(index),
+                max_retries=DEFAULT_MAX_RETRIES,
+                initial_delay=DEFAULT_RETRY_DELAY,
+                error_message=(
+                    f"Index '{index}' creation appeared to succeed (HTTP 200), "
+                    f"but verification failed - the index could not be found. "
+                    f"This may indicate a persistence issue with Elasticsearch."
+                ),
+            )
+            logger.debug(f"Verified index '{index}' was created successfully")
+        except RuntimeError as e:
+            raise LTRIndexError(
+                f"{str(e)} "
+                f"Please check:\n"
+                f"  1. Elasticsearch is running and accessible\n"
+                f"  2. The index settings are valid\n"
+                f"  3. Try creating the index again or check Elasticsearch logs for errors",
+                index=index,
+                operation="create_index",
+                client_name="elastic",
+            ) from e
 
     def index_documents(
         self,
@@ -291,7 +285,7 @@ class ElasticClient(BaseClient):
             """
             for doc in doc_src:
                 if "id" not in doc:
-                    raise ValueError(
+                    raise ValidationError(
                         "Expecting docs to have field 'id' that uniquely "
                         "identifies document"
                     )
@@ -299,7 +293,7 @@ class ElasticClient(BaseClient):
                 yield add_cmd
 
         if isinstance(doc_src, str):
-            raise ValueError(
+            raise ValidationError(
                 "ElasticClient.index_documents does not support file paths"
             )
         if callable(doc_src):
@@ -351,9 +345,12 @@ class ElasticClient(BaseClient):
         # Check if index exists before attempting to create feature set
         # Elasticsearch LTR validates feature sets against indices, so the index must exist
         if not self.check_index_exists(index):
-            raise RuntimeError(
+            raise LTRIndexError(
                 f"Cannot create feature set '{name}': index '{index}' does not exist. "
-                f"Please create the index first using create_index('{index}')."
+                f"Please create the index first using create_index('{index}').",
+                index=index,
+                operation="create_featureset",
+                client_name="elastic",
             )
 
         resp = requests.post(f"{self.elastic_ep}/_featureset/{name}", json=ftr_config)
@@ -367,24 +364,32 @@ class ElasticClient(BaseClient):
                     error_detail = error_json.get("error", {})
                     if isinstance(error_detail, dict):
                         # Check root cause for index_not_found_exception
-                        root_causes = error_detail.get("root_cause", [])
+                        root_causes: list[JSONDict] = error_detail.get("root_cause", [])
                         for root_cause in root_causes:
-                            if root_cause.get("type") == "index_not_found_exception":
-                                missing_index = root_cause.get("index", index)
-                                raise RuntimeError(
-                                    f"Cannot create feature set '{name}': index '{missing_index}' does not exist. "
-                                    f"Please create the index first using create_index('{missing_index}')."
+                            if (
+                                isinstance(root_cause, dict)
+                                and root_cause.get("type")
+                                == "index_not_found_exception"
+                            ):
+                                missing_index_root: str = root_cause.get("index", index)
+                                raise LTRIndexError(
+                                    f"Cannot create feature set '{name}': index '{missing_index_root}' does not exist. "
+                                    f"Please create the index first using create_index('{missing_index_root}').",
+                                    index=missing_index_root,
+                                    client_name="elastic",
                                 )
                         # Check caused_by for nested index_not_found_exception
-                        caused_by = error_detail.get("caused_by", {})
+                        caused_by: JSONDict = error_detail.get("caused_by", {})
                         if (
                             isinstance(caused_by, dict)
                             and caused_by.get("type") == "index_not_found_exception"
                         ):
-                            missing_index = caused_by.get("index", index)
-                            raise RuntimeError(
-                                f"Cannot create feature set '{name}': index '{missing_index}' does not exist. "
-                                f"Please create the index first using create_index('{missing_index}')."
+                            missing_index_caused: str = caused_by.get("index", index)
+                            raise LTRIndexError(
+                                f"Cannot create feature set '{name}': index '{missing_index_caused}' does not exist. "
+                                f"Please create the index first using create_index('{missing_index_caused}').",
+                                index=missing_index_caused,
+                                client_name="elastic",
                             )
             except (ValueError, KeyError, TypeError):
                 # If JSON parsing fails or structure is unexpected, fall through to resp_msg
@@ -394,118 +399,129 @@ class ElasticClient(BaseClient):
 
         # Verify feature set was actually created and persisted
         # Elasticsearch LTR may return 200 but not persist the feature set in some cases
-        # Retry a few times with small delays to handle potential timing issues
-        max_retries = 3
-        retry_delay = 0.1  # 100ms delay between retries
-        for attempt in range(max_retries):
+        def verify_feature_set_exists() -> bool:
             try:
-                # Try to retrieve the feature set to verify it was persisted
                 self.feature_set(index=index, name=name)
-                # If we get here, feature set exists - verification successful
                 logger.debug(f"Verified feature set '{name}' was created successfully")
-                break
+                return True
             except RuntimeError:
-                # Feature set not found yet, retry if we have attempts left
-                if attempt < max_retries - 1:
-                    time.sleep(retry_delay)
-                    retry_delay *= 2  # Exponential backoff
-                    continue
-                # All retries exhausted, raise error
-                raise RuntimeError(
+                return False  # Feature set not found yet, will retry
+
+        try:
+            retry_until_true(
+                check_func=verify_feature_set_exists,
+                max_retries=DEFAULT_MAX_RETRIES,
+                initial_delay=DEFAULT_RETRY_DELAY,
+                error_message=(
                     f"Feature set '{name}' creation appeared to succeed (HTTP {resp.status_code}), "
                     f"but verification failed - the feature set could not be retrieved. "
-                    f"This may indicate a persistence issue with the Elasticsearch LTR plugin. "
-                    f"Please check:\n"
-                    f"  1. The index '{index}' exists and is accessible\n"
-                    f"  2. The LTR plugin is properly installed and configured\n"
-                    f"  3. Try creating the feature set again or check Elasticsearch logs for errors"
-                )
+                    f"This may indicate a persistence issue with the Elasticsearch LTR plugin."
+                ),
+            )
+        except RuntimeError as e:
+            raise QueryError(
+                f"{str(e)} "
+                f"Please check:\n"
+                f"  1. The index '{index}' exists and is accessible\n"
+                f"  2. The LTR plugin is properly installed and configured\n"
+                f"  3. Try creating the feature set again or check Elasticsearch logs for errors",
+                index=index,
+                client_name="elastic",
+            ) from e
 
         # Verify feature set is usable in queries (not just retrievable)
         # Feature sets may exist but not be immediately usable due to internal indexing delays
         # Try a simple test query to ensure the feature set is ready for use
         max_query_retries = 5
-        query_retry_delay = 0.2  # 200ms delay between query attempts
-        for attempt in range(max_query_retries):
-            try:
-                # Try a simple log_query with empty params to verify feature set is usable
-                # Use a minimal query that should work if the feature set is ready
-                test_params = {
-                    "query": {
-                        "bool": {
-                            "filter": [
-                                {
-                                    "sltr": {
-                                        "_name": "test_features",
-                                        "featureset": name,
-                                        "params": {},
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "size": 0,  # Don't return documents, just verify query works
-                }
-                test_resp = self.es.search(index=index, body=test_params)
+        query_retry_delay = QUERY_RETRY_DELAY
 
-                # Check if query succeeded (no error in response)
-                if "error" not in test_resp:
-                    logger.debug(f"Verified feature set '{name}' is usable in queries")
-                    return
-                else:
-                    # Query returned an error, check if it's a feature set issue
-                    error_detail = test_resp.get("error", {})
-                    if isinstance(error_detail, dict):
-                        error_reason = error_detail.get("reason", "")
-                        # If it's a feature set parsing issue or timing issue, retry
-                        # "Unknown featureset" can occur when the featureset was just created
-                        # and Elasticsearch hasn't fully indexed it yet
-                        if (
-                            "NullPointerException" in error_reason
-                            or "getAndParse" in error_reason
-                            or "Unknown featureset" in error_reason
-                        ):
-                            if attempt < max_query_retries - 1:
-                                logger.debug(
-                                    f"Feature set '{name}' not yet usable (attempt {attempt + 1}/{max_query_retries}), retrying..."
-                                )
-                                time.sleep(query_retry_delay)
-                                query_retry_delay *= 1.5  # Gradual backoff
-                                continue
-                            else:
-                                raise RuntimeError(
-                                    f"Feature set '{name}' exists but is not usable in queries after {max_query_retries} attempts. "
-                                    f"Error: {error_reason}. This may indicate a timing issue with the Elasticsearch LTR plugin. "
-                                    f"Try waiting a moment and using the feature set again."
-                                )
-                    # Other errors should be raised immediately
-                    raise RuntimeError(
-                        f"Feature set '{name}' verification query failed: {error_detail}"
-                    )
-            except Exception as e:
-                # Check if it's a feature set not ready error
-                error_str = str(e)
-                # "Unknown featureset" can occur when the featureset was just created
-                # and Elasticsearch hasn't fully indexed it yet
+        # Extract required parameters from feature set configuration
+        # First check if validation section provides default params
+        test_query_params = {}
+        if isinstance(ftr_config, dict) and "validation" in ftr_config:
+            validation: JSONDict = ftr_config.get("validation", {})
+            if isinstance(validation, dict) and "params" in validation:
+                params = validation["params"]
+                if isinstance(params, dict):
+                    test_query_params = params.copy()
+
+        # If no validation params, extract from features
+        if not test_query_params and isinstance(ftr_config, dict):
+            featureset: JSONDict = ftr_config.get("featureset", {})
+            if isinstance(featureset, dict):
+                features: list[JSONDict] = featureset.get("features", [])
+                # Collect all unique params from all features
+                required_params: set[str] = set()
+                for feature in features:
+                    if isinstance(feature, dict) and "params" in feature:
+                        feature_params: list[str] = feature.get("params", [])
+                        if isinstance(feature_params, list):
+                            required_params.update(feature_params)
+
+                # Provide default values for required params
+                # Detect param types based on naming conventions and template usage
+                for param in required_params:
+                    if param not in test_query_params:
+                        # Check if param name suggests it should be an array/list
+                        param_lower: str = param.lower()
+                        if "list" in param_lower or "array" in param_lower:
+                            # Param name suggests it's an array (e.g., "keywordsList")
+                            test_query_params[param] = []
+                        else:
+                            # Default to empty string for most params (keywords, query, etc.)
+                            # This allows the query to execute even if the param value isn't meaningful
+                            test_query_params[param] = ""
+
+        # Verify feature set is usable in queries using shared helper
+        def execute_verification_query() -> JSONDict:
+            test_params = {
+                "query": {
+                    "bool": {
+                        "filter": [
+                            {
+                                "sltr": {
+                                    "_name": "test_features",
+                                    "featureset": name,
+                                    "params": test_query_params,
+                                }
+                            }
+                        ]
+                    }
+                },
+                "size": 0,  # Don't return documents, just verify query works
+            }
+            test_resp = self.es.search(index=index, body=test_params)
+            # Check if query succeeded (no error in response)
+            if "error" not in test_resp:
+                logger.debug(f"Verified feature set '{name}' is usable in queries")
+                return test_resp
+            # Query returned an error - check if it's a feature set issue
+            error_detail: JSONDict = test_resp.get("error", {})
+            if isinstance(error_detail, dict):
+                error_reason: str = error_detail.get("reason", "")
+                # Check if it's a timing issue
                 if (
-                    "NullPointerException" in error_str
-                    or "getAndParse" in error_str
-                    or "Unknown featureset" in error_str
+                    "NullPointerException" in error_reason
+                    or "getAndParse" in error_reason
+                    or "Unknown featureset" in error_reason
                 ):
-                    if attempt < max_query_retries - 1:
-                        logger.debug(
-                            f"Feature set '{name}' not yet usable (attempt {attempt + 1}/{max_query_retries}), retrying..."
-                        )
-                        time.sleep(query_retry_delay)
-                        query_retry_delay *= 1.5
-                        continue
-                    else:
-                        raise RuntimeError(
-                            f"Feature set '{name}' exists but is not usable in queries after {max_query_retries} attempts. "
-                            f"Error: {error_str}. This may indicate a timing issue with the Elasticsearch LTR plugin."
-                        )
-                # Re-raise other exceptions
-                raise
+                    # This is a timing error - will be retried by retry_feature_set_query
+                    raise ValueError(f"Feature set not ready: {error_reason}")
+            # Other errors should be raised immediately
+            raise QueryError(
+                f"Feature set '{name}' verification query failed: {error_detail}",
+                index=index,
+                client_name="elastic",
+            )
+
+        retry_feature_set_query(
+            query_func=execute_verification_query,
+            featureset=name,
+            index=index,
+            client_name="elastic",
+            max_retries=max_query_retries,
+            initial_delay=query_retry_delay,
+        )
 
     def get_feature_name(self, config: FeatureConfig, ftr_idx: int) -> str:
         """Get the name of a feature by its index.
@@ -521,7 +537,9 @@ class ElasticClient(BaseClient):
             ValueError: If config is a list instead of a dictionary.
         """
         if isinstance(config, list):
-            raise ValueError("ElasticClient.get_feature_name requires a dict config")
+            raise ValidationError(
+                "ElasticClient.get_feature_name requires a dict config"
+            )
         return config["featureset"]["features"][int(ftr_idx) - 1]["name"]
 
     def log_query(
@@ -585,74 +603,21 @@ class ElasticClient(BaseClient):
         if ids is not None:
             query_body["query"]["bool"]["must"] = terms_query
 
-        # Retry logic for feature set timing issues
-        max_retries = 5
-        retry_delay = 0.2  # 200ms initial delay
-        resp = None
-        for attempt in range(max_retries):
-            try:
-                resp = self.es.search(index=index, body=query_body)
-                # resp_msg(msg="Searching {} - {}".format(index, str(terms_query)[:20]), resp=SearchResp(resp))
+        # Retry logic for feature set timing issues using shared helper
+        def execute_and_validate_query() -> JSONDict:
+            resp = self.es.search(index=index, body=query_body)
+            # Validate response (will raise ValueError if invalid)
+            self._validate_search_response(resp, operation="query")
+            return resp
 
-                # Check for feature set not ready errors before validation
-                if "error" in resp:
-                    error_detail = resp.get("error", {})
-                    if isinstance(error_detail, dict):
-                        error_reason = error_detail.get("reason", "")
-                        # Check if it's a feature set parsing/optimization error
-                        if (
-                            "NullPointerException" in error_reason
-                            or "getAndParse" in error_reason
-                            or "optimize()" in error_reason
-                            or "StoredFeatureSet" in error_reason
-                        ):
-                            if attempt < max_retries - 1:
-                                logger.debug(
-                                    f"Feature set '{featureset}' not yet usable in query "
-                                    f"(attempt {attempt + 1}/{max_retries}), retrying..."
-                                )
-                                time.sleep(retry_delay)
-                                retry_delay *= 1.5  # Gradual backoff
-                                continue
-                            else:
-                                raise RuntimeError(
-                                    f"Feature set '{featureset}' is not usable in queries after {max_retries} attempts. "
-                                    f"Error: {error_reason}. The feature set may need more time to be fully indexed. "
-                                    f"Try waiting a moment and using the feature set again."
-                                )
-                        # For other errors, validate normally (will raise ValueError)
-                    # Fall through to validation for non-feature-set errors
-
-                self._validate_search_response(resp, operation="query")
-                break  # Success, exit retry loop
-            except ValueError as e:
-                # Check if it's a feature set error
-                error_str = str(e)
-                if (
-                    "NullPointerException" in error_str
-                    or "getAndParse" in error_str
-                    or "optimize()" in error_str
-                ):
-                    if attempt < max_retries - 1:
-                        logger.debug(
-                            f"Feature set '{featureset}' not yet usable (attempt {attempt + 1}/{max_retries}), retrying..."
-                        )
-                        time.sleep(retry_delay)
-                        retry_delay *= 1.5
-                        continue
-                    else:
-                        raise RuntimeError(
-                            f"Feature set '{featureset}' is not usable in queries after {max_retries} attempts. "
-                            f"Error: {error_str}"
-                        )
-                # Re-raise other ValueError exceptions
-                raise
-
-        # Ensure resp was set (should always be set if we reach here due to exception handling above)
-        if resp is None:
-            raise RuntimeError(
-                f"Feature set '{featureset}' query failed: no response received after {max_retries} attempts"
-            )
+        resp = retry_feature_set_query(
+            query_func=execute_and_validate_query,
+            featureset=featureset,
+            index=index,
+            client_name="elastic",
+            max_retries=FEATURE_SET_MAX_RETRIES,
+            initial_delay=FEATURE_SET_RETRY_DELAY,
+        )
 
         # Extract feature values from response
         matches = []
@@ -663,6 +628,14 @@ class ElasticClient(BaseClient):
                 value = 0.0
                 if "value" in feature:
                     value = feature["value"]
+                    # Ensure None values and string "None" are converted to 0.0 for RankLib compatibility
+                    if (
+                        value is None
+                        or value == "None"
+                        or isinstance(value, str)
+                        and value.lower() == "none"
+                    ):
+                        value = 0.0
 
                 hit["_source"]["ltr_features"].append(value)
 
@@ -703,53 +676,47 @@ class ElasticClient(BaseClient):
 
         # Verify model was actually created and persisted
         # Elasticsearch LTR may return 200 but not persist the model in some cases
-        # Retry a few times with small delays to handle potential timing issues
-        max_retries = 3
-        retry_delay = 0.1  # 100ms delay between retries
-        for attempt in range(max_retries):
+        def verify_model_exists() -> bool:
             try:
-                # Try to retrieve the model to verify it was persisted
                 verify_resp = requests.get(f"{model_ep}{model_name}")
                 if verify_resp.status_code == 200:
-                    # Model exists - verification successful
                     logger.debug(
                         f"Verified model '{model_name}' was created successfully"
                     )
-                    return
+                    return True
                 elif verify_resp.status_code == 404:
-                    # Model not found yet, retry if we have attempts left
-                    if attempt < max_retries - 1:
-                        time.sleep(retry_delay)
-                        retry_delay *= 2  # Exponential backoff
-                        continue
-                    # All retries exhausted, raise error
-                    raise RuntimeError(
-                        f"Model '{model_name}' creation appeared to succeed (HTTP {resp.status_code}), "
-                        f"but verification failed - the model could not be retrieved. "
-                        f"This may indicate a persistence issue with the Elasticsearch LTR plugin. "
-                        f"Please check:\n"
-                        f"  1. The feature set '{featureset}' exists and is accessible\n"
-                        f"  2. The LTR plugin is properly installed and configured\n"
-                        f"  3. Try creating the model again or check Elasticsearch logs for errors"
-                    )
+                    return False  # Model not found yet, will retry
                 else:
-                    # Unexpected status code
+                    # Unexpected status code - log but consider it success
                     resp_msg(msg=f"Verify model {model_name}", resp=verify_resp)
-                    return
+                    return True
             except requests.RequestException as e:
-                # Network/request error, retry if we have attempts left
-                if attempt < max_retries - 1:
-                    logger.warning(
-                        f"Error verifying model '{model_name}' (attempt {attempt + 1}/{max_retries}): {e}"
-                    )
-                    time.sleep(retry_delay)
-                    retry_delay *= 2
-                    continue
-                # All retries exhausted, raise error
-                raise RuntimeError(
-                    f"Model '{model_name}' creation appeared to succeed, but verification failed "
-                    f"due to request error: {e}"
-                )
+                # Network/request error - log and retry
+                logger.warning(f"Error verifying model '{model_name}': {e}")
+                return False
+
+        try:
+            retry_until_true(
+                check_func=verify_model_exists,
+                max_retries=DEFAULT_MAX_RETRIES,
+                initial_delay=DEFAULT_RETRY_DELAY,
+                error_message=(
+                    f"Model '{model_name}' creation appeared to succeed (HTTP {resp.status_code}), "
+                    f"but verification failed - the model could not be retrieved. "
+                    f"This may indicate a persistence issue with the Elasticsearch LTR plugin."
+                ),
+            )
+        except RuntimeError as e:
+            raise ModelError(
+                f"{str(e)} "
+                f"Please check:\n"
+                f"  1. The feature set '{featureset}' exists and is accessible\n"
+                f"  2. The LTR plugin is properly installed and configured\n"
+                f"  3. Try creating the model again or check Elasticsearch logs for errors",
+                model_name=model_name,
+                operation="submit",
+                context={"featureset": featureset, "index": index},
+            ) from e
 
     def submit_ranklib_model(
         self, featureset: str, index: str, model_name: str, model_payload: str
@@ -839,65 +806,21 @@ class ElasticClient(BaseClient):
             "size": 1000,
         }
 
-        # Retry logic for model timing issues
-        max_retries = 5
-        retry_delay = 0.5  # 500ms initial delay
-        resp = None
-        for attempt in range(max_retries):
-            try:
-                resp = self.es.search(index=index, body=params)
-                # Check for "Unknown model" errors before validation
-                if "error" in resp:
-                    error_str = str(resp.get("error", ""))
-                    if (
-                        "Unknown model" in error_str
-                        or "IllegalArgumentException" in error_str
-                    ):
-                        if attempt < max_retries - 1:
-                            logger.debug(
-                                f"Model '{model}' not yet available (attempt {attempt + 1}/{max_retries}), retrying..."
-                            )
-                            time.sleep(retry_delay)
-                            retry_delay *= 1.5
-                            continue
-                        else:
-                            raise RuntimeError(
-                                f"Model '{model}' is not available after {max_retries} attempts. "
-                                f"Error: {error_str}. This may indicate a timing issue with the Elasticsearch LTR plugin "
-                                f"or the model was not successfully created."
-                            )
-                # No error, proceed with validation
-                self._validate_search_response(resp, operation="model query")
-                break
-            except ValueError as e:
-                # _validate_search_response raises ValueError for invalid responses
-                # Check if it's an "Unknown model" error
-                error_str = str(e)
-                if (
-                    "Unknown model" in error_str
-                    or "IllegalArgumentException" in error_str
-                ):
-                    if attempt < max_retries - 1:
-                        logger.debug(
-                            f"Model '{model}' not yet available (attempt {attempt + 1}/{max_retries}), retrying..."
-                        )
-                        time.sleep(retry_delay)
-                        retry_delay *= 1.5
-                        continue
-                    else:
-                        raise RuntimeError(
-                            f"Model '{model}' is not available after {max_retries} attempts. "
-                            f"Error: {error_str}. This may indicate a timing issue with the Elasticsearch LTR plugin "
-                            f"or the model was not successfully created."
-                        )
-                # Re-raise other ValueError exceptions
-                raise
+        # Retry logic for model timing issues using shared helper
+        def execute_and_validate_query() -> JSONDict:
+            resp = self.es.search(index=index, body=params)
+            # Validate response (will raise ValueError if invalid)
+            self._validate_search_response(resp, operation="model query")
+            return resp
 
-        # Ensure resp was set (should always be set if we reach here)
-        if resp is None:
-            raise RuntimeError(
-                f"Model query for '{model}' failed: no response received after {max_retries} attempts"
-            )
+        resp = retry_model_query(
+            query_func=execute_and_validate_query,
+            model_name=model,
+            index=index,
+            client_name="elastic",
+            max_retries=MODEL_QUERY_MAX_RETRIES,
+            initial_delay=MODEL_QUERY_RETRY_DELAY,
+        )
 
         # Transform to a consistent format between ES/Solr
         matches = []
@@ -920,12 +843,33 @@ class ElasticClient(BaseClient):
                 a format consistent with Solr.
 
         Raises:
+            QueryError: If the query fails due to network errors, index not found,
+                or other client-related issues.
             ValueError: If the response contains an error or has an invalid structure.
         """
-        resp = self.es.search(index=index, body=query)
-        # resp_msg(msg="Searching {} - {}".format(index, str(query)[:20]), resp=SearchResp(resp))
+        try:
+            resp = self.es.search(index=index, body=query)
+        except Exception as e:
+            # Wrap Elasticsearch client exceptions with context
+            query_str = str(query)[:200]  # Truncate for security/logging
+            raise QueryError(
+                f"Elasticsearch query failed: {e}",
+                index=index,
+                query=query_str,
+                client_name="elastic",
+            ) from e
 
-        self._validate_search_response(resp, operation="query")
+        try:
+            self._validate_search_response(resp, operation="query")
+        except ValueError as e:
+            # Re-raise validation errors with query context
+            query_str = str(query)[:200]
+            raise QueryError(
+                f"Invalid Elasticsearch query response: {e}",
+                index=index,
+                query=query_str,
+                client_name="elastic",
+            ) from e
 
         # Transform to a consistent format between ES/Solr
         matches = []
@@ -954,11 +898,13 @@ class ElasticClient(BaseClient):
 
         # Check HTTP status code first
         if resp.status_code == 404:
-            raise RuntimeError(
+            raise QueryError(
                 f"Feature set '{name}' not found. "
                 f"Please ensure the feature set has been created using "
                 f"client.create_featureset(index='{index}', name='{name}', ftr_config=...). "
-                f"If the index doesn't exist, create it first using client.create_index('{index}')."
+                f"If the index doesn't exist, create it first using client.create_index('{index}').",
+                index=index,
+                client_name="elastic",
             )
 
         json_resp = resp.json()
@@ -977,7 +923,11 @@ class ElasticClient(BaseClient):
                 f"client.create_featureset(index='{index}', name='{name}', ftr_config=...). "
                 f"If the index doesn't exist, create it first using client.create_index('{index}')."
             )
-            raise RuntimeError(error_msg)
+            raise QueryError(
+                error_msg,
+                index=index,
+                client_name="elastic",
+            )
 
         resp_msg(msg=f"Fetched FeatureSet {name}", resp=resp)
 

@@ -13,6 +13,7 @@ from collections.abc import Callable, Iterable, Iterator
 
 import requests
 
+from ltr.exceptions import LTRIndexError, ModelError, QueryError
 from ltr.helpers.convert import convert
 from ltr.helpers.handle_resp import resp_msg
 from ltr.types import (
@@ -23,8 +24,15 @@ from ltr.types import (
     ModelPayload,
     QueryParams,
 )
+from ltr.validation import ValidationError
 
 from .base_client import BaseClient
+
+# Retry configuration constants
+DEFAULT_MAX_RETRIES = 3
+DEFAULT_RETRY_DELAY = 0.1  # 100ms delay between retries
+FEATURE_SET_MAX_RETRIES = 5
+FEATURE_SET_RETRY_DELAY = 0.2  # 200ms initial delay
 
 
 class SolrClient(BaseClient):
@@ -119,6 +127,8 @@ class SolrClient(BaseClient):
 
         Raises:
             RuntimeError: If core creation fails (HTTP status >= 400).
+            LTRIndexError: If core creation appears to succeed but verification fails
+                (core cannot be found after creation).
         """
         params = {
             "action": "CREATE",
@@ -127,6 +137,34 @@ class SolrClient(BaseClient):
         }
         resp = requests.get(f"{self.solr_base_ep}/admin/cores?", params=params)
         resp_msg(msg=f"Created index {index}", resp=resp)
+
+        # Verify index (core) was actually created and is accessible
+        # Solr may return success but the core might not be immediately available
+        # Retry a few times with small delays to handle potential timing issues
+        max_retries = DEFAULT_MAX_RETRIES
+        retry_delay = DEFAULT_RETRY_DELAY
+        for attempt in range(max_retries):
+            if self.check_index_exists(index):
+                # Index exists - verification successful
+                break
+            # Index not found yet, retry if we have attempts left
+            if attempt < max_retries - 1:
+                time.sleep(retry_delay)
+                retry_delay *= 2  # Exponential backoff
+                continue
+            # All retries exhausted, raise error
+            raise LTRIndexError(
+                f"Index (core) '{index}' creation appeared to succeed (HTTP 200), "
+                f"but verification failed - the core could not be found. "
+                f"This may indicate a persistence issue with Solr. "
+                f"Please check:\n"
+                f"  1. Solr is running and accessible\n"
+                f"  2. The configset '{index}' exists\n"
+                f"  3. Try creating the core again or check Solr logs for errors",
+                index=index,
+                operation="create_index",
+                client_name="solr",
+            )
 
     def index_documents(
         self,
@@ -164,7 +202,9 @@ class SolrClient(BaseClient):
             docs.clear()
 
         if isinstance(doc_src, str):
-            raise ValueError("SolrClient.index_documents does not support file paths")
+            raise ValidationError(
+                "SolrClient.index_documents does not support file paths"
+            )
         if callable(doc_src):
             doc_src = doc_src()
 
@@ -219,7 +259,7 @@ class SolrClient(BaseClient):
         """
         for feature in config:
             if "store" not in feature or feature["store"] != name:
-                raise ValueError(
+                raise ValidationError(
                     f'Feature {feature["name"]} needs to be created with "store": "{name}" '
                 )
 
@@ -238,7 +278,9 @@ class SolrClient(BaseClient):
             ValueError: If any feature doesn't have the correct store name.
         """
         if isinstance(ftr_config, dict):
-            raise ValueError("SolrClient.create_featureset requires a list of features")
+            raise ValidationError(
+                "SolrClient.create_featureset requires a list of features"
+            )
         self.validate_featureset(name, ftr_config)
         resp = requests.put(
             f"{self.solr_base_ep}/{index}/schema/feature-store", json=ftr_config
@@ -259,7 +301,7 @@ class SolrClient(BaseClient):
             ValueError: If config is a dictionary instead of a list.
         """
         if isinstance(config, dict):
-            raise ValueError("SolrClient.get_feature_name requires a list config")
+            raise ValidationError("SolrClient.get_feature_name requires a list config")
         return config[int(ftr_idx) - 1]["name"]
 
     def log_query(
@@ -308,8 +350,8 @@ class SolrClient(BaseClient):
 
         # Retry logic for feature set timing issues
         # Solr LTR may need time to index feature sets after creation
-        max_retries = 5
-        retry_delay = 0.2  # 200ms initial delay
+        max_retries = FEATURE_SET_MAX_RETRIES
+        retry_delay = FEATURE_SET_RETRY_DELAY
         resp_json = None
 
         for attempt in range(max_retries):
@@ -341,36 +383,48 @@ class SolrClient(BaseClient):
                         retry_delay *= 1.5  # Gradual backoff
                         continue
                     else:
-                        raise RuntimeError(
+                        raise QueryError(
                             f"Solr log_query failed after {max_retries} attempts. "
                             f"Feature set '{featureset}' may not be ready for queries yet. "
                             f"Error: {error_msg}. "
                             f"Try waiting a moment and using the feature set again, or verify "
-                            f"the feature set was created successfully."
+                            f"the feature set was created successfully.",
+                            index=index,
+                            client_name="solr",
                         )
                 else:
                     # Non-timing error, raise immediately
-                    raise RuntimeError(f"Solr log_query failed: {error_msg}")
+                    raise QueryError(
+                        f"Solr log_query failed: {error_msg}",
+                        index=index,
+                        client_name="solr",
+                    )
             else:
                 # No error, break out of retry loop
                 break
 
         if resp_json is None:
-            raise RuntimeError(
-                f"Solr log_query failed: no response received after {max_retries} attempts"
+            raise QueryError(
+                f"Solr log_query failed: no response received after {max_retries} attempts",
+                index=index,
+                client_name="solr",
             )
 
         # Validate response structure
         if "response" not in resp_json:
-            raise RuntimeError(
+            raise QueryError(
                 f"Unexpected Solr response structure: missing 'response' key. "
-                f"Response: {resp_json}"
+                f"Response: {resp_json}",
+                index=index,
+                client_name="solr",
             )
 
         if "docs" not in resp_json["response"]:
-            raise RuntimeError(
+            raise QueryError(
                 f"Unexpected Solr response structure: missing 'docs' key in response. "
-                f"Response: {resp_json}"
+                f"Response: {resp_json}",
+                index=index,
+                client_name="solr",
             )
 
         def parse_features(features: str) -> list[float]:
@@ -496,7 +550,9 @@ class SolrClient(BaseClient):
 
         query_str = query.get("q")
         if query_str is None:
-            raise ValueError('query dict must contain a "q" key with the query string')
+            raise ValidationError(
+                'query dict must contain a "q" key with the query string'
+            )
 
         url = f"{self.solr_base_ep}/{index}/select?"
         params = {
@@ -513,19 +569,27 @@ class SolrClient(BaseClient):
         # Check for error responses
         if "error" in resp_json:
             error_msg = resp_json.get("error", {}).get("msg", "Unknown Solr error")
-            raise RuntimeError(f"Solr model_query failed: {error_msg}")
+            raise ModelError(
+                f"Solr model_query failed: {error_msg}",
+                model_name=model,
+                context={"index": index},
+            )
 
         # Validate response structure
         if "response" not in resp_json:
-            raise RuntimeError(
+            raise ModelError(
                 f"Unexpected Solr response structure: missing 'response' key. "
-                f"Response: {resp_json}"
+                f"Response: {resp_json}",
+                model_name=model,
+                context={"index": index},
             )
 
         if "docs" not in resp_json["response"]:
-            raise RuntimeError(
+            raise ModelError(
                 f"Unexpected Solr response structure: missing 'docs' key in response. "
-                f"Response: {resp_json}"
+                f"Response: {resp_json}",
+                model_name=model,
+                context={"index": index},
             )
 
         return resp_json["response"]["docs"]
@@ -542,74 +606,106 @@ class SolrClient(BaseClient):
                 a format consistent with Elasticsearch/OpenSearch (score -> _score).
 
         Raises:
-            RuntimeError: If the Solr response indicates an error or has unexpected structure.
+            QueryError: If the query fails due to network errors, index not found,
+                or other client-related issues.
             ValueError: If JSON parsing fails or response structure is invalid.
         """
         url = f"{self.solr_base_ep}/{index}/select?"
 
-        resp = requests.post(url, data=query)
+        try:
+            resp = requests.post(url, data=query)
+        except requests.exceptions.RequestException as e:
+            query_str = str(query)[:200]
+            raise QueryError(
+                f"Solr network request failed: {e}",
+                index=index,
+                query=query_str,
+                client_name="solr",
+            ) from e
 
         # Check HTTP status code before parsing JSON
         if resp.status_code >= 400:
-            error_context = f"Solr query failed for index '{index}'"
+            query_str = str(query)[:200]
             try:
                 # Try to parse error response as JSON
                 error_json = resp.json()
                 error_details = self._extract_solr_error_details(error_json)
-                raise RuntimeError(
-                    f"{error_context} [HTTP {resp.status_code}]: {error_details}"
+                raise QueryError(
+                    f"Solr query failed [HTTP {resp.status_code}]: {error_details}",
+                    index=index,
+                    query=query_str,
+                    client_name="solr",
                 )
             except ValueError:
                 # If JSON parsing fails, use raw response text
-                raise RuntimeError(
-                    f"{error_context} [HTTP {resp.status_code}]: {resp.text[:500]}"
+                raise QueryError(
+                    f"Solr query failed [HTTP {resp.status_code}]: {resp.text[:500]}",
+                    index=index,
+                    query=query_str,
+                    client_name="solr",
                 )
 
         # Parse JSON response
         try:
             resp_json = resp.json()
         except ValueError as e:
-            raise ValueError(
-                f"Failed to parse Solr response as JSON for index '{index}': {e}. "
+            query_str = str(query)[:200]
+            raise QueryError(
+                f"Failed to parse Solr response as JSON: {e}. "
                 f"Response status: {resp.status_code}, "
-                f"Response text (first 500 chars): {resp.text[:500]}"
+                f"Response text (first 500 chars): {resp.text[:500]}",
+                index=index,
+                query=query_str,
+                client_name="solr",
             ) from e
 
         # Check for error responses in JSON structure
         if "error" in resp_json:
+            query_str = str(query)[:200]
             error_details = self._extract_solr_error_details(resp_json)
-            raise RuntimeError(
-                f"Solr query failed for index '{index}': {error_details}"
+            raise QueryError(
+                f"Solr query failed: {error_details}",
+                index=index,
+                query=query_str,
+                client_name="solr",
             )
 
         # Validate response structure
         if "response" not in resp_json:
-            raise RuntimeError(
+            raise QueryError(
                 f"Unexpected Solr response structure for index '{index}': "
                 f"missing 'response' key. Response keys: {list(resp_json.keys())}. "
-                f"Full response (first 1000 chars): {str(resp_json)[:1000]}"
+                f"Full response (first 1000 chars): {str(resp_json)[:1000]}",
+                index=index,
+                client_name="solr",
             )
 
         if not isinstance(resp_json["response"], dict):
-            raise RuntimeError(
+            raise QueryError(
                 f"Unexpected Solr response structure for index '{index}': "
                 f"'response' is not a dictionary (got {type(resp_json['response'])}). "
-                f"Response: {resp_json['response']}"
+                f"Response: {resp_json['response']}",
+                index=index,
+                client_name="solr",
             )
 
         if "docs" not in resp_json["response"]:
             response_keys = list(resp_json["response"].keys())
-            raise RuntimeError(
+            raise QueryError(
                 f"Unexpected Solr response structure for index '{index}': "
                 f"missing 'docs' key in response. Response keys: {response_keys}. "
-                f"Response structure: {resp_json['response']}"
+                f"Response structure: {resp_json['response']}",
+                index=index,
+                client_name="solr",
             )
 
         if not isinstance(resp_json["response"]["docs"], list):
-            raise RuntimeError(
+            raise QueryError(
                 f"Unexpected Solr response structure for index '{index}': "
                 f"'docs' is not a list (got {type(resp_json['response']['docs'])}). "
-                f"Response: {resp_json['response']['docs']}"
+                f"Response: {resp_json['response']['docs']}",
+                index=index,
+                client_name="solr",
             )
 
         # Transform to be consistent
@@ -850,19 +946,27 @@ class SolrClient(BaseClient):
         # Check for error responses
         if "error" in resp_json:
             error_msg = resp_json.get("error", {}).get("msg", "Unknown Solr error")
-            raise RuntimeError(f"Solr get_doc failed: {error_msg}")
+            raise QueryError(
+                f"Solr get_doc failed: {error_msg}",
+                index=index,
+                client_name="solr",
+            )
 
         # Validate response structure
         if "response" not in resp_json:
-            raise RuntimeError(
+            raise QueryError(
                 f"Unexpected Solr response structure: missing 'response' key. "
-                f"Response: {resp_json}"
+                f"Response: {resp_json}",
+                index=index,
+                client_name="solr",
             )
 
         if "docs" not in resp_json["response"]:
-            raise RuntimeError(
+            raise QueryError(
                 f"Unexpected Solr response structure: missing 'docs' key in response. "
-                f"Response: {resp_json}"
+                f"Response: {resp_json}",
+                index=index,
+                client_name="solr",
             )
 
         if not resp_json["response"]["docs"]:

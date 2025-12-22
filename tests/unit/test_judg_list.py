@@ -40,6 +40,7 @@ class JudgmentsTestCase(unittest.TestCase):
         are sorted by qid (query ID). When judgments are not sorted,
         a ValueError should be raised.
         """
+        # Arrange
         judgment_list = clean_jl("""
                       # qid:1: rambo*1
                       # qid:2: rocky ii*1
@@ -54,6 +55,7 @@ class JudgmentsTestCase(unittest.TestCase):
 
         judg_string_io = StringIO(judgment_list)
 
+        # Act & Assert
         with (
             self.assertRaises(ValueError),
             judgments_reader(judg_string_io) as judg_list,

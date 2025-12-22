@@ -23,6 +23,16 @@ from pathlib import Path
 import pytest
 import requests
 
+from ltr.logger import get_logger
+
+logger = get_logger(__name__)
+
+# Retry configuration constants
+DEFAULT_MAX_RETRIES = 3
+DEFAULT_RETRY_DELAY = 0.5
+HEALTH_CHECK_MAX_RETRIES = 3
+HEALTH_CHECK_BASE_RETRY_DELAY = 0.1
+
 # Platform-specific file locking support
 try:
     import fcntl
@@ -194,6 +204,95 @@ def get_docker_compose_cmd():
     )
 
 
+def _perform_single_health_check(url):
+    """
+    Perform a single health check HTTP request.
+
+    Args:
+        url: URL to check
+
+    Returns:
+        tuple: (success: bool, should_retry: bool) where success indicates
+               service is ready and should_retry indicates if retry is needed
+    """
+    try:
+        # Use original requests.get if available (to avoid double retries from patched version)
+        # Health checks have their own retry logic, so we don't need the patched retry logic
+        get_func = getattr(requests, "_original_get", requests.get)
+        response = get_func(url, timeout=2)
+        # Only accept 2xx status codes as ready (successful responses)
+        if 200 <= response.status_code < 300:
+            return True, False
+        # Non-2xx response: don't retry, wait for next check interval
+        return False, False
+    except (requests.exceptions.RequestException, ConnectionError):
+        # Transient failure: retry is needed
+        return False, True
+
+
+def _check_health_with_retries(
+    url,
+    max_retries=HEALTH_CHECK_MAX_RETRIES,
+    base_retry_delay=HEALTH_CHECK_BASE_RETRY_DELAY,
+):
+    """
+    Check health endpoint with exponential backoff retry logic.
+
+    Args:
+        url: URL to check
+        max_retries: Maximum number of retry attempts
+        base_retry_delay: Base delay in seconds for exponential backoff
+
+    Returns:
+        bool: True if service is ready, False otherwise
+    """
+    for retry_attempt in range(max_retries):
+        success, should_retry = _perform_single_health_check(url)
+        if success:
+            return True
+        if not should_retry:
+            # Non-retryable failure (e.g., non-2xx response)
+            return False
+        # If this is the last retry attempt, don't sleep
+        if retry_attempt == max_retries - 1:
+            return False
+        # Exponential backoff: 0.1s, 0.2s, 0.4s
+        retry_delay = base_retry_delay * (2**retry_attempt)
+        time.sleep(retry_delay)
+    return False
+
+
+def _get_progressive_interval(elapsed_time, timeout, check_interval, current_index):
+    """
+    Calculate progressive check interval based on elapsed time.
+
+    Progressive intervals start shorter and increase as time passes to balance
+    early responsiveness with efficiency for long waits.
+
+    Args:
+        elapsed_time: Time elapsed since start
+        timeout: Total timeout duration
+        check_interval: Base check interval
+        current_index: Current interval index (0, 1, or 2)
+
+    Returns:
+        tuple: (interval: float, new_index: int) where interval is the delay
+               to use and new_index is the updated interval index
+    """
+    progressive_intervals = [check_interval, check_interval * 1.5, check_interval * 2]
+    new_index = current_index
+
+    # Progressively increase interval as more time passes
+    if elapsed_time > timeout * 0.75 and current_index < len(progressive_intervals) - 1:
+        new_index = 2
+    elif (
+        elapsed_time > timeout * 0.5 and current_index < len(progressive_intervals) - 1
+    ):
+        new_index = 1
+
+    return progressive_intervals[new_index], new_index
+
+
 def wait_for_service(
     port, service_name, health_endpoint="/", timeout=None, check_interval=2
 ):
@@ -201,13 +300,15 @@ def wait_for_service(
     Wait for a service to be ready by checking its health endpoint.
 
     Uses exponential backoff retry logic to handle transient network failures.
+    Implements progressive check intervals: starts with shorter intervals and increases
+    them as time passes to balance responsiveness with efficiency.
 
     Args:
         port: Port number to check
         service_name: Name of the service (for logging)
         health_endpoint: Health check endpoint path
         timeout: Maximum time to wait in seconds (defaults to SERVICE_WAIT_TIMEOUT env var or 300)
-        check_interval: Time between checks in seconds
+        check_interval: Base time between checks in seconds (will increase progressively)
 
     Returns:
         bool: True if service is ready, False if timeout
@@ -216,29 +317,19 @@ def wait_for_service(
         timeout = get_service_wait_timeout()
     start_time = time.time()
     url = f"http://localhost:{port}{health_endpoint}"
-    max_retries = 3
-    base_retry_delay = 0.1  # Start with 100ms
+    interval_index = 0
 
     while time.time() - start_time < timeout:
-        # Try with exponential backoff retry logic for transient failures
-        for retry_attempt in range(max_retries):
-            try:
-                response = requests.get(url, timeout=2)
-                # Only accept 2xx status codes as ready (successful responses)
-                if 200 <= response.status_code < 300:
-                    return True
-                # If we get a non-2xx response, break retry loop and wait for next check interval
-                break
-            except (requests.exceptions.RequestException, ConnectionError):
-                # If this is the last retry attempt, break and move to next check interval
-                if retry_attempt == max_retries - 1:
-                    break
-                # Exponential backoff: 0.1s, 0.2s, 0.4s
-                retry_delay = base_retry_delay * (2**retry_attempt)
-                time.sleep(retry_delay)
+        # Check health with retry logic for transient failures
+        if _check_health_with_retries(url):
+            return True
 
-        # Wait for check_interval before next health check attempt
-        time.sleep(check_interval)
+        # Wait with progressive interval before next health check attempt
+        elapsed = time.time() - start_time
+        current_interval, interval_index = _get_progressive_interval(
+            elapsed, timeout, check_interval, interval_index
+        )
+        time.sleep(current_interval)
 
     return False
 
@@ -400,11 +491,9 @@ def check_ports_available(ports_dict):
         from .integration.test_env_validation import check_port_available
     except ImportError:
         # If check function not available, log warning and assume ports are available
-        print(
-            "WARNING: Could not import check_port_available from test_env_validation. "
-            "Skipping port availability check. This may lead to port conflicts.",
-            file=sys.stderr,
-            flush=True,
+        logger.warning(
+            "Could not import check_port_available from test_env_validation. "
+            "Skipping port availability check. This may lead to port conflicts."
         )
         return True, []
 
@@ -643,19 +732,8 @@ def _manage_container_fixture(engine_config, request=None):
         patch_clients_for_test_ports()
     except ImportError:
         # If patching module not available, log warning but continue
-        print(
-            f"[Worker {worker_id}] WARNING: Could not import patch_clients_for_test_ports",
-            file=sys.stderr,
-            flush=True,
-        )
-
-    # CRITICAL: Check port availability before starting containers
-    # This prevents race conditions where multiple workers try to use the same port
-    all_available, unavailable_ports = check_ports_available(ports)
-    if not all_available:
-        raise RuntimeError(
-            f"Ports not available for worker {worker_id}: {', '.join(unavailable_ports)}. "
-            "This may indicate a port conflict or leftover containers from a previous run."
+        logger.warning(
+            f"[Worker {worker_id}] Could not import patch_clients_for_test_ports"
         )
 
     # Track whether we should clean up containers at the end
@@ -664,6 +742,7 @@ def _manage_container_fixture(engine_config, request=None):
     # 2. They exist for our test project name (they're test containers, even if from a previous run)
     # We DON'T clean up if USE_WORKER_CONTAINERS=false (containers managed externally)
     should_cleanup = True
+    elapsed = 0.0  # Initialize elapsed time for timing information
 
     # Register container for cleanup in global registry
     # This ensures cleanup even if pytest is interrupted
@@ -687,6 +766,16 @@ def _manage_container_fixture(engine_config, request=None):
                 check_result.returncode == 0 and check_result.stdout.strip()
             )
 
+            # Only check port availability if containers don't exist
+            # If containers exist, they're using the ports, which is fine
+            if not containers_exist:
+                all_available, unavailable_ports = check_ports_available(ports)
+                if not all_available:
+                    raise RuntimeError(
+                        f"Ports not available for worker {worker_id}: {', '.join(unavailable_ports)}. "
+                        "This may indicate a port conflict or leftover containers from a previous run."
+                    )
+
             if containers_exist:
                 # Containers already exist for this test project - check if they're healthy
                 print(
@@ -695,11 +784,16 @@ def _manage_container_fixture(engine_config, request=None):
                     flush=True,
                 )
                 # Verify health checks pass
+                # Use shorter timeout for existing containers (10s) - if they're not ready quickly, restart them
+                # This prevents hanging on unhealthy containers
                 all_healthy = True
                 for port_key, service_name, health_endpoint in health_checks:
                     port = int(ports[port_key])
                     if not wait_for_service(
-                        port, service_name, health_endpoint, timeout=10
+                        port,
+                        service_name,
+                        health_endpoint,
+                        timeout=10,  # Short timeout for existing containers - if not ready, restart
                     ):
                         print(
                             f"[Worker {worker_id}] Existing {service_name} on port {port} not healthy, will start new containers",
@@ -710,12 +804,41 @@ def _manage_container_fixture(engine_config, request=None):
                         break
 
                 if all_healthy:
-                    print(
-                        f"[Worker {worker_id}] ✓ Reusing existing {display_name} containers",
-                        file=sys.stderr,
-                        flush=True,
+                    # Double-check containers are actually running (health check might pass on stopping containers)
+                    import subprocess
+
+                    check_result = subprocess.run(
+                        [
+                            "docker",
+                            "ps",
+                            "--filter",
+                            f"name={project_name}",
+                            "--format",
+                            "{{.Names}}",
+                        ],
+                        capture_output=True,
+                        text=True,
+                        timeout=5,
                     )
-                    # We'll still clean them up at the end since they're test containers
+                    running_containers = [
+                        line.strip()
+                        for line in check_result.stdout.splitlines()
+                        if line.strip()
+                    ]
+                    if not running_containers:
+                        print(
+                            f"[Worker {worker_id}] Health check passed but containers not running, restarting...",
+                            file=sys.stderr,
+                            flush=True,
+                        )
+                        all_healthy = False
+                    else:
+                        print(
+                            f"[Worker {worker_id}] ✓ Reusing existing {display_name} containers ({len(running_containers)} running)",
+                            file=sys.stderr,
+                            flush=True,
+                        )
+                        # We'll still clean them up at the end since they're test containers
                 else:
                     # Containers exist but aren't healthy - clean them up and start fresh
                     print(
@@ -754,6 +877,10 @@ def _manage_container_fixture(engine_config, request=None):
 
                 # CRITICAL: Health checks inside lock to prevent race conditions
                 # If health check fails, containers are cleaned up before lock is released
+                # Initialize ltr_ready before the loop so it's always in scope
+                ltr_ready = (
+                    True  # Default to True (not checked for non-OpenSearch services)
+                )
                 for port_key, service_name, health_endpoint in health_checks:
                     port = int(ports[port_key])
                     print(
@@ -761,7 +888,78 @@ def _manage_container_fixture(engine_config, request=None):
                         file=sys.stderr,
                         flush=True,
                     )
-                    if not wait_for_service(port, service_name, health_endpoint):
+
+                    # First, wait for basic service health
+                    health_check_result = wait_for_service(
+                        port, service_name, health_endpoint, timeout=None
+                    )
+
+                    # For OpenSearch, also wait for LTR plugin readiness
+                    # This is critical - notebooks use LTR features, so the plugin must be ready
+                    if (
+                        engine == "opensearch"
+                        and port_key == "OPENSEARCH_PORT"
+                        and health_check_result
+                    ):
+                        ltr_endpoint = f"http://localhost:{port}/_ltr"
+                        print(
+                            f"[Worker {worker_id}] Waiting for OpenSearch LTR plugin on {ltr_endpoint}...",
+                            file=sys.stderr,
+                            flush=True,
+                        )
+                        ltr_ready = False
+                        ltr_error = None
+                        ltr_status_code = None
+                        ltr_start_time = time.time()
+                        ltr_timeout = get_service_wait_timeout()
+
+                        # Wait for LTR plugin to be ready
+                        while time.time() - ltr_start_time < ltr_timeout:
+                            try:
+                                # Use original requests.get if available (to avoid double retries)
+                                get_func = getattr(
+                                    requests, "_original_get", requests.get
+                                )
+                                ltr_resp = get_func(ltr_endpoint, timeout=2)
+                                ltr_status_code = ltr_resp.status_code
+                                ltr_ready = 200 <= ltr_status_code < 300
+                                if ltr_ready:
+                                    print(
+                                        f"[Worker {worker_id}] ✓ OpenSearch LTR plugin ready on {ltr_endpoint}",
+                                        file=sys.stderr,
+                                        flush=True,
+                                    )
+                                    break  # LTR plugin is ready
+                                else:
+                                    print(
+                                        f"[Worker {worker_id}] OpenSearch LTR plugin not ready on {ltr_endpoint}, "
+                                        f"status: {ltr_status_code}, retrying...",
+                                        file=sys.stderr,
+                                        flush=True,
+                                    )
+                            except Exception as e:
+                                ltr_error = str(e)
+                                logger.debug(
+                                    f"[Worker {worker_id}] OpenSearch LTR plugin check failed (will retry): {ltr_error}"
+                                )
+
+                            # Wait before next attempt
+                            time.sleep(2)
+
+                        # Update health_check_result based on LTR plugin status
+                        if not ltr_ready:
+                            health_check_result = False
+                            print(
+                                f"[Worker {worker_id}] OpenSearch LTR plugin did not become ready within timeout",
+                                file=sys.stderr,
+                                flush=True,
+                            )
+
+                    # Final health check result
+                    # For OpenSearch, both service and LTR plugin must be ready
+                    # For other services, only service health check is needed
+
+                    if not health_check_result:
                         print(
                             f"[Worker {worker_id}] {service_name} health check failed, cleaning up containers...",
                             file=sys.stderr,
@@ -771,8 +969,19 @@ def _manage_container_fixture(engine_config, request=None):
                             engine, "down", project_name=project_name, ports=ports
                         )
                         should_cleanup = False  # Cleanup already done
+                        error_details = []
+                        # Check if LTR plugin failed (ltr_ready is always initialized, so check its value)
+                        if (
+                            engine == "opensearch"
+                            and port_key == "OPENSEARCH_PORT"
+                            and not ltr_ready
+                        ):
+                            error_details.append("LTR plugin not ready")
+                        else:
+                            error_details.append("service health check failed")
                         raise RuntimeError(
-                            f"{service_name} did not become ready within timeout on port {port}"
+                            f"{service_name} did not become ready within timeout on port {port}. "
+                            f"Details: {', '.join(error_details)}"
                         )
 
                 # Log timing information
@@ -782,11 +991,11 @@ def _manage_container_fixture(engine_config, request=None):
                     file=sys.stderr,
                     flush=True,
                 )
-                print(
-                    f"[Worker {worker_id}] ✓ Containers started in {elapsed:.1f}s",
-                    file=sys.stderr,
-                    flush=True,
-                )
+        print(
+            f"[Worker {worker_id}] ✓ Containers started in {elapsed:.1f}s",
+            file=sys.stderr,
+            flush=True,
+        )
 
         yield True
 
@@ -861,7 +1070,9 @@ def notebook_runner():
     """
     from .notebooks.runner import run_notebook
 
-    def runner(notebook_path, timeout=None, save_nb_path="tests/last_run.ipynb"):
+    def runner(
+        notebook_path, timeout=None, save_nb_path="tests/last_run.ipynb", fail_fast=None
+    ):
         """
         Run a notebook and return results.
 
@@ -869,6 +1080,7 @@ def notebook_runner():
             notebook_path: Path to the notebook to execute
             timeout: Optional timeout in seconds (default: 5 minutes from env)
             save_nb_path: Where to save the executed notebook
+            fail_fast: If True, stop execution on first error (default: from env or False)
 
         Returns:
             dict with keys:
@@ -878,7 +1090,10 @@ def notebook_runner():
                 - 'path': Path to the notebook
         """
         nb, errors, exec_time = run_notebook(
-            notebook_path, timeout=timeout, save_nb_path=save_nb_path
+            notebook_path,
+            timeout=timeout,
+            save_nb_path=save_nb_path,
+            fail_fast=fail_fast,
         )
         return {
             "notebook": nb,
@@ -1037,7 +1252,9 @@ def cleanup_registry(request):
             cleanup_func(*args, **kwargs)
         except Exception as e:
             # Log cleanup failures but don't fail the test
-            print(f"WARNING: Cleanup function failed: {e}", file=sys.stderr, flush=True)
+            logger.warning(
+                f"Cleanup function failed (non-critical): {e}", exc_info=True
+            )
 
 
 @pytest.fixture
@@ -1214,10 +1431,9 @@ def _cleanup_all_test_containers():
                         flush=True,
                     )
         except Exception as e:
-            print(
-                f"WARNING: Error cleaning up {engine} containers (project: {project_name}): {e}",
-                file=sys.stderr,
-                flush=True,
+            logger.warning(
+                f"Error cleaning up {engine} containers (project: {project_name}, non-critical): {e}",
+                exc_info=True,
             )
 
     if cleaned_count > 0:
@@ -1289,11 +1505,9 @@ def pytest_configure(config):
         except ImportError:
             # If check function not available (e.g., when running individual test files),
             # skip environment validation
-            print(
-                "WARNING: Could not import check_test_environment from test_env_validation. "
-                "Skipping environment validation. This may occur when running individual test files.",
-                file=sys.stderr,
-                flush=True,
+            logger.warning(
+                "Could not import check_test_environment from test_env_validation. "
+                "Skipping environment validation. This may occur when running individual test files."
             )
             return
 
@@ -1370,6 +1584,11 @@ def pytest_configure(config):
         "markers", "setup: Setup notebooks that prepare test environments"
     )
     config.addinivalue_line("markers", "fast: Fast-running tests (< 1 minute)")
+    config.addinivalue_line("markers", "integration: Integration tests")
+    config.addinivalue_line("markers", "e2e: End-to-end tests (notebook tests)")
+
+    # Output capturing for integration and e2e tests is configured in
+    # pytest_collection_modifyitems to use tee-sys mode for real-time streaming
 
 
 def _load_test_execution_times(config):
@@ -1425,7 +1644,8 @@ def pytest_collection_modifyitems(config, items):
     """
     Pytest hook to modify test items after collection.
 
-    Applies markers dynamically based on test parameters and reorders tests
+    Applies markers dynamically based on test parameters, enables tee-sys capture
+    mode for e2e/integration tests to show real-time output, and reorders tests
     so slow tests run last.
     """
     # Load execution times from cache
@@ -1433,13 +1653,34 @@ def pytest_collection_modifyitems(config, items):
 
     # First pass: apply markers
     for item in items:
+        # Mark integration tests (tests in tests/integration/)
+        test_path = None
+        if hasattr(item, "fspath"):
+            test_path = str(item.fspath)
+        elif hasattr(item, "path"):
+            test_path = str(item.path)
+
+        if test_path and "/tests/integration/" in test_path.replace("\\", "/"):
+            item.add_marker(pytest.mark.integration)
+
+        # Mark E2E tests (notebook tests) - check path first
+        is_notebook_test = test_path and "/tests/notebooks/" in test_path.replace(
+            "\\", "/"
+        )
+
         # Only process parametrized tests (from notebooks/test_notebooks.py)
         if not hasattr(item, "callspec") or not item.callspec:
+            # If it's a notebook test file but not parametrized, mark as e2e
+            if is_notebook_test:
+                item.add_marker(pytest.mark.e2e)
             continue
 
         # Check if this is a parametrized test with our expected parameters
         params = item.callspec.params
         if "engine" not in params or "notebook_path" not in params:
+            # If it's a notebook test file but doesn't match expected params, mark as e2e
+            if is_notebook_test:
+                item.add_marker(pytest.mark.e2e)
             continue
 
         engine = params.get("engine", "general")
@@ -1458,9 +1699,21 @@ def pytest_collection_modifyitems(config, items):
         if notebook_type == "setup":
             item.add_marker(pytest.mark.setup)
 
+        # Mark notebook tests as e2e (parametrized notebook tests)
+        item.add_marker(pytest.mark.e2e)
+
         # Mark slow tests based on patterns and execution history
         if _is_slow_test(notebook_path, execution_times, item.nodeid):
             item.add_marker(pytest.mark.slow)
+
+    # Check if we have any e2e or integration tests and enable tee-sys capture mode
+    # This shows output in real-time while still capturing it for pytest reports
+    has_e2e_or_integration = any(
+        any(marker.name in ("e2e", "integration") for marker in item.iter_markers())
+        for item in items
+    )
+    if has_e2e_or_integration:
+        config.option.capture = "tee-sys"
 
     # Second pass: reorder tests - fast tests first, slow tests last
     # Maintain relative order within each group
@@ -1501,7 +1754,7 @@ def pytest_collection_finish(session):
     if num_tests > 0:
         timestamp = datetime.now().strftime("%H:%M:%S")
         print(f"[{timestamp}] Found {num_tests} notebook(s) to execute", flush=True)
-        print(f"[{timestamp}] {'='*60}\n", flush=True)
+        print(f"[{timestamp}] {'=' * 60}\n", flush=True)
 
 
 def pytest_terminal_summary(terminalreporter, exitstatus, config):
@@ -1556,9 +1809,9 @@ def pytest_terminal_summary(terminalreporter, exitstatus, config):
     total_time = getattr(session, "duration", 0) if session else 0
 
     # Print summary report
-    print(f"\n{'='*80}", file=sys.stderr)
+    print(f"\n{'=' * 80}", file=sys.stderr)
     print("TEST SUMMARY REPORT", file=sys.stderr)
-    print(f"{'='*80}", file=sys.stderr)
+    print(f"{'=' * 80}", file=sys.stderr)
     print(f"Total notebooks in test set: {total}", file=sys.stderr)
     print(f"  ✓ Passed: {passed}", file=sys.stderr)
     print(f"  ✗ Failed: {failed}", file=sys.stderr)
@@ -1567,7 +1820,7 @@ def pytest_terminal_summary(terminalreporter, exitstatus, config):
 
     if total_time > 0:
         print(
-            f"\nTotal execution time: {total_time:.1f}s ({total_time/60:.1f} minutes)",
+            f"\nTotal execution time: {total_time:.1f}s ({total_time / 60:.1f} minutes)",
             file=sys.stderr,
         )
 
@@ -1592,7 +1845,7 @@ def pytest_terminal_summary(terminalreporter, exitstatus, config):
             name = _extract_notebook_name_from_report(report, session)
             print(f"  ✗ {name}", file=sys.stderr)
 
-    print(f"{'='*80}\n", file=sys.stderr)
+    print(f"{'=' * 80}\n", file=sys.stderr)
 
 
 def pytest_sessionfinish(session, exitstatus):

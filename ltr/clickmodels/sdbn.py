@@ -68,9 +68,9 @@ def sdbn(sessions: list[Session]) -> Model:
     """
     model = Model()
     no_click = -1
-    counts = Counter()
-    clicks = Counter()
-    last_clicks = Counter()
+    counts: Counter[QueryDocPair] = Counter()
+    clicks: Counter[QueryDocPair] = Counter()
+    last_clicks: Counter[QueryDocPair] = Counter()
     for session in sessions:
         last_click = no_click
         for rank, doc in reverse_enumerate(session.docs):
@@ -78,7 +78,7 @@ def sdbn(sessions: list[Session]) -> Model:
                 last_click = rank
 
             if last_click != no_click:
-                query_doc = (session.query, doc.doc_id)
+                query_doc: QueryDocPair = (session.query, doc.doc_id)
                 counts[query_doc] += 1
 
                 if doc.click:

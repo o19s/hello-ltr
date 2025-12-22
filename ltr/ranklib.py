@@ -16,9 +16,11 @@ from typing import Any
 
 from ltr import download
 from ltr.client.base_client import BaseClient
+from ltr.exceptions import ModelError
 from ltr.helpers.ranklib_result import RanklibResult, parse_training_log
 from ltr.judgments import Judgment
 from ltr.logger import get_logger
+from ltr.validation import ValidationError
 
 logger = get_logger(__name__)
 
@@ -70,12 +72,12 @@ def train_model(
     features: list[int] | None = None,
     kcv: int | None = None,
     ranker: int = 6,
-    leafs: int = 10,
-    trees: int = 50,
+    leafs: int | None = 10,
+    trees: int | None = 50,
     frate: float = 1.0,
     shrinkage: float = 0.1,
     srate: float = 1.0,
-    bag: int = 1,
+    bag: int | None = 1,
     metric2t: str = "DCG@10",
 ) -> RanklibResult:
     """Train a RankLib model using the provided training set.
@@ -89,14 +91,14 @@ def train_model(
         ranker: Ranker algorithm to use:
             - 6: LambdaMART (default)
             - 8: RandomForest
-        leafs: Number of leaves per tree (default: 10).
-        trees: Number of trees in the ensemble (default: 50).
+        leafs: Number of leaves per tree (default: 10). If None, defaults to 10.
+        trees: Number of trees in the ensemble (default: 50). If None, defaults to 50.
         frate: Feature rate - proportion of features considered at each split
             (default: 1.0, only used for RandomForest).
         shrinkage: Learning rate/shrinkage parameter (default: 0.1).
         srate: Sample rate - proportion of queries examined for each ensemble
             (default: 1.0, only used for RandomForest).
-        bag: Bagging fraction (default: 1).
+        bag: Bagging fraction (default: 1). If None, defaults to 1.
         metric2t: Metric to optimize during training (default: "DCG@10").
 
     Returns:
@@ -110,11 +112,15 @@ def train_model(
     Note:
         RandomForest-specific parameters (frate, srate) are only used when
         ranker=8. For LambdaMART (ranker=6), these parameters are ignored.
+
+        The leafs, trees, and bag parameters accept None for defensive handling
+        (e.g., when called from test wrappers), but will use their default values
+        in such cases. In normal use, these should be positive integers.
     """
 
     # Validate training set before proceeding
     if not training_set:
-        raise ValueError(
+        raise ValidationError(
             "Training set is empty. Cannot train a model without training data. "
             "Ensure you have created judgments and logged features before training."
         )
@@ -122,7 +128,7 @@ def train_model(
     # Check if training set has features
     judgments_with_features = [j for j in training_set if j.has_features()]
     if not judgments_with_features:
-        raise ValueError(
+        raise ValidationError(
             "No judgments in the training set have features. "
             "Features must be logged before training. "
             "Use log_query() or FeatureLogger to log features for your judgments."
@@ -130,7 +136,7 @@ def train_model(
 
     # Check if training set has sufficient data
     if len(judgments_with_features) < 2:
-        raise ValueError(
+        raise ValidationError(
             f"Training set has only {len(judgments_with_features)} judgment(s) with features. "
             "At least 2 judgments with features are required for training."
         )
@@ -145,7 +151,11 @@ def train_model(
 
     ranky_loc = check_for_rankymcrankface()
     training_set_path = write_training_set(training_set)
-    cmd = f"java -jar {ranky_loc} -ranker {ranker} -shrinkage {shrinkage} -metric2t {metric2t} -tree {trees} -bag {bag} -leaf {leafs} -frate {frate} -srate {srate} -train {training_set_path} -save {out} "
+    # Use default values if parameters are None (can happen when called from test wrapper)
+    trees_val = trees if trees is not None else 50
+    bag_val = bag if bag is not None else 1
+    leafs_val = leafs if leafs is not None else 10
+    cmd = f"java -jar {ranky_loc} -ranker {ranker} -shrinkage {shrinkage} -metric2t {metric2t} -tree {trees_val} -bag {bag_val} -leaf {leafs_val} -frate {frate} -srate {srate} -train {training_set_path} -save {out} "
 
     if features is not None:
         features_file = os.path.join(tempfile.gettempdir(), "features.txt")
@@ -173,32 +183,36 @@ def train_model(
 
         # Provide more helpful error messages based on common issues
         if "FileNotFoundException" in error_msg_str or "No such file" in error_msg_str:
-            raise RuntimeError(
+            raise ModelError(
                 f"RankLib training failed: Could not find training data file. "
                 f"This may indicate the training set file was not created properly. "
                 f"Return code: {process_result.returncode}. "
-                f"Error: {error_preview}"
+                f"Error: {error_preview}",
+                operation="train",
             )
         elif "ParseException" in error_msg_str or "parse" in error_msg_str.lower():
-            raise RuntimeError(
+            raise ModelError(
                 f"RankLib training failed: Training data format error. "
                 f"The training set may be malformed or contain invalid data. "
                 f"Check that all judgments have valid features and ratings. "
                 f"Return code: {process_result.returncode}. "
-                f"Error: {error_preview}"
+                f"Error: {error_preview}",
+                operation="train",
             )
         elif len(training_set) == 0:
-            raise RuntimeError(
+            raise ModelError(
                 f"RankLib training failed: Empty training set. "
                 f"Ensure you have created judgments and logged features before training. "
                 f"Return code: {process_result.returncode}. "
-                f"Error: {error_preview}"
+                f"Error: {error_preview}",
+                operation="train",
             )
         else:
-            raise RuntimeError(
+            raise ModelError(
                 f"RankLib training failed with return code {process_result.returncode}. "
                 f"Error output: {error_preview}. "
-                f"Common causes: invalid training data, missing features, or RankLib configuration issues."
+                f"Common causes: invalid training data, missing features, or RankLib configuration issues.",
+                operation="train",
             )
 
     # Parse training logs
@@ -217,15 +231,21 @@ def train_model(
         )
         if process_result.stderr:
             error_msg = process_result.stderr[:500]
-            raise RuntimeError(f"{error_context}\n\nStderr output: {error_msg}")
+            raise ModelError(
+                f"{error_context}\n\nStderr output: {error_msg}",
+                operation="train",
+            )
         elif process_result.stdout:
             stdout_preview = (
                 process_result.stdout[:500] if process_result.stdout else "No output"
             )
-            raise RuntimeError(f"{error_context}\n\nStdout output: {stdout_preview}")
+            raise ModelError(
+                f"{error_context}\n\nStdout output: {stdout_preview}",
+                operation="train",
+            )
         else:
             # Even without stderr, no training logs is an error condition
-            raise RuntimeError(error_context)
+            raise ModelError(error_context, operation="train")
 
     return parsed_result
 
@@ -245,10 +265,36 @@ def save_model(
         model_file: Path to the file containing the trained model definition.
         index: Name of the search index where the model will be stored.
         feature_set: Name of the feature set associated with this model.
+
+    Raises:
+        ModelError: If the model file doesn't exist, is empty, or model submission fails.
     """
+    import os
+
+    # Validate model file exists and has content
+    if not os.path.exists(model_file):
+        raise ModelError(
+            f"Model file not found: {model_file}. "
+            f"This indicates RankLib training did not produce a model file. "
+            f"Please check training logs for errors.",
+            operation="save_model",
+            model_name=model_name,
+        )
+
     with open(model_file) as src:
-        definition = src.read()
-        client.submit_ranklib_model(feature_set, index, model_name, definition)
+        definition = src.read().strip()
+
+    if not definition:
+        raise ModelError(
+            f"Model file is empty: {model_file}. "
+            f"This indicates RankLib training did not produce a valid model. "
+            f"Please check training logs for errors.",
+            operation="save_model",
+            model_name=model_name,
+        )
+
+    # Submit the model (this includes verification that the model was created)
+    client.submit_ranklib_model(feature_set, index, model_name, definition)
 
 
 def _validate_training_prerequisites(
@@ -279,7 +325,7 @@ def _validate_training_prerequisites(
         client.feature_set(index=index, name=feature_set)
         logger.debug(f"Feature set '{feature_set}' validated successfully")
     except RuntimeError as e:
-        raise RuntimeError(
+        raise ModelError(
             f"Cannot train model: Feature set '{feature_set}' not found or not accessible. "
             f"This usually means:\n"
             f"  1. The feature set hasn't been created yet - run client.create_featureset() first\n"
@@ -290,12 +336,14 @@ def _validate_training_prerequisites(
             f"  1. client.create_index('{index}')\n"
             f"  2. client.create_featureset(index='{index}', name='{feature_set}', ftr_config=...)\n"
             f"  3. Log features using log_query() or FeatureLogger\n"
-            f"  4. Train model using train()"
+            f"  4. Train model using train()",
+            operation="train",
+            context={"feature_set": feature_set, "index": index},
         ) from e
 
     # Validate training set
     if not training_set:
-        raise ValueError(
+        raise ValidationError(
             "Cannot train model: Training set is empty. "
             "Ensure you have:\n"
             "  1. Created judgments\n"
@@ -305,7 +353,7 @@ def _validate_training_prerequisites(
 
     judgments_with_features = [j for j in training_set if j.has_features()]
     if not judgments_with_features:
-        raise ValueError(
+        raise ValidationError(
             "Cannot train model: No judgments in the training set have features. "
             "Features must be logged before training. "
             "Use log_query() or FeatureLogger.log_for_qid() to log features for your judgments."
@@ -404,8 +452,9 @@ def train(
     )
 
     if len(ranklib_result.trainingLogs) == 0:
-        raise RuntimeError(
-            "Training failed: RankLib did not produce any training logs. This may indicate an error in the training data or RankLib execution."
+        raise ModelError(
+            "Training failed: RankLib did not produce any training logs. This may indicate an error in the training data or RankLib execution.",
+            operation="train",
         )
 
     if not kcv:
@@ -496,7 +545,7 @@ def feature_search(
         )
 
     if features is None:
-        raise ValueError("features parameter is required for feature_search")
+        raise ValidationError("features parameter is required for feature_search")
 
     model_file = "data/{}_model.txt".format("temp")
     best = 0

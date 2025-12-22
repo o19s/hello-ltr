@@ -49,7 +49,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Updated search query functions (`ltr/search.py`) to use input validation
 - Improved click models (PBM, UBM) to use centralized logging instead of print statements
 - Enhanced test coverage for search functionality (`tests/unit/test_search.py`)
-- Updated architecture documentation (`ARCHITECTURE.md`)
+- Updated architecture documentation (`ARCHITECTURE.md`) with:
+  - Documentation for validation, logging, and retry helper modules
+  - Updated Security Considerations section reflecting current validation implementation
+  - Updated Performance Considerations section with retry logic details
+  - Added Retry Pattern with Exponential Backoff to design patterns section
+  - Fixed date inconsistencies throughout document
 - Updated main README with improved documentation
 
 ### Fixed

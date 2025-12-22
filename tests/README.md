@@ -319,6 +319,12 @@ pytest -m "not slow" tests/notebooks/test_notebooks.py
 # Run only slow tests (for validation)
 pytest -m slow tests/notebooks/test_notebooks.py
 
+# Run integration tests (real-time output streaming enabled)
+pytest -m integration tests/integration/
+
+# Run E2E/notebook tests (real-time output streaming enabled)
+pytest -m e2e tests/notebooks/test_notebooks.py
+
 # Combine markers
 pytest -m "opensearch and not slow" tests/notebooks/test_notebooks.py
 ```
@@ -476,9 +482,16 @@ The test suite is organized into three main categories:
 
 **Test Files:**
 - `test_notebooks.py` - Parametrized test suite that executes all notebooks
-- `runner.py` - Notebook execution engine with error capture and port patching
+- `runner.py` - Notebook execution engine with real-time streaming, error capture, and port patching
 - `nb_test_config.py` - NotebookTestConfig class for discovering notebooks in directories
 - `test_config.py` - Configuration constants (TEST_PATHS and IGNORED_NOTEBOOKS)
+
+**Features:**
+- Real-time output streaming (errors visible immediately)
+- Fail-fast mode (stop on first error via `NOTEBOOK_FAIL_FAST=true`)
+- Progress indicators with time estimates
+- Cell-by-cell execution logging
+- Automatic parameter reduction for faster testing
 
 **Coverage:**
 - 36+ notebooks across Solr, Elasticsearch, and OpenSearch
@@ -842,6 +855,11 @@ markers =
     slow: Slow-running tests (detected by patterns or execution time > 60s)
     setup: Setup notebooks
     fast: Fast-running tests (< 1 minute)
+    integration: Integration tests (automatically applied to tests in tests/integration/)
+    e2e: End-to-end tests (automatically applied to notebook tests)
+```
+
+Integration and E2E tests automatically use `tee-sys` capture mode, which shows output in real-time while still capturing it for pytest reports. This makes it easier to monitor test progress and debug issues.
 ```
 
 ### Test Paths ([conftest.py](conftest.py))
@@ -1921,8 +1939,9 @@ If a notebook should not be tested automatically:
    ```
 
 3. **Use pytest markers** for test categorization:
-   - Existing markers: `solr`, `elasticsearch`, `opensearch`, `slow`, `setup`, `fast`
+   - Existing markers: `solr`, `elasticsearch`, `opensearch`, `slow`, `setup`, `fast`, `integration`, `e2e`
    - Add new markers in `pytest.ini` and `conftest.py`
+   - Integration and E2E tests automatically stream output in real-time
 
 4. **Document new features**:
    - Update this README with new functionality

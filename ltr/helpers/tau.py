@@ -9,6 +9,8 @@ from __future__ import annotations
 from collections.abc import Iterator
 from typing import Any
 
+from ltr.validation import ValidationError
+
 
 def sign(a: float) -> int:
     """Get the sign of a number.
@@ -69,7 +71,7 @@ def tau(rank1: list[Any], rank2: list[Any], at: int = 4) -> float:
     rank1in = {}
 
     if len(rank1) < at or len(rank2) < at:
-        raise ValueError(f"rankings must be larger than provided at param({at})")
+        raise ValidationError(f"rankings must be larger than provided at param({at})")
 
     # Handle 1 as a special case
     if at == 1:
@@ -119,7 +121,7 @@ def avg_tau(rank1: list[Any], rank2: list[Any], at: int = 4) -> float:
         ValueError: If either ranking is shorter than the 'at' parameter.
     """
     if len(rank1) < at or len(rank2) < at:
-        raise ValueError(f"rankings must be larger than provided at param({at})")
+        raise ValidationError(f"rankings must be larger than provided at param({at})")
 
     rank1 = rank1[:at]
     rank2 = rank2[:at]

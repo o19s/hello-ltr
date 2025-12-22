@@ -10,13 +10,29 @@ import json
 import os
 import time
 from collections.abc import Callable, Iterable
-from typing import Any
 
 import requests
 from opensearchpy import OpenSearch, helpers
-from opensearchpy.exceptions import RequestError
+from opensearchpy.exceptions import (
+    ConnectionError as OpenSearchConnectionError,
+)
+from opensearchpy.exceptions import (
+    RequestError,
+    TransportError,
+)
 
+from ltr.exceptions import LTRConnectionError, LTRIndexError, ModelError, QueryError
 from ltr.helpers.handle_resp import resp_msg
+from ltr.helpers.retry import (
+    is_feature_set_timing_error,
+    is_model_timing_error,
+    is_opensearch_connection_error,
+    is_requests_connection_error,
+    retry_feature_set_query,
+    retry_model_query,
+    retry_on_connection_error,
+    retry_until_true,
+)
 from ltr.logger import get_logger
 from ltr.types import (
     FeatureConfig,
@@ -26,75 +42,24 @@ from ltr.types import (
     ModelPayload,
     QueryParams,
 )
+from ltr.validation import ValidationError
 
 from .base_client import BaseClient
+from .responses import APIResp, BulkResp
+
+# Retry configuration constants
+DEFAULT_MAX_RETRIES = 5
+DEFAULT_RETRY_DELAY = 0.5
+CLIENT_INIT_MAX_RETRIES = 3
+CLIENT_INIT_RETRY_DELAY = 0.1
+VERIFICATION_MAX_RETRIES = 3
+VERIFICATION_RETRY_DELAY = 0.1
+QUERY_VERIFICATION_RETRY_DELAY = 0.2
 
 logger = get_logger(__name__)
 
-
-class OpenSearchResp:
-    """Response wrapper for OpenSearch API responses.
-
-    Converts OpenSearch JSON responses into a format compatible with
-    the resp_msg error handling function.
-
-    Attributes:
-        status_code: HTTP status code (200 for success, 400 for errors).
-        text: JSON-formatted response text (only present on errors).
-    """
-
-    def __init__(self, resp: JSONDict) -> None:
-        """Initialize an OpenSearchResp wrapper.
-
-        Args:
-            resp: OpenSearch API response dictionary.
-        """
-        self.status_code: int = 400
-        if "acknowledged" in resp and resp["acknowledged"]:
-            self.status_code = 200
-        else:
-            self.status_code = resp["status"]
-            self.text: str = json.dumps(resp, indent=2)
-
-
-class BulkResp:
-    """Response wrapper for OpenSearch bulk operation responses.
-
-    Attributes:
-        status_code: HTTP status code (201 if documents indexed, 400 otherwise).
-    """
-
-    def __init__(self, resp: tuple[int, Any]) -> None:
-        """Initialize a BulkResp wrapper.
-
-        Args:
-            resp: OpenSearch bulk operation response tuple.
-        """
-        self.status_code: int = 400
-        if resp[0] > 0:
-            self.status_code = 201
-
-
-class SearchResp:
-    """Response wrapper for OpenSearch search responses.
-
-    Attributes:
-        status_code: HTTP status code (200 if hits found, 400 otherwise).
-        text: JSON-formatted response text (only present on errors).
-    """
-
-    def __init__(self, resp: JSONDict) -> None:
-        """Initialize a SearchResp wrapper.
-
-        Args:
-            resp: OpenSearch search API response dictionary.
-        """
-        self.status_code: int = 400
-        if "hits" in resp:
-            self.status_code = 200
-        else:
-            self.status_code = resp["status"]
-            self.text: str = json.dumps(resp, indent=2)
+# Alias for backward compatibility
+OpenSearchResp = APIResp
 
 
 class OpenSearchClient(BaseClient):
@@ -136,7 +101,15 @@ class OpenSearchClient(BaseClient):
             self.host = "localhost"
 
         self.opensearch_ep: str = f"http://{self.host}:9201/_ltr"
-        self.opensearch: OpenSearch = OpenSearch(f"http://{self.host}:9201")
+        # Create OpenSearch client - note that OpenSearch() constructor doesn't connect immediately
+        # Connection happens lazily on first API call, so this shouldn't fail here
+        # In test environments (OPENSEARCH_PORT set), the patched __init__ will replace this client
+        # and handle retry logic. For non-test environments, if creation fails, let it fail immediately.
+        try:
+            self.opensearch: OpenSearch = OpenSearch(f"http://{self.host}:9201")
+        except Exception:
+            # If creation fails, let it fail - patched version will handle retries in test environments
+            raise
         logger.debug(f"OpenSearch endpoint: {self.opensearch_ep}")
 
     def _validate_search_response(
@@ -155,15 +128,19 @@ class OpenSearchClient(BaseClient):
             ValueError: If response contains an error or is missing the 'hits' key.
         """
         if "error" in resp:
-            error_detail = resp.get("error", {})
+            error_detail: JSONDict = resp.get("error", {})
             if isinstance(error_detail, dict):
-                error_msg = error_detail.get("reason", str(error_detail))
+                error_msg: str = error_detail.get("reason", str(error_detail))
             else:
                 error_msg = str(error_detail)
-            raise ValueError(f"OpenSearch {operation} failed: {error_msg}")
+            raise QueryError(
+                f"OpenSearch {operation} failed: {error_msg}",
+                client_name="opensearch",
+            )
         if "hits" not in resp:
-            raise ValueError(
-                f"Unexpected response structure: missing 'hits' key. Response: {json.dumps(resp, indent=2)[:500]}"
+            raise QueryError(
+                f"Unexpected response structure: missing 'hits' key. Response: {json.dumps(resp, indent=2)[:500]}",
+                client_name="opensearch",
             )
 
     def get_host(self) -> str:
@@ -191,7 +168,24 @@ class OpenSearchClient(BaseClient):
         Returns:
             bool: True if the index exists, False otherwise.
         """
-        return self.opensearch.indices.exists(index=index)
+
+        def check_index() -> bool:
+            return self.opensearch.indices.exists(index=index)
+
+        try:
+            return retry_on_connection_error(
+                check_index,
+                max_retries=DEFAULT_MAX_RETRIES,
+                initial_delay=DEFAULT_RETRY_DELAY,
+                is_connection_error=is_opensearch_connection_error,
+            )
+        except RuntimeError as e:
+            raise LTRConnectionError(
+                f"Failed to connect to OpenSearch when checking index '{index}' after {DEFAULT_MAX_RETRIES} attempts. "
+                f"OpenSearch container may not be ready. Error: {e}",
+                client_name="opensearch",
+                operation="check_index_exists",
+            ) from e
 
     def delete_index(self, index: str) -> None:
         """Delete an OpenSearch index.
@@ -203,13 +197,30 @@ class OpenSearchClient(BaseClient):
             Does not raise exceptions if the index doesn't exist (404) or
             if there are other client errors (400).
         """
-        resp = self.opensearch.indices.delete(index=index, ignore=[400, 404])
-        resp_msg(
-            msg=f"Deleted index {index}",
-            resp=OpenSearchResp(resp),
-            throw=False,
-            ignore=[400, 404],
-        )
+
+        def delete_index() -> None:
+            resp = self.opensearch.indices.delete(index=index, ignore=[400, 404])
+            resp_msg(
+                msg=f"Deleted index {index}",
+                resp=OpenSearchResp(resp),
+                throw=False,
+                ignore=[400, 404],
+            )
+
+        try:
+            retry_on_connection_error(
+                delete_index,
+                max_retries=DEFAULT_MAX_RETRIES,
+                initial_delay=DEFAULT_RETRY_DELAY,
+                is_connection_error=is_opensearch_connection_error,
+            )
+        except RuntimeError as e:
+            raise LTRConnectionError(
+                f"Failed to connect to OpenSearch when deleting index '{index}' after {DEFAULT_MAX_RETRIES} attempts. "
+                f"OpenSearch container may not be ready. Error: {e}",
+                client_name="opensearch",
+                operation="delete_index",
+            ) from e
 
     def create_index(self, index: str) -> None:
         """Create an OpenSearch index from local configuration files.
@@ -222,7 +233,10 @@ class OpenSearchClient(BaseClient):
 
         Raises:
             FileNotFoundError: If the configuration file cannot be found.
-            RuntimeError: If index creation fails (HTTP status >= 400).
+            ClientError: If index creation fails (HTTP status >= 400).
+            LTRConnectionError: If connection to OpenSearch fails during creation or verification.
+            LTRIndexError: If index creation appears to succeed but verification fails
+                (index cannot be found after creation).
         """
         cfg_json_path = os.path.join(self.configs_dir, f"{index}_settings.json")
 
@@ -251,6 +265,14 @@ class OpenSearchClient(BaseClient):
                     project_root,
                     f"notebooks/elasticsearch/{index}/{index}_settings.json",
                 ),
+                # Check osc-blog directory for blog index
+                os.path.join(
+                    project_root, f"notebooks/opensearch/osc-blog/{index}_settings.json"
+                ),
+                os.path.join(
+                    project_root,
+                    f"notebooks/elasticsearch/osc-blog/{index}_settings.json",
+                ),
             ]
             for alt_path in possible_paths:
                 if os.path.exists(alt_path):
@@ -259,8 +281,59 @@ class OpenSearchClient(BaseClient):
 
         with open(cfg_json_path) as src:
             settings = json.load(src)
-            resp = self.opensearch.indices.create(index=index, body=settings)
-            resp_msg(msg=f"Created index {index}", resp=OpenSearchResp(resp))
+
+            def create_index() -> JSONDict:
+                return self.opensearch.indices.create(index=index, body=settings)
+
+            try:
+                resp = retry_on_connection_error(
+                    create_index,
+                    max_retries=DEFAULT_MAX_RETRIES,
+                    initial_delay=DEFAULT_RETRY_DELAY,
+                    is_connection_error=is_opensearch_connection_error,
+                )
+                # Validate response after successful retry - don't retry response validation errors
+                resp_msg(msg=f"Created index {index}", resp=OpenSearchResp(resp))
+            except RuntimeError as e:
+                raise LTRConnectionError(
+                    f"Failed to connect to OpenSearch when creating index '{index}' after {DEFAULT_MAX_RETRIES} attempts. "
+                    f"OpenSearch container may not be ready. Error: {e}",
+                    client_name="opensearch",
+                    operation="create_index",
+                ) from e
+
+        # Verify index was actually created and is accessible
+        # OpenSearch may return success but the index might not be immediately available
+        def check_index() -> bool:
+            try:
+                return self.check_index_exists(index)
+            except LTRConnectionError:
+                # Connection error during verification - return False to retry
+                return False
+
+        try:
+            retry_until_true(
+                check_func=check_index,
+                max_retries=VERIFICATION_MAX_RETRIES,
+                initial_delay=VERIFICATION_RETRY_DELAY,
+                error_message=(
+                    f"Index '{index}' creation appeared to succeed (HTTP 200), "
+                    f"but verification failed - the index could not be found. "
+                    f"This may indicate a persistence issue with OpenSearch."
+                ),
+            )
+            logger.debug(f"Verified index '{index}' was created successfully")
+        except RuntimeError as e:
+            raise LTRIndexError(
+                f"{str(e)} "
+                f"Please check:\n"
+                f"  1. OpenSearch is running and accessible\n"
+                f"  2. The index settings are valid\n"
+                f"  3. Try creating the index again or check OpenSearch logs for errors",
+                index=index,
+                operation="create_index",
+                client_name="opensearch",
+            ) from e
 
     def index_documents(
         self,
@@ -293,20 +366,37 @@ class OpenSearchClient(BaseClient):
             """
             for doc in doc_src:
                 if "id" not in doc:
-                    raise ValueError(
+                    raise ValidationError(
                         "Expecting docs to have field 'id' that uniquely identifies document"
                     )
                 add_cmd = {"_index": index, "_id": doc["id"], "_source": doc}
                 yield add_cmd
 
         if isinstance(doc_src, str):
-            raise ValueError(
+            raise ValidationError(
                 "OpenSearchClient.index_documents does not support file paths"
             )
         if callable(doc_src):
             doc_src = doc_src()
         resp = helpers.bulk(self.opensearch, bulk_docs(doc_src), chunk_size=100)
-        self.opensearch.indices.refresh(index=index)
+
+        def refresh_index() -> None:
+            self.opensearch.indices.refresh(index=index)
+
+        try:
+            retry_on_connection_error(
+                refresh_index,
+                max_retries=DEFAULT_MAX_RETRIES,
+                initial_delay=DEFAULT_RETRY_DELAY,
+                is_connection_error=is_opensearch_connection_error,
+            )
+        except RuntimeError as e:
+            raise LTRConnectionError(
+                f"Failed to refresh index '{index}' after {DEFAULT_MAX_RETRIES} attempts. "
+                f"OpenSearch container may not be ready. Error: {e}",
+                client_name="opensearch",
+                operation="index_documents",
+            ) from e
         resp_msg(msg=f"Streaming Bulk index DONE {index}", resp=BulkResp(resp))
 
     def reset_ltr(self, index: str) -> None:
@@ -325,12 +415,60 @@ class OpenSearchClient(BaseClient):
         Raises:
             RuntimeError: If LTR store initialization fails (HTTP status >= 400).
         """
-        resp = requests.delete(self.opensearch_ep)
-        resp_msg(
-            msg="Removed Default LTR feature store".format(), resp=resp, throw=False
-        )
-        resp = requests.put(self.opensearch_ep)
-        resp_msg(msg="Initialize Default LTR feature store".format(), resp=resp)
+
+        # Delete LTR store with retry
+        def delete_ltr_store() -> requests.Response:
+            return requests.delete(self.opensearch_ep, timeout=10)
+
+        try:
+            delete_resp = retry_on_connection_error(
+                delete_ltr_store,
+                max_retries=DEFAULT_MAX_RETRIES,
+                initial_delay=DEFAULT_RETRY_DELAY,
+                is_connection_error=is_requests_connection_error,
+            )
+        except RuntimeError as e:
+            raise LTRConnectionError(
+                f"Failed to connect to OpenSearch when deleting LTR store after {DEFAULT_MAX_RETRIES} attempts. "
+                f"OpenSearch container may not be ready. Error: {e}",
+                client_name="opensearch",
+                operation="reset_ltr",
+            ) from e
+
+        if delete_resp is not None:
+            resp_msg(
+                msg="Removed Default LTR feature store".format(),
+                resp=delete_resp,
+                throw=False,
+            )
+
+        # Create LTR store with retry
+        def create_ltr_store() -> requests.Response:
+            return requests.put(self.opensearch_ep, timeout=10)
+
+        try:
+            create_resp = retry_on_connection_error(
+                create_ltr_store,
+                max_retries=DEFAULT_MAX_RETRIES,
+                initial_delay=DEFAULT_RETRY_DELAY,
+                is_connection_error=is_requests_connection_error,
+            )
+        except RuntimeError as e:
+            raise LTRConnectionError(
+                f"Failed to connect to OpenSearch when creating LTR store after {DEFAULT_MAX_RETRIES} attempts. "
+                f"OpenSearch container may not be ready. Error: {e}",
+                client_name="opensearch",
+                operation="reset_ltr",
+            ) from e
+
+        if create_resp is None:
+            raise LTRConnectionError(
+                "Failed to reset LTR: No response received for PUT request",
+                client_name="opensearch",
+                operation="reset_ltr",
+            )
+
+        resp_msg(msg="Initialize Default LTR feature store".format(), resp=create_resp)
 
         # Small delay to ensure LTR store is fully initialized
         # This helps prevent timing issues when creating feature sets immediately after reset
@@ -352,14 +490,42 @@ class OpenSearchClient(BaseClient):
         # Check if index exists before attempting to create feature set
         # OpenSearch LTR validates feature sets against indices, so the index must exist
         if not self.check_index_exists(index):
-            raise RuntimeError(
+            raise LTRIndexError(
                 f"Cannot create feature set '{name}': index '{index}' does not exist. "
-                f"Please create the index first using create_index('{index}')."
+                f"Please create the index first using create_index('{index}').",
+                index=index,
+                client_name="opensearch",
             )
 
-        resp = requests.post(
-            f"{self.opensearch_ep}/_featureset/{name}", json=ftr_config
-        )
+        # Retry logic for connection errors when creating feature sets
+        # This handles cases where OpenSearch container is starting up or temporarily unavailable
+        def create_feature_set() -> requests.Response:
+            return requests.post(
+                f"{self.opensearch_ep}/_featureset/{name}",
+                json=ftr_config,
+                timeout=10,
+            )
+
+        try:
+            resp = retry_on_connection_error(
+                create_feature_set,
+                max_retries=DEFAULT_MAX_RETRIES,
+                initial_delay=DEFAULT_RETRY_DELAY,
+                is_connection_error=is_requests_connection_error,
+            )
+        except RuntimeError as e:
+            raise LTRConnectionError(
+                f"Failed to connect to OpenSearch when creating feature set '{name}' after {DEFAULT_MAX_RETRIES} attempts. "
+                f"OpenSearch container may not be ready. Error: {e}",
+                client_name="opensearch",
+            ) from e
+
+        if resp is None:
+            raise QueryError(
+                f"Failed to create feature set '{name}': No response received",
+                index=index,
+                client_name="opensearch",
+            )
 
         # Enhanced error handling for index_not_found_exception in API response
         if resp.status_code >= 400:
@@ -367,27 +533,35 @@ class OpenSearchClient(BaseClient):
                 error_json = resp.json()
                 # Check for index_not_found_exception in the error response
                 if "error" in error_json:
-                    error_detail = error_json.get("error", {})
+                    error_detail: JSONDict = error_json.get("error", {})
                     if isinstance(error_detail, dict):
                         # Check root cause for index_not_found_exception
-                        root_causes = error_detail.get("root_cause", [])
+                        root_causes: list[JSONDict] = error_detail.get("root_cause", [])
                         for root_cause in root_causes:
-                            if root_cause.get("type") == "index_not_found_exception":
-                                missing_index = root_cause.get("index", index)
-                                raise RuntimeError(
-                                    f"Cannot create feature set '{name}': index '{missing_index}' does not exist. "
-                                    f"Please create the index first using create_index('{missing_index}')."
+                            if (
+                                isinstance(root_cause, dict)
+                                and root_cause.get("type")
+                                == "index_not_found_exception"
+                            ):
+                                missing_index_root: str = root_cause.get("index", index)
+                                raise LTRIndexError(
+                                    f"Cannot create feature set '{name}': index '{missing_index_root}' does not exist. "
+                                    f"Please create the index first using create_index('{missing_index_root}').",
+                                    index=missing_index_root,
+                                    client_name="opensearch",
                                 )
                         # Check caused_by for nested index_not_found_exception
-                        caused_by = error_detail.get("caused_by", {})
+                        caused_by: JSONDict = error_detail.get("caused_by", {})
                         if (
                             isinstance(caused_by, dict)
                             and caused_by.get("type") == "index_not_found_exception"
                         ):
-                            missing_index = caused_by.get("index", index)
-                            raise RuntimeError(
-                                f"Cannot create feature set '{name}': index '{missing_index}' does not exist. "
-                                f"Please create the index first using create_index('{missing_index}')."
+                            missing_index_caused: str = caused_by.get("index", index)
+                            raise LTRIndexError(
+                                f"Cannot create feature set '{name}': index '{missing_index_caused}' does not exist. "
+                                f"Please create the index first using create_index('{missing_index_caused}').",
+                                index=missing_index_caused,
+                                client_name="opensearch",
                             )
             except (ValueError, KeyError, TypeError):
                 # If JSON parsing fails or structure is unexpected, fall through to resp_msg
@@ -397,32 +571,36 @@ class OpenSearchClient(BaseClient):
 
         # Verify feature set was actually created and persisted
         # OpenSearch LTR may return 200 but not persist the feature set in some cases
-        # Retry a few times with small delays to handle potential timing issues
-        max_retries = 3
-        retry_delay = 0.1  # 100ms delay between retries
-        for attempt in range(max_retries):
+        def verify_feature_set_exists() -> bool:
             try:
-                # Try to retrieve the feature set to verify it was persisted
                 self.feature_set(index=index, name=name)
-                # If we get here, feature set exists - verification successful
                 logger.debug(f"Verified feature set '{name}' was created successfully")
-                break
+                return True
             except RuntimeError:
-                # Feature set not found yet, retry if we have attempts left
-                if attempt < max_retries - 1:
-                    time.sleep(retry_delay)
-                    retry_delay *= 2  # Exponential backoff
-                    continue
-                # All retries exhausted, raise error
-                raise RuntimeError(
+                return False  # Feature set not found yet, will retry
+
+        try:
+            retry_until_true(
+                check_func=verify_feature_set_exists,
+                max_retries=VERIFICATION_MAX_RETRIES,
+                initial_delay=VERIFICATION_RETRY_DELAY,
+                error_message=(
                     f"Feature set '{name}' creation appeared to succeed (HTTP {resp.status_code}), "
                     f"but verification failed - the feature set could not be retrieved. "
-                    f"This may indicate a persistence issue with the OpenSearch LTR plugin. "
-                    f"Please check:\n"
-                    f"  1. The index '{index}' exists and is accessible\n"
-                    f"  2. The LTR plugin is properly installed and configured\n"
-                    f"  3. Try creating the feature set again or check OpenSearch logs for errors"
-                )
+                    f"This may indicate a persistence issue with the OpenSearch LTR plugin."
+                ),
+            )
+        except RuntimeError as e:
+            raise QueryError(
+                f"{str(e)} "
+                f"Please check:\n"
+                f"  1. The index '{index}' exists and is accessible\n"
+                f"  2. The LTR plugin is properly installed and configured\n"
+                f"  3. Try creating the feature set again or check OpenSearch logs for errors",
+                index=index,
+                client_name="opensearch",
+            ) from e
+
         # Add a small delay after verification to ensure feature set is ready for queries
         # OpenSearch LTR may need additional time to index the feature set for query use
         time.sleep(0.3)  # 300ms delay to allow feature set to be fully indexed
@@ -430,79 +608,102 @@ class OpenSearchClient(BaseClient):
         # Verify feature set is usable in queries (not just retrievable)
         # Feature sets may exist but not be immediately usable due to internal indexing delays
         # Try a simple test query to ensure the feature set is ready for use
-        max_query_retries = 5
-        query_retry_delay = 0.2  # 200ms delay between query attempts
-        for attempt in range(max_query_retries):
-            try:
-                # Try a simple log_query with empty params to verify feature set is usable
-                # Use a minimal query that should work if the feature set is ready
-                test_params = {
-                    "query": {
-                        "bool": {
-                            "filter": [
-                                {
-                                    "sltr": {
-                                        "_name": "test_features",
-                                        "featureset": name,
-                                        "params": {},
-                                    }
-                                }
-                            ]
-                        }
-                    },
-                    "size": 0,  # Don't return documents, just verify query works
-                }
-                test_resp = self.opensearch.search(index=index, body=test_params)
+        max_query_retries = DEFAULT_MAX_RETRIES
+        query_retry_delay = QUERY_VERIFICATION_RETRY_DELAY
 
-                # Check if query succeeded (no error in response)
-                if "error" not in test_resp:
-                    logger.debug(f"Verified feature set '{name}' is usable in queries")
-                    return
-                else:
-                    # Query returned an error, check if it's a feature set issue
-                    error_detail = test_resp.get("error", {})
-                    if isinstance(error_detail, dict):
-                        error_reason = error_detail.get("reason", "")
-                        # If it's a feature set parsing issue, retry
-                        if (
-                            "NullPointerException" in error_reason
-                            or "getAndParse" in error_reason
-                        ):
-                            if attempt < max_query_retries - 1:
-                                logger.debug(
-                                    f"Feature set '{name}' not yet usable (attempt {attempt + 1}/{max_query_retries}), retrying..."
-                                )
-                                time.sleep(query_retry_delay)
-                                query_retry_delay *= 1.5  # Gradual backoff
-                                continue
-                            else:
-                                raise RuntimeError(
-                                    f"Feature set '{name}' exists but is not usable in queries after {max_query_retries} attempts. "
-                                    f"Error: {error_reason}. This may indicate a timing issue with the OpenSearch LTR plugin. "
-                                    f"Try waiting a moment and using the feature set again."
-                                )
-                    # Other errors should be raised immediately
-                    raise RuntimeError(
-                        f"Feature set '{name}' verification query failed: {error_detail}"
-                    )
-            except Exception as e:
-                # Check if it's a feature set not ready error
-                error_str = str(e)
-                if "NullPointerException" in error_str or "getAndParse" in error_str:
-                    if attempt < max_query_retries - 1:
-                        logger.debug(
-                            f"Feature set '{name}' not yet usable (attempt {attempt + 1}/{max_query_retries}), retrying..."
-                        )
-                        time.sleep(query_retry_delay)
-                        query_retry_delay *= 1.5
-                        continue
-                    else:
-                        raise RuntimeError(
-                            f"Feature set '{name}' exists but is not usable in queries after {max_query_retries} attempts. "
-                            f"Error: {error_str}. This may indicate a timing issue with the OpenSearch LTR plugin."
-                        )
-                # Re-raise other exceptions
-                raise
+        # Extract required parameters from feature set configuration
+        # First check if validation section provides default params
+        test_query_params = {}
+        if isinstance(ftr_config, dict) and "validation" in ftr_config:
+            validation: JSONDict = ftr_config.get("validation", {})
+            if isinstance(validation, dict) and "params" in validation:
+                test_query_params = validation["params"].copy()
+
+        # If no validation params, extract from features
+        if not test_query_params and isinstance(ftr_config, dict):
+            featureset: JSONDict = ftr_config.get("featureset", {})
+            if isinstance(featureset, dict):
+                features = featureset.get("features", [])
+                # Collect all unique params from all features
+                required_params = set()
+                for feature in features:
+                    if isinstance(feature, dict) and "params" in feature:
+                        feature_params = feature.get("params", [])
+                        if isinstance(feature_params, list):
+                            required_params.update(feature_params)
+
+                # Provide default values for required params
+                # Detect param types based on naming conventions and template usage
+                for param in required_params:
+                    if param not in test_query_params:
+                        # Check if param name suggests it should be an array/list
+                        param_lower = param.lower()
+                        if "list" in param_lower or "array" in param_lower:
+                            # Param name suggests it's an array (e.g., "keywordsList")
+                            test_query_params[param] = []
+                        else:
+                            # Default to empty string for most params (keywords, query, etc.)
+                            # This allows the query to execute even if the param value isn't meaningful
+                            test_query_params[param] = ""
+
+        # Verify feature set is usable in queries using shared helper
+        def execute_verification_query() -> JSONDict:
+            test_params = {
+                "query": {
+                    "bool": {
+                        "filter": [
+                            {
+                                "sltr": {
+                                    "_name": "test_features",
+                                    "featureset": name,
+                                    "params": test_query_params,
+                                }
+                            }
+                        ]
+                    }
+                },
+                "size": 0,  # Don't return documents, just verify query works
+            }
+            try:
+                test_resp = self.opensearch.search(index=index, body=test_params)
+            except (OpenSearchConnectionError, TransportError) as e:
+                # Connection error - convert to LTRConnectionError for retry logic
+                raise LTRConnectionError(
+                    f"Failed to connect to OpenSearch when verifying feature set '{name}'. "
+                    f"OpenSearch container may not be ready. Error: {e}",
+                    client_name="opensearch",
+                ) from e
+
+            # Check if query succeeded (no error in response)
+            if "error" not in test_resp:
+                logger.debug(f"Verified feature set '{name}' is usable in queries")
+                return test_resp
+            # Query returned an error - check if it's a feature set issue
+            error_detail = test_resp.get("error", {})
+            if isinstance(error_detail, dict):
+                error_reason = error_detail.get("reason", "")
+                # Check if it's a timing issue
+                if (
+                    "NullPointerException" in error_reason
+                    or "getAndParse" in error_reason
+                ):
+                    # This is a timing error - will be retried by retry_feature_set_query
+                    raise ValueError(f"Feature set not ready: {error_reason}")
+            # Other errors should be raised immediately
+            raise QueryError(
+                f"Feature set '{name}' verification query failed: {error_detail}",
+                index=index,
+                client_name="opensearch",
+            )
+
+        retry_feature_set_query(
+            query_func=execute_verification_query,
+            featureset=name,
+            index=index,
+            client_name="opensearch",
+            max_retries=max_query_retries,
+            initial_delay=query_retry_delay,
+        )
 
     def get_feature_name(self, config: FeatureConfig, ftr_idx: int) -> str:
         """Get the name of a feature by its index.
@@ -518,7 +719,9 @@ class OpenSearchClient(BaseClient):
             ValueError: If config is a list instead of a dictionary.
         """
         if isinstance(config, list):
-            raise ValueError("OpenSearchClient.get_feature_name requires a dict config")
+            raise ValidationError(
+                "OpenSearchClient.get_feature_name requires a dict config"
+            )
         return config["featureset"]["features"][int(ftr_idx) - 1]["name"]
 
     def log_query(
@@ -582,123 +785,30 @@ class OpenSearchClient(BaseClient):
         if ids is not None:
             query_body["query"]["bool"]["must"] = terms_query
 
-        # Retry logic for feature set timing issues
-        max_retries = 5
-        retry_delay = 0.5  # 500ms initial delay (increased for better reliability)
-        resp = None
-        for attempt in range(max_retries):
+        # Retry logic for feature set timing issues using shared helper
+        def execute_and_validate_query() -> JSONDict:
             try:
                 resp = self.opensearch.search(index=index, body=query_body)
-                # resp_msg(msg="Searching {} - {}".format(index, str(terms_query)[:20]), resp=SearchResp(resp))
-
-                # Check for feature set not ready errors before validation
-                if "error" in resp:
-                    error_detail = resp.get("error", {})
-                    if isinstance(error_detail, dict):
-                        error_reason = error_detail.get("reason", "")
-                        # Check if it's a feature set parsing/optimization error
-                        if (
-                            "NullPointerException" in error_reason
-                            or "getAndParse" in error_reason
-                            or "optimize()" in error_reason
-                            or "StoredFeatureSet" in error_reason
-                        ):
-                            if attempt < max_retries - 1:
-                                logger.debug(
-                                    f"Feature set '{featureset}' not yet usable in query "
-                                    f"(attempt {attempt + 1}/{max_retries}), retrying..."
-                                )
-                                time.sleep(retry_delay)
-                                retry_delay *= 1.5  # Gradual backoff
-                                continue
-                            else:
-                                raise RuntimeError(
-                                    f"Feature set '{featureset}' is not usable in queries after {max_retries} attempts. "
-                                    f"Error: {error_reason}. The feature set may need more time to be fully indexed. "
-                                    f"Try waiting a moment and using the feature set again."
-                                )
-                        # For other errors, validate normally (will raise ValueError)
-                    # Fall through to validation for non-feature-set errors
-
+                # Validate response (will raise ValueError if invalid)
                 self._validate_search_response(resp, operation="query")
-                break  # Success, exit retry loop
+                return resp
             except RequestError as e:
                 # OpenSearch client raises RequestError for API errors
                 # Check if it's a feature set timing issue
-                error_str = str(e)
-                # Check both error and info attributes for error details
-                error_info = getattr(e, "info", {})
-                error_attr = getattr(e, "error", "")
-                error_reason = ""
-
-                # Try to extract error reason from info dict
-                if isinstance(error_info, dict):
-                    error_detail = error_info.get("error", {})
-                    if isinstance(error_detail, dict):
-                        error_reason = error_detail.get("reason", "")
-
-                # Also check error attribute directly (might be a string)
-                if isinstance(error_attr, str):
-                    error_reason = error_reason or error_attr
-
-                # Check if it's a feature set parsing/optimization error
-                # The error string should contain the full message
-                is_feature_set_timing_error = (
-                    "NullPointerException" in error_str
-                    or "NullPointerException" in error_reason
-                    or "getAndParse" in error_str
-                    or "getAndParse" in error_reason
-                    or "optimize()" in error_str
-                    or "optimize()" in error_reason
-                    or "StoredFeatureSet" in error_str
-                    or "StoredFeatureSet" in error_reason
-                )
-
-                if is_feature_set_timing_error:
-                    if attempt < max_retries - 1:
-                        logger.warning(
-                            f"Feature set '{featureset}' not yet usable in query "
-                            f"(attempt {attempt + 1}/{max_retries}), retrying after {retry_delay:.2f}s..."
-                        )
-                        time.sleep(retry_delay)
-                        retry_delay *= 1.5  # Gradual backoff
-                        continue
-                    else:
-                        raise RuntimeError(
-                            f"Feature set '{featureset}' is not usable in queries after {max_retries} attempts. "
-                            f"Error: {error_reason or error_str}. The feature set may need more time to be fully indexed. "
-                            f"Try waiting a moment and using the feature set again."
-                        )
+                if is_feature_set_timing_error(e):
+                    # Convert to ValueError so retry helper can catch it
+                    raise ValueError(str(e)) from e
                 # Re-raise other RequestError exceptions
                 raise
-            except ValueError as e:
-                # Check if it's a feature set error
-                error_str = str(e)
-                if (
-                    "NullPointerException" in error_str
-                    or "getAndParse" in error_str
-                    or "optimize()" in error_str
-                ):
-                    if attempt < max_retries - 1:
-                        logger.debug(
-                            f"Feature set '{featureset}' not yet usable (attempt {attempt + 1}/{max_retries}), retrying..."
-                        )
-                        time.sleep(retry_delay)
-                        retry_delay *= 1.5
-                        continue
-                    else:
-                        raise RuntimeError(
-                            f"Feature set '{featureset}' is not usable in queries after {max_retries} attempts. "
-                            f"Error: {error_str}"
-                        )
-                # Re-raise other ValueError exceptions
-                raise
 
-        # Ensure resp was set (should always be set if we reach here due to exception handling above)
-        if resp is None:
-            raise RuntimeError(
-                f"Feature set '{featureset}' query failed: no response received after {max_retries} attempts"
-            )
+        resp = retry_feature_set_query(
+            query_func=execute_and_validate_query,
+            featureset=featureset,
+            index=index,
+            client_name="opensearch",
+            max_retries=DEFAULT_MAX_RETRIES,
+            initial_delay=DEFAULT_RETRY_DELAY,
+        )
 
         # Extract feature values from response
         matches = []
@@ -709,6 +819,14 @@ class OpenSearchClient(BaseClient):
                 value = 0.0
                 if "value" in feature:
                     value = feature["value"]
+                    # Ensure None values and string "None" are converted to 0.0 for RankLib compatibility
+                    if (
+                        value is None
+                        or value == "None"
+                        or isinstance(value, str)
+                        and value.lower() == "none"
+                    ):
+                        value = 0.0
 
                 hit["_source"]["ltr_features"].append(value)
 
@@ -745,57 +863,69 @@ class OpenSearchClient(BaseClient):
         logger.info(f"Delete model {model_name}: {resp.status_code}")
 
         resp = requests.post(create_ep, json=model_payload)
+        # Log the full response for debugging
+        logger.info(
+            f"Create model {model_name} response: status={resp.status_code}, "
+            f"text={resp.text[:500] if resp.text else 'None'}"
+        )
         resp_msg(msg=f"Created Model {model_name}", resp=resp)
 
         # Verify model was actually created and persisted
         # OpenSearch LTR may return 200 but not persist the model in some cases
-        # Retry a few times with small delays to handle potential timing issues
-        max_retries = 3
-        retry_delay = 0.1  # 100ms delay between retries
-        for attempt in range(max_retries):
+        def verify_model_exists() -> bool:
             try:
-                # Try to retrieve the model to verify it was persisted
                 verify_resp = requests.get(f"{model_ep}{model_name}")
+                logger.debug(
+                    f"Model verification: status={verify_resp.status_code}, "
+                    f"text={verify_resp.text[:200] if verify_resp.text else 'None'}"
+                )
                 if verify_resp.status_code == 200:
-                    # Model exists - verification successful
-                    logger.debug(
+                    logger.info(
                         f"Verified model '{model_name}' was created successfully"
                     )
-                    return
+                    # Add a small delay to allow cache to refresh before returning
+                    time.sleep(0.1)
+                    return True
                 elif verify_resp.status_code == 404:
-                    # Model not found yet, retry if we have attempts left
-                    if attempt < max_retries - 1:
-                        time.sleep(retry_delay)
-                        retry_delay *= 2  # Exponential backoff
-                        continue
-                    # All retries exhausted, raise error
-                    raise RuntimeError(
-                        f"Model '{model_name}' creation appeared to succeed (HTTP {resp.status_code}), "
-                        f"but verification failed - the model could not be retrieved. "
-                        f"This may indicate a persistence issue with the OpenSearch LTR plugin. "
-                        f"Please check:\n"
-                        f"  1. The feature set '{featureset}' exists and is accessible\n"
-                        f"  2. The LTR plugin is properly installed and configured\n"
-                        f"  3. Try creating the model again or check OpenSearch logs for errors"
-                    )
+                    logger.warning(f"Model '{model_name}' not found yet, will retry...")
+                    return False  # Model not found yet, will retry
                 else:
-                    # Unexpected status code
+                    # Unexpected status code - log but consider it success
                     resp_msg(msg=f"Verify model {model_name}", resp=verify_resp)
-                    return
+                    return True
             except requests.RequestException as e:
-                # Network/request error, retry if we have attempts left
-                if attempt < max_retries - 1:
-                    logger.warning(
-                        f"Error verifying model '{model_name}' (attempt {attempt + 1}/{max_retries}): {e}"
-                    )
-                    time.sleep(retry_delay)
-                    retry_delay *= 2
-                    continue
-                # All retries exhausted, raise error
-                raise RuntimeError(
-                    f"Model '{model_name}' creation appeared to succeed, but verification failed "
-                    f"due to request error: {e}"
-                )
+                # Network/request error - log and retry
+                logger.warning(f"Error verifying model '{model_name}': {e}")
+                return False
+
+        try:
+            retry_until_true(
+                check_func=verify_model_exists,
+                max_retries=VERIFICATION_MAX_RETRIES,
+                initial_delay=VERIFICATION_RETRY_DELAY,
+                error_message=(
+                    f"Model '{model_name}' creation appeared to succeed (HTTP {resp.status_code}), "
+                    f"but verification failed - the model could not be retrieved. "
+                    f"This may indicate a persistence issue with the OpenSearch LTR plugin."
+                ),
+            )
+        except RuntimeError as e:
+            logger.error(
+                f"Model '{model_name}' verification failed. "
+                f"Creation response: status={resp.status_code}, text={resp.text[:500] if resp.text else 'None'}"
+            )
+            raise ModelError(
+                f"{str(e)} "
+                f"Please check:\n"
+                f"  1. The feature set '{featureset}' exists and is accessible\n"
+                f"  2. The LTR plugin is properly installed and configured\n"
+                f"  3. Check OpenSearch logs for errors during model creation\n"
+                f"  4. Creation endpoint: {create_ep}\n"
+                f"  5. Verification endpoint: {model_ep}{model_name}",
+                model_name=model_name,
+                operation="submit",
+                context={"featureset": featureset, "index": index},
+            ) from e
 
     def submit_ranklib_model(
         self, featureset: str, index: str, model_name: str, model_payload: str
@@ -885,108 +1015,65 @@ class OpenSearchClient(BaseClient):
             "size": 1000,
         }
 
-        # Retry logic for model timing issues
-        max_retries = 5
-        retry_delay = 0.5  # 500ms initial delay
-        resp = None
-        for attempt in range(max_retries):
+        # Retry logic for model timing issues using shared helper
+        # Note: Connection errors are handled within the helper by catching and re-raising
+        def execute_and_validate_query() -> JSONDict:
             try:
                 resp = self.opensearch.search(index=index, body=params)
-                # Check for "Unknown model" errors before validation
-                if "error" in resp:
-                    error_str = str(resp.get("error", ""))
-                    if (
-                        "Unknown model" in error_str
-                        or "IllegalArgumentException" in error_str
-                    ):
-                        if attempt < max_retries - 1:
-                            logger.debug(
-                                f"Model '{model}' not yet available (attempt {attempt + 1}/{max_retries}), retrying..."
-                            )
-                            time.sleep(retry_delay)
-                            retry_delay *= 1.5
-                            continue
-                        else:
-                            raise RuntimeError(
-                                f"Model '{model}' is not available after {max_retries} attempts. "
-                                f"Error: {error_str}. This may indicate a timing issue with the OpenSearch LTR plugin "
-                                f"or the model was not successfully created."
-                            )
-                # No error, proceed with validation
+                # Validate response (will raise ValueError if invalid)
                 self._validate_search_response(resp, operation="model query")
-                break
+                return resp
             except RequestError as e:
                 # OpenSearch client raises RequestError for API errors
-                # Check if it's an "Unknown model" error
-                error_str = str(e)
-                # Check both error and info attributes for error details
-                error_info = getattr(e, "info", {})
-                error_attr = getattr(e, "error", "")
-                error_reason = ""
+                # Check if it's a model timing issue
+                if is_model_timing_error(e):
+                    # Convert to ValueError so retry_model_query can catch it
+                    raise ValueError(str(e)) from e
+                # Re-raise other RequestError exceptions (will propagate, not retried)
+                raise
+            except (OpenSearchConnectionError, TransportError) as e:
+                # Check if this is actually an application error or a real connection error
+                if is_model_timing_error(e):
+                    # This is an application error, not a connection error
+                    raise ValueError(str(e)) from e
+                # Real connection errors - wrap and re-raise for outer handling
+                raise LTRConnectionError(
+                    f"Failed to connect to OpenSearch for model query. "
+                    f"OpenSearch container may not be ready. Error: {e}",
+                    client_name="opensearch",
+                    operation="model_query",
+                ) from e
 
-                # Try to extract error reason from info dict
-                if isinstance(error_info, dict):
-                    error_detail = error_info.get("error", {})
-                    if isinstance(error_detail, dict):
-                        error_reason = error_detail.get("reason", "")
-
-                # Also check error attribute directly (might be a string)
-                if isinstance(error_attr, str):
-                    error_reason = error_reason or error_attr
-
-                # Check if it's an "Unknown model" error
-                is_unknown_model_error = (
-                    "Unknown model" in error_str
-                    or "Unknown model" in error_reason
-                    or "IllegalArgumentException" in error_str
-                    or "IllegalArgumentException" in error_reason
+        # Use retry_on_connection_error to handle connection errors first
+        def execute_with_connection_retry() -> JSONDict:
+            try:
+                return retry_on_connection_error(
+                    execute_and_validate_query,
+                    max_retries=DEFAULT_MAX_RETRIES,
+                    initial_delay=DEFAULT_RETRY_DELAY,
+                    is_connection_error=is_opensearch_connection_error,
                 )
-
-                if is_unknown_model_error:
-                    if attempt < max_retries - 1:
-                        logger.debug(
-                            f"Model '{model}' not yet available (attempt {attempt + 1}/{max_retries}), retrying..."
-                        )
-                        time.sleep(retry_delay)
-                        retry_delay *= 1.5
-                        continue
-                    else:
-                        raise RuntimeError(
-                            f"Model '{model}' is not available after {max_retries} attempts. "
-                            f"Error: {error_reason or error_str}. This may indicate a timing issue with the OpenSearch LTR plugin "
-                            f"or the model was not successfully created."
-                        )
-                # Re-raise other RequestError exceptions
-                raise
-            except ValueError as e:
-                # _validate_search_response raises ValueError for invalid responses
-                # Check if it's an "Unknown model" error
-                error_str = str(e)
-                if (
-                    "Unknown model" in error_str
-                    or "IllegalArgumentException" in error_str
-                ):
-                    if attempt < max_retries - 1:
-                        logger.debug(
-                            f"Model '{model}' not yet available (attempt {attempt + 1}/{max_retries}), retrying..."
-                        )
-                        time.sleep(retry_delay)
-                        retry_delay *= 1.5
-                        continue
-                    else:
-                        raise RuntimeError(
-                            f"Model '{model}' is not available after {max_retries} attempts. "
-                            f"Error: {error_str}. This may indicate a timing issue with the OpenSearch LTR plugin "
-                            f"or the model was not successfully created."
-                        )
-                # Re-raise other ValueError exceptions
+            except RuntimeError as e:
+                # retry_on_connection_error wraps failures in RuntimeError
+                # Check if it's actually a connection error or something else
+                if "connection" in str(e).lower() or "connect" in str(e).lower():
+                    raise LTRConnectionError(
+                        f"Failed to connect to OpenSearch for model query after {DEFAULT_MAX_RETRIES} attempts. "
+                        f"OpenSearch container may not be ready. Error: {e}",
+                        client_name="opensearch",
+                        operation="model_query",
+                    ) from e
                 raise
 
-        # Ensure resp was set (should always be set if we reach here)
-        if resp is None:
-            raise RuntimeError(
-                f"Model query for '{model}' failed: no response received after {max_retries} attempts"
-            )
+        # Use retry_model_query to handle model timing errors
+        resp = retry_model_query(
+            query_func=execute_with_connection_retry,
+            model_name=model,
+            index=index,
+            client_name="opensearch",
+            max_retries=DEFAULT_MAX_RETRIES,
+            initial_delay=DEFAULT_RETRY_DELAY,
+        )
 
         # Transform to consistent format between ES/Solr
         matches = []
@@ -1009,13 +1096,53 @@ class OpenSearchClient(BaseClient):
                 a format consistent with Solr.
 
         Raises:
+            QueryError: If the query fails due to network errors, index not found,
+                or other client-related issues.
             ValueError: If the response contains an error or has an invalid structure.
         """
         logger.debug(f"OpenSearch query: {query}")
-        resp = self.opensearch.search(index=index, body=query)
-        # resp_msg(msg="Searching {} - {}".format(index, str(query)[:20]), resp=SearchResp(resp))
 
-        self._validate_search_response(resp, operation="query")
+        # Retry logic for connection errors with exponential backoff
+        # This handles cases where OpenSearch container is starting up or temporarily unavailable
+        def execute_query() -> JSONDict:
+            return self.opensearch.search(index=index, body=query)
+
+        try:
+            resp = retry_on_connection_error(
+                execute_query,
+                max_retries=DEFAULT_MAX_RETRIES,
+                initial_delay=DEFAULT_RETRY_DELAY,
+                is_connection_error=is_opensearch_connection_error,
+            )
+        except RuntimeError as e:
+            query_str = str(query)[:200]
+            raise LTRConnectionError(
+                f"Failed to connect to OpenSearch after {DEFAULT_MAX_RETRIES} attempts. "
+                f"This usually means the OpenSearch container is not running or not ready yet. "
+                f"Error: {e}. "
+                f"Please ensure OpenSearch containers are started and healthy before running notebooks.",
+                client_name="opensearch",
+                operation="query",
+            ) from e
+        except (OpenSearchConnectionError, TransportError, RequestError) as e:
+            query_str = str(query)[:200]
+            raise QueryError(
+                f"OpenSearch query failed: {e}",
+                index=index,
+                query=query_str,
+                client_name="opensearch",
+            ) from e
+
+        try:
+            self._validate_search_response(resp, operation="query")
+        except ValueError as e:
+            query_str = str(query)[:200]
+            raise QueryError(
+                f"Invalid OpenSearch query response: {e}",
+                index=index,
+                query=query_str,
+                client_name="opensearch",
+            ) from e
 
         # Transform to consistent format between ES/Solr
         matches = []
@@ -1044,11 +1171,13 @@ class OpenSearchClient(BaseClient):
 
         # Check HTTP status code first
         if resp.status_code == 404:
-            raise RuntimeError(
+            raise QueryError(
                 f"Feature set '{name}' not found. "
                 f"Please ensure the feature set has been created using "
                 f"client.create_featureset(index='{index}', name='{name}', ftr_config=...). "
-                f"If the index doesn't exist, create it first using client.create_index('{index}')."
+                f"If the index doesn't exist, create it first using client.create_index('{index}').",
+                index=index,
+                client_name="opensearch",
             )
 
         json_resp = resp.json()
@@ -1067,7 +1196,11 @@ class OpenSearchClient(BaseClient):
                 f"client.create_featureset(index='{index}', name='{name}', ftr_config=...). "
                 f"If the index doesn't exist, create it first using client.create_index('{index}')."
             )
-            raise RuntimeError(error_msg)
+            raise QueryError(
+                error_msg,
+                index=index,
+                client_name="opensearch",
+            )
 
         resp_msg(msg=f"Fetched FeatureSet {name}", resp=resp)
 
@@ -1089,5 +1222,23 @@ class OpenSearchClient(BaseClient):
         Returns:
             dict: Document source dictionary.
         """
-        resp = self.opensearch.get(index=index, id=doc_id)
-        return resp["_source"]
+
+        # Retry logic for connection errors
+        def get_document() -> JSONDict:
+            resp = self.opensearch.get(index=index, id=doc_id)
+            return resp["_source"]
+
+        try:
+            return retry_on_connection_error(
+                get_document,
+                max_retries=DEFAULT_MAX_RETRIES,
+                initial_delay=DEFAULT_RETRY_DELAY,
+                is_connection_error=is_opensearch_connection_error,
+            )
+        except RuntimeError as e:
+            raise LTRConnectionError(
+                f"Failed to connect to OpenSearch when getting document '{doc_id}' from index '{index}' after {DEFAULT_MAX_RETRIES} attempts. "
+                f"OpenSearch container may not be ready. Error: {e}",
+                client_name="opensearch",
+                operation="get_doc",
+            ) from e

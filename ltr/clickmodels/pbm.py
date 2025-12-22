@@ -57,7 +57,9 @@ def update_attractiveness(sessions: list[Session], model: Model) -> None:
     attractions: defaultdict[QueryDocPair, float] = defaultdict(
         lambda: 0.0
     )  # Track query-doc attractiveness in this round
-    num_sessions = Counter()  # Track num sessions where query-doc appears
+    num_sessions: Counter[QueryDocPair] = (
+        Counter()
+    )  # Track num sessions where query-doc appears
     for session in sessions:
         for rank, doc in enumerate(session.docs):
             query_doc_key = (session.query, doc.doc_id)

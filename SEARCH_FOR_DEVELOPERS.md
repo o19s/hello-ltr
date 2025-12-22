@@ -1,5 +1,7 @@
 # Search for Developers
 
+**Last Updated:** December 21, 2025
+
 ## Overview
 
 This document attempts to provide an introduction to various concepts and methods developers may not have encountered previously.

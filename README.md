@@ -1,5 +1,7 @@
 # Hello LTR :)
 
+**Last Updated:** December 21, 2025
+
 The overall goal of this project is to demonstrate all the steps required to work with LTR in Elasticsearch, Solr, or OpenSearch. There are two modes of running this project. You can run and edit notebooks in a docker container or you can do local development on the notebooks and connect to the search engine(s) running in Docker.
 
 ## No fuss setup: You just want to play with LTR
@@ -178,7 +180,53 @@ Key points:
 - Constants: `UPPER_SNAKE_CASE`
 - Naming violations are automatically checked by ruff in CI/CD
 
-For a complete audit of existing violations and their justifications, see [`NAMING_CONVENTIONS_VIOLATIONS.md`](NAMING_CONVENTIONS_VIOLATIONS.md).
+All intentional violations and their justifications are documented in the [Naming Conventions Guide](NAMING_CONVENTIONS.md#intentional-violations).
+
+### Error Handling
+
+This project uses standardized error handling patterns. For detailed guidelines and examples, see [ADR-025: Error Handling Strategy](adr/025-error-handling-strategy.md).
+
+**Quick Reference:**
+
+1. **Critical operations** → Re-raise with context
+   ```python
+   try:
+       resp = self.opensearch.search(index=index, body=query)
+   except OpenSearchConnectionError as e:
+       raise RuntimeError(f"Query failed for index {index}: {e}") from e
+   ```
+
+2. **Cleanup operations** → Log and continue
+   ```python
+   try:
+       cleanup_containers()
+   except Exception as e:
+       logger.warning(f"Cleanup failed (non-critical): {e}", exc_info=True)
+       # Continue - cleanup failure shouldn't fail the test
+   ```
+
+3. **Retry loops** → Use `retry_on_connection_error` utility
+   ```python
+   from ltr.helpers.retry import retry_on_connection_error, is_opensearch_connection_error
+   
+   result = retry_on_connection_error(
+       lambda: operation(),
+       max_retries=5,
+       initial_delay=0.5,
+       is_connection_error=is_opensearch_connection_error,
+   )
+   ```
+
+4. **Optional features** → Silently pass
+   ```python
+   try:
+       import fcntl
+       HAS_FCNTL = True
+   except ImportError:
+       HAS_FCNTL = False
+   ```
+
+**Decision Tree:** See [ADR-025: Error Handling Strategy](adr/025-error-handling-strategy.md#notes) for guidance on choosing the right pattern.
 
 ### Quality Check Script
 
@@ -258,3 +306,4 @@ For comprehensive documentation, see:
 - **[Type Aliases Guide](TYPE_ALIASES_GUIDE.md)** - Type system documentation and usage
 - **[Test Suite Documentation](tests/README.md)** - Testing infrastructure and usage
 - **[Naming Conventions](NAMING_CONVENTIONS.md)** - Code style guidelines
+- **[Error Handling Strategy](adr/025-error-handling-strategy.md)** - Error handling patterns and best practices (see also [README Error Handling section](#error-handling))

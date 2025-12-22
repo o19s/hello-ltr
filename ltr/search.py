@@ -8,6 +8,7 @@ import json
 import re
 
 from ltr.client.base_client import BaseClient
+from ltr.exceptions import QueryError
 from ltr.logger import get_logger
 from ltr.types import JSONDict
 from ltr.validation import (
@@ -127,6 +128,8 @@ def search(
 
     Raises:
         ValidationError: If keywords, model_name, or index are invalid.
+        QueryError: If the query fails due to network errors, index not found,
+            or other client-related issues.
 
     Example:
         >>> from ltr.client.elastic_client import ElasticClient
@@ -138,12 +141,24 @@ def search(
     model_name = validate_model_name(model_name)
     index = validate_index_name(index)
 
-    if client.name() == "elastic" or client.name() == "opensearch":
-        results = client.query(index, es_ltr_query(keywords, model_name))
-    else:
-        q = solr_ltr_query(keywords, model_name)
-        logger.debug(f"Solr LTR query: {q}")
-        results = client.query(index, q)
+    client_name = client.name()
+    try:
+        if client_name == "elastic" or client_name == "opensearch":
+            query = es_ltr_query(keywords, model_name)
+            results = client.query(index, query)
+        else:
+            q = solr_ltr_query(keywords, model_name)
+            logger.debug(f"Solr LTR query: {q}")
+            results = client.query(index, q)
+    except Exception as e:
+        # Wrap client exceptions with context
+        query_str = f"keywords={keywords!r}, model={model_name!r}"
+        raise QueryError(
+            f"Search query failed: {e}",
+            index=index,
+            query=query_str,
+            client_name=client_name,
+        ) from e
 
     ti = fields["title"]
 

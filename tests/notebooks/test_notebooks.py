@@ -27,6 +27,7 @@ Usage:
     pytest -n auto tests/notebooks/test_notebooks.py
 """
 
+import sys
 from datetime import datetime
 
 import pytest
@@ -163,7 +164,7 @@ def format_error_output(notebook_path, errors):
     if not errors:
         return ""
 
-    lines = [f"\n{'='*60}"]
+    lines = [f"\n{'=' * 60}"]
     lines.append(f"Errors in {notebook_path}: {len(errors)} error(s)")
 
     for i, error in enumerate(errors, 1):
@@ -198,7 +199,7 @@ def format_error_output(notebook_path, errors):
             for tb_line in error["traceback"]:
                 lines.append(f"    {tb_line}")
 
-    lines.append(f"{'='*60}\n")
+    lines.append(f"{'=' * 60}\n")
     return "\n".join(lines)
 
 
@@ -227,23 +228,54 @@ def test_notebook_executes_without_errors(
     """
     # Arrange: Request container fixtures based on engine (for per-worker containers)
     # This ensures containers are started when USE_WORKER_CONTAINERS=true
-    if engine == "solr":
-        request.getfixturevalue("solr_container")
-    elif engine == "elasticsearch":
-        request.getfixturevalue("elasticsearch_container")
-    elif engine == "opensearch":
-        request.getfixturevalue("opensearch_container")
+    try:
+        if engine == "solr":
+            request.getfixturevalue("solr_container")
+        elif engine == "elasticsearch":
+            request.getfixturevalue("elasticsearch_container")
+        elif engine == "opensearch":
+            request.getfixturevalue("opensearch_container")
+    except Exception:
+        raise
 
     # Arrange: Log execution start (matches existing test output style)
-    log(f"\n{'='*60}")
+    log(f"\n{'=' * 60}")
     log(f"Running: {notebook_path}")
-    log(f"{'='*60}")
+    log(f"{'=' * 60}")
 
     # Act: Execute notebook using the runner fixture
     result = notebook_runner(notebook_path)
 
     # Assert: Check for errors and format output
     if result["errors"]:
+        print(f"\n{'=' * 80}", file=sys.stderr, flush=True)
+        print(
+            f"Found {len(result['errors'])} error(s) in notebook: {notebook_path}",
+            file=sys.stderr,
+            flush=True,
+        )
+        print(f"{'=' * 80}", file=sys.stderr, flush=True)
+
+        for i, error in enumerate(result["errors"], 1):
+            ename = error.get("ename", "Unknown")
+            evalue = error.get("evalue", "No message")
+            cell_index = error.get("cell_index", "unknown")
+            traceback_lines = error.get("traceback", [])
+
+            # Print detailed error info to stderr (will show in pytest output)
+            print(
+                f"\nError {i}/{len(result['errors'])}:",
+                file=sys.stderr,
+                flush=True,
+            )
+            print(f"  Cell Index: {cell_index}", file=sys.stderr, flush=True)
+            print(f"  Error Type: {ename}", file=sys.stderr, flush=True)
+            print(f"  Error Message: {evalue}", file=sys.stderr, flush=True)
+            if traceback_lines:
+                print("  Traceback:", file=sys.stderr, flush=True)
+                for tb_line in traceback_lines[:15]:  # First 15 lines
+                    print(f"    {tb_line}", file=sys.stderr, flush=True)
+
         error_msg = format_error_output(notebook_path, result["errors"])
         pytest.fail(error_msg, pytrace=False)
     else:

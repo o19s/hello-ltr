@@ -7,6 +7,7 @@ injection attacks and ensure data integrity.
 import re
 from typing import Any
 
+from ltr.exceptions import LTRError
 from ltr.logger import get_logger
 
 logger = get_logger(__name__)
@@ -27,8 +28,13 @@ MAX_MODEL_NAME_LENGTH = 255
 MAX_KEYWORDS_LENGTH = 10000  # Allow longer keywords for search queries
 
 
-class ValidationError(ValueError):
-    """Raised when input validation fails."""
+class ValidationError(LTRError, ValueError):
+    """Raised when input validation fails.
+
+    This exception inherits from both LTRError and ValueError to maintain
+    backward compatibility with code that catches ValueError, while also being
+    part of the LTR exception hierarchy.
+    """
 
     pass
 

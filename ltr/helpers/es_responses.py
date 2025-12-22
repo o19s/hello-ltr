@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 
+from ltr.exceptions import QueryError
 from ltr.types import JSONDict
 
 
@@ -39,12 +40,16 @@ def safe_search_response(resp: JSONDict) -> JSONDict:
             error_msg = error_detail.get("reason", str(error_detail))
         else:
             error_msg = str(error_detail)
-        raise ValueError(f"Elasticsearch search failed: {error_msg}")
+        raise QueryError(
+            f"Elasticsearch search failed: {error_msg}",
+            client_name="elastic",
+        )
 
     if "hits" not in resp:
-        raise ValueError(
+        raise QueryError(
             f"Unexpected response structure: missing 'hits' key. "
-            f"Response: {json.dumps(resp, indent=2)[:500]}"
+            f"Response: {json.dumps(resp, indent=2)[:500]}",
+            client_name="elastic",
         )
 
     return resp
@@ -72,7 +77,10 @@ def get_first_hit(resp: JSONDict) -> JSONDict:
     """
     hits = resp.get("hits", {}).get("hits", [])
     if not hits:
-        raise ValueError("No hits returned in response")
+        raise QueryError(
+            "No hits returned in response",
+            client_name="elastic",
+        )
     return hits[0]
 
 

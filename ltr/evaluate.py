@@ -16,6 +16,7 @@ from plotly.offline import init_notebook_mode, iplot
 
 from ltr.logger import get_logger
 from ltr.types import JSONDict
+from ltr.validation import ValidationError
 
 logger = get_logger(__name__)
 
@@ -81,7 +82,7 @@ def evaluate(mode: Literal["elastic", "solr", "opensearch"]) -> None:
     # Build the docker image
     acceptable_modes = ["elastic", "solr", "opensearch"]
     if mode not in acceptable_modes:
-        raise ValueError(
+        raise ValidationError(
             f"{mode} is not a supported value for mode. must be one of {acceptable_modes}"
         )
 
