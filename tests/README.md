@@ -445,10 +445,12 @@ tests/
 - Automatic marking by engine (solr, elasticsearch, opensearch)
 
 **2. Notebook Runner ([runner.py](runner.py))**
-- Executes notebooks with 6-hour timeout
-- Cell-by-cell progress logging
-- Captures errors with context (cell index, source)
+- Executes notebooks with configurable timeout (default: 5 minutes)
+- Cell-by-cell progress logging with time estimates
+- Captures errors with context (cell index, source, traceback)
 - Automatic port patching injection
+- Validation fail-fast: Stops execution immediately on validation errors (empty training sets, missing dependencies, failed operations) by default
+- Fail-fast mode: Can stop on first error (via `NOTEBOOK_FAIL_FAST` env var)
 
 **3. Port Patching ([patch_clients_for_tests.py](patch_clients_for_tests.py))**
 - Redirects client connections to test ports
@@ -489,9 +491,12 @@ The test suite is organized into three main categories:
 **Features:**
 - Real-time output streaming (errors visible immediately)
 - Fail-fast mode (stop on first error via `NOTEBOOK_FAIL_FAST=true`)
+- Validation fail-fast (stops on validation errors by default via `NOTEBOOK_VALIDATION_FAIL_FAST=true`)
+- Debug mode (show variable states on error via `NOTEBOOK_DEBUG_MODE=true`)
 - Progress indicators with time estimates
 - Cell-by-cell execution logging
 - Automatic parameter reduction for faster testing
+- Prevents cascading failures by stopping at root cause validation errors
 
 **Coverage:**
 - 36+ notebooks across Solr, Elasticsearch, and OpenSearch
@@ -650,6 +655,7 @@ def test_my_notebook(notebook_runner):
 - Automatic port patching injection
 - Cell-by-cell progress logging
 - Error capture with context (cell index, source code)
+- Validation error handling (stops execution on validation failures by default)
 - Configurable timeout (default: 5 minutes from `NOTEBOOK_TIMEOUT_MINUTES`)
 
 ### Running Specific Test Scenarios
@@ -893,6 +899,17 @@ See `IGNORED_NOTEBOOKS` in [test_config.py](test_config.py) for the full list wi
 
 ### Test Execution
 - `NOTEBOOK_TIMEOUT_MINUTES`: Timeout per notebook in minutes (default: 5)
+- `NOTEBOOK_FAIL_FAST`: Enable fail-fast mode - stop on first error (default: false)
+- `NOTEBOOK_VALIDATION_FAIL_FAST`: Enable fail-fast for validation errors (default: true)
+  - When enabled, validation errors (empty training sets, missing dependencies, failed operations) stop execution immediately
+  - Prevents cascading failures with clearer error messages
+  - Set to `false` to allow execution to continue despite validation warnings
+- `NOTEBOOK_DEBUG_MODE`: Enable debug mode - show variable states on error (default: false)
+  - When enabled, captures and displays variable states when notebook cells fail
+  - Shows information about common variables like `ftr_logger.logged`, `training_set`, `lambdas_per_query`, etc.
+  - Helps debug what data was available at the failure point
+  - Useful for understanding test environment differences and debugging failures
+  - Example: `NOTEBOOK_DEBUG_MODE=true pytest tests/notebooks/test_notebooks.py`
 - `PYTEST_ARGS`: Additional pytest arguments for test.sh
 
 ### Service Ports
@@ -1296,6 +1313,48 @@ This section covers common issues and their solutions.
    ```
 
 **Note**: The cleanup script and automatic cleanup only affect containers with test project names (starting with `test-{test_type}-{engine}-gw`, e.g., `test-unit-solr-gw0`, `test-integration-opensearch-gw0`, `test-notebooks-elasticsearch-gw0`). Manually started containers (like `hello-ltr-notebook` or containers from root `docker-compose.yml`) are never touched by automatic cleanup.
+
+### Validation Errors
+
+**Problem**: Notebooks fail with validation errors (empty training sets, missing dependencies, failed operations)
+
+**Symptoms:**
+- `ValidationError` exceptions in test output
+- Errors about empty training sets or missing features
+- Execution stops immediately at validation point
+- Error messages like "No valid training pairs were generated" or "No features were logged"
+
+**Solutions:**
+
+1. **Understand the validation error**:
+   - Validation errors stop execution immediately to prevent cascading failures
+   - The error message indicates the root cause (e.g., empty training set, missing index)
+   - This is intentional behavior to provide clearer error messages
+
+2. **Check test data**:
+   ```bash
+   # Verify index exists and has data
+   curl http://localhost:18983/solr/tmdb/select?q=*:*&rows=0  # Solr
+   curl http://localhost:19200/tmdb/_count  # Elasticsearch
+   curl http://localhost:19201/tmdb/_count   # OpenSearch
+   ```
+
+3. **Disable validation fail-fast** (if needed for debugging):
+   ```bash
+   # Allow execution to continue despite validation warnings
+   NOTEBOOK_VALIDATION_FAIL_FAST=false pytest tests/notebooks/test_notebooks.py
+   ```
+   Note: This may lead to cascading failures with confusing error messages.
+
+4. **Check for test environment differences**:
+   - Empty training sets often indicate documents don't exist in test index
+   - Missing query IDs suggest test data differs from production data
+   - Review `tests/last_run.ipynb` to see what data was available
+
+5. **Fix the root cause**:
+   - Ensure test index is properly set up (check index setup cells)
+   - Verify test data matches expected format
+   - Check that judgments file references documents that exist in index
 
 ### Notebook Execution Errors
 

@@ -17,6 +17,8 @@ Adapted from: https://www.blog.pythonlibrary.org/2018/10/16/testing-jupyter-note
 Environment Variables:
     NOTEBOOK_TIMEOUT_MINUTES: Minutes to allow per notebook execution (default: 5)
     NOTEBOOK_FAIL_FAST: Enable fail-fast mode - stop on first error (default: false)
+    NOTEBOOK_VALIDATION_FAIL_FAST: Enable fail-fast for validation errors (default: true)
+    NOTEBOOK_DEBUG_MODE: Enable debug mode - show variable states on error (default: false)
 
 Key Functions:
     run_notebook: Execute a notebook and return results with error details
@@ -35,7 +37,7 @@ Framework Evaluation Note:
 import os
 import re
 from contextlib import suppress
-from typing import Optional
+from typing import Any, Optional
 
 import nbformat
 from nbconvert.preprocessors import CellExecutionError, ExecutePreprocessor
@@ -51,6 +53,162 @@ def hours(hours):
         int: Number of seconds
     """
     return hours * 60 * 60
+
+
+def inspect_notebook_variables(kernel_manager) -> dict[str, Any]:
+    """Inspect common notebook variables to help with debugging.
+
+    Executes code in the kernel to inspect common objects like:
+    - ftr_logger.logged (feature logger data)
+    - training_set (training data)
+    - lambdas_per_query (query-specific lambdas)
+    - Other common variables used in LTR notebooks
+
+    Args:
+        kernel_manager: Kernel manager instance from ExecutePreprocessor
+
+    Returns:
+        Dictionary mapping variable names to their inspected values (or error messages)
+    """
+    if not kernel_manager:
+        return {"error": "No kernel manager available"}
+
+    import json
+    import time
+
+    # Code to execute in kernel to inspect variables
+    # We'll capture the result by storing it in a special variable
+    inspect_code = """
+import json
+
+def _safe_repr(obj, max_len=200):
+    \"\"\"Safely represent an object, truncating if too long.\"\"\"
+    try:
+        if hasattr(obj, '__len__') and len(obj) > 10:
+            first_item = obj[0] if len(obj) > 0 else None
+            first_repr = _safe_repr(first_item, max_len=50) if first_item is not None else "None"
+            return f"{type(obj).__name__}(len={len(obj)}, first_item={first_repr})"
+        elif hasattr(obj, 'shape'):  # numpy/pandas objects
+            return f"{type(obj).__name__}(shape={obj.shape})"
+        else:
+            repr_str = repr(obj)
+            if len(repr_str) > max_len:
+                return repr_str[:max_len] + "..."
+            return repr_str
+    except Exception as e:
+        return f"<Error getting repr: {e}>"
+
+def _inspect_var(name):
+    \"\"\"Inspect a variable if it exists.\"\"\"
+    try:
+        if name in globals():
+            value = globals()[name]
+            return {
+                "exists": True,
+                "type": type(value).__name__,
+                "repr": _safe_repr(value),
+                "len": len(value) if hasattr(value, '__len__') else None,
+            }
+        else:
+            return {"exists": False}
+    except Exception as e:
+        return {"exists": True, "error": str(e)}
+
+# Inspect common variables
+result = {}
+for var_name in ['ftr_logger', 'training_set', 'lambdas_per_query', 'lambdas_per_query_prec',
+                 'features', 'predictors', 'client', 'judgments', 'judgments_open']:
+    result[var_name] = _inspect_var(var_name)
+
+# Special handling for ftr_logger.logged if ftr_logger exists
+if 'ftr_logger' in globals():
+    try:
+        ftr_logger = globals()['ftr_logger']
+        if hasattr(ftr_logger, 'logged'):
+            logged = ftr_logger.logged
+            result['ftr_logger.logged'] = {
+                "exists": True,
+                "type": type(logged).__name__,
+                "len": len(logged) if hasattr(logged, '__len__') else None,
+                "repr": _safe_repr(logged),
+            }
+        else:
+            result['ftr_logger.logged'] = {"exists": False, "reason": "ftr_logger has no 'logged' attribute"}
+    except Exception as e:
+        result['ftr_logger.logged'] = {"exists": True, "error": str(e)}
+
+# Store result in a special variable for retrieval
+__notebook_debug_result__ = json.dumps(result)
+"""
+
+    try:
+        # Execute the inspection code in the kernel using kernel manager's client
+        if hasattr(kernel_manager, "client") and kernel_manager.client:
+            # Execute code and wait for result
+            msg_id = kernel_manager.client.execute(inspect_code)
+
+            # Wait for execution to complete (with timeout)
+            timeout = 5.0
+            start_time = time.time()
+            result_received = False
+            result_data = None
+
+            while time.time() - start_time < timeout:
+                try:
+                    msg = kernel_manager.client.get_iopub_msg(timeout=0.5)
+                    if msg.get("parent_header", {}).get("msg_id") == msg_id:
+                        if msg["msg_type"] == "execute_result":
+                            # Extract the result from text/plain output
+                            result_str = msg["content"]["data"].get("text/plain", "")
+                            # Remove quotes and unescape if needed
+                            if result_str.startswith('"') and result_str.endswith('"'):
+                                result_str = result_str[1:-1]
+                            if result_str.startswith("'") and result_str.endswith("'"):
+                                result_str = result_str[1:-1]
+                            # Try to parse JSON
+                            try:
+                                result_data = json.loads(result_str)
+                                result_received = True
+                                break
+                            except json.JSONDecodeError:
+                                # Try to get from execute_reply instead
+                                pass
+                        elif msg["msg_type"] == "error":
+                            return {
+                                "error": f"Failed to inspect variables: {msg['content'].get('ename', 'Unknown')}: {msg['content'].get('evalue', 'No message')}"
+                            }
+                except Exception:
+                    # Timeout or other error, continue waiting
+                    pass
+
+            # Try to get result from kernel namespace directly
+            if not result_received:
+                # Execute a simple command to get the result variable
+                get_result_code = "__notebook_debug_result__"
+                msg_id2 = kernel_manager.client.execute(get_result_code)
+                time.sleep(0.5)  # Brief wait
+                try:
+                    msg = kernel_manager.client.get_iopub_msg(timeout=1.0)
+                    parent_msg_id = msg.get("parent_header", {}).get("msg_id")
+                    if parent_msg_id == msg_id2 and msg["msg_type"] == "execute_result":
+                        result_str = msg["content"]["data"].get("text/plain", "")
+                        if result_str.startswith('"') and result_str.endswith('"'):
+                            result_str = result_str[1:-1]
+                        if result_str.startswith("'") and result_str.endswith("'"):
+                            result_str = result_str[1:-1]
+                        result_data = json.loads(result_str)
+                        result_received = True
+                except Exception:
+                    pass
+
+            if result_received and result_data:
+                return result_data
+            else:
+                return {"error": "Could not retrieve variable inspection results"}
+        else:
+            return {"error": "Kernel manager doesn't have a client available"}
+    except Exception as e:
+        return {"error": f"Exception while inspecting variables: {e}"}
 
 
 class NotebookDependencyValidator:
@@ -327,17 +485,32 @@ class PatchedExecutePreprocessor(ExecutePreprocessor):
     - Cell-by-cell progress logging with time estimates
     - Real-time error detection and reporting
     - Fail-fast option to stop on first error
+    - Validation error handling (fail-fast by default)
     - Immediate error visibility
+    - Debug mode for variable state inspection on errors
 
     Logs each code cell with:
     - Cell index and total cell count
     - Timestamp
     - Cell source code (first 5 lines or up to 300 characters)
     - Progress percentage and estimated time remaining
+
+    Validation errors (from dependency checks and operation validation) will
+    stop execution immediately by default unless NOTEBOOK_VALIDATION_FAIL_FAST=false.
+    This prevents cascading failures and provides clearer error messages.
+
+    When NOTEBOOK_DEBUG_MODE is enabled, variable states are captured and displayed
+    when errors occur, helping debug what data was available at the failure point.
     """
 
     def __init__(
-        self, *args, fail_fast=False, enable_dependency_validation=True, **kwargs
+        self,
+        *args,
+        fail_fast=False,
+        enable_dependency_validation=True,
+        validation_fail_fast=None,
+        debug_mode=None,
+        **kwargs,
     ):
         """Initialize preprocessor with cell tracking counters.
 
@@ -345,6 +518,8 @@ class PatchedExecutePreprocessor(ExecutePreprocessor):
             *args: Positional arguments passed to parent ExecutePreprocessor
             fail_fast: If True, raise exception immediately on first error (default: False)
             enable_dependency_validation: If True, validate cell dependencies (default: True)
+            validation_fail_fast: If True, raise exception on validation errors (default: from NOTEBOOK_VALIDATION_FAIL_FAST env var or True)
+            debug_mode: If True, capture variable states on errors (default: from NOTEBOOK_DEBUG_MODE env var or False)
             **kwargs: Keyword arguments passed to parent ExecutePreprocessor
         """
         super().__init__(*args, **kwargs)
@@ -354,7 +529,29 @@ class PatchedExecutePreprocessor(ExecutePreprocessor):
         self.start_time = None
         self.errors_detected = []
         self.enable_dependency_validation = enable_dependency_validation
+
+        # Get validation_fail_fast from parameter, environment variable, or default to True
+        if validation_fail_fast is None:
+            validation_fail_fast = os.environ.get(
+                "NOTEBOOK_VALIDATION_FAIL_FAST", "true"
+            ).lower() in (
+                "true",
+                "1",
+                "yes",
+            )
+        self.validation_fail_fast = validation_fail_fast
+
+        # Get debug_mode from parameter, environment variable, or default to False
+        if debug_mode is None:
+            debug_mode = os.environ.get("NOTEBOOK_DEBUG_MODE", "false").lower() in (
+                "true",
+                "1",
+                "yes",
+            )
+        self.debug_mode = debug_mode
+
         self.dependency_validator = None  # Will be initialized in preprocess()
+        self.kernel_manager = None  # Will be set in preprocess()
 
     def preprocess(self, nb, resources=None, km=None):
         """Preprocess notebook and track total cell count.
@@ -372,6 +569,7 @@ class PatchedExecutePreprocessor(ExecutePreprocessor):
         self.total_cells = len(nb.cells)
         self.start_time = time.time()
         self.errors_detected = []
+        self.kernel_manager = km  # Store kernel manager for debug mode
 
         # Initialize dependency validator if enabled
         if self.enable_dependency_validation:
@@ -404,6 +602,7 @@ class PatchedExecutePreprocessor(ExecutePreprocessor):
         Also validates cell dependencies if dependency validation is enabled:
         - Checks prerequisites before executing cells
         - Validates critical operations after execution
+        - Raises CellExecutionError on validation failures if validation_fail_fast=True
 
         Args:
             cell: Cell to preprocess
@@ -414,7 +613,8 @@ class PatchedExecutePreprocessor(ExecutePreprocessor):
             Tuple of (cell, resources) after preprocessing
 
         Raises:
-            CellExecutionError: If fail_fast=True and an error is detected
+            CellExecutionError: If fail_fast=True and an error is detected, or if
+                validation_fail_fast=True and validation fails
         """
         import sys
         import time
@@ -433,12 +633,25 @@ class PatchedExecutePreprocessor(ExecutePreprocessor):
                     self.dependency_validator.check_prerequisites(dependencies, index)
                 )
                 if not prerequisites_met:
-                    # Log warning but don't fail (notebooks may handle dependencies differently)
+                    # Log error and fail fast if validation_fail_fast is enabled
                     print(
-                        f"\n[WARNING] Cell {index}/{self.total_cells} dependency check: {error_msg}",
+                        f"\n[ERROR] Cell {index}/{self.total_cells} dependency check failed: {error_msg}",
                         file=sys.stderr,
                         flush=True,
                     )
+                    if self.validation_fail_fast:
+                        raise CellExecutionError(
+                            ename="ValidationError",
+                            evalue=f"Dependency check failed: {error_msg}",
+                            traceback=[],  # type: ignore[arg-type]
+                        )
+                    else:
+                        # Log warning but don't fail (notebooks may handle dependencies differently)
+                        print(
+                            "[WARNING] Continuing despite dependency check failure (NOTEBOOK_VALIDATION_FAIL_FAST=false)",
+                            file=sys.stderr,
+                            flush=True,
+                        )
 
         # Log progress for code cells BEFORE execution
         if cell.cell_type == "code" and cell.source.strip():
@@ -524,12 +737,25 @@ class PatchedExecutePreprocessor(ExecutePreprocessor):
                         )
                     )
                     if not success and error_msg:
-                        # Log warning about failed validation
+                        # Log error and fail fast if validation_fail_fast is enabled
                         print(
-                            f"\n[WARNING] Cell {index}/{self.total_cells} operation validation: {error_msg}",
+                            f"\n[ERROR] Cell {index}/{self.total_cells} operation validation failed: {error_msg}",
                             file=sys.stderr,
                             flush=True,
                         )
+                        if self.validation_fail_fast:
+                            raise CellExecutionError(
+                                ename="ValidationError",
+                                evalue=f"Operation validation failed: {error_msg}",
+                                traceback=[],  # type: ignore[arg-type]
+                            )
+                        else:
+                            # Log warning but don't fail
+                            print(
+                                "[WARNING] Continuing despite operation validation failure (NOTEBOOK_VALIDATION_FAIL_FAST=false)",
+                                file=sys.stderr,
+                                flush=True,
+                            )
 
         # Check for errors AFTER execution (cell is modified in place by ExecutePreprocessor)
         if result_cell.cell_type == "code" and "outputs" in result_cell:
@@ -566,6 +792,68 @@ class PatchedExecutePreprocessor(ExecutePreprocessor):
                         print("Traceback:", file=sys.stderr, flush=True)
                         for tb_line in error_info["traceback"][:20]:  # First 20 lines
                             print(f"  {tb_line}", file=sys.stderr, flush=True)
+
+                    # Capture and display variable states if debug mode is enabled
+                    if self.debug_mode:
+                        print("\n" + "-" * 80, file=sys.stderr, flush=True)
+                        print(
+                            "DEBUG MODE: Variable States at Error Point",
+                            file=sys.stderr,
+                            flush=True,
+                        )
+                        print("-" * 80, file=sys.stderr, flush=True)
+                        try:
+                            var_states = inspect_notebook_variables(self.kernel_manager)
+                            if "error" in var_states:
+                                print(
+                                    f"  Could not inspect variables: {var_states['error']}",
+                                    file=sys.stderr,
+                                    flush=True,
+                                )
+                            else:
+                                for var_name, var_info in var_states.items():
+                                    if isinstance(var_info, dict):
+                                        if var_info.get("exists"):
+                                            var_type = var_info.get("type", "unknown")
+                                            var_len = var_info.get("len")
+                                            var_repr = var_info.get("repr", "N/A")
+                                            if "error" in var_info:
+                                                print(
+                                                    f"  {var_name}: <Error: {var_info['error']}>",
+                                                    file=sys.stderr,
+                                                    flush=True,
+                                                )
+                                            else:
+                                                len_str = (
+                                                    f", len={var_len}"
+                                                    if var_len is not None
+                                                    else ""
+                                                )
+                                                print(
+                                                    f"  {var_name}: {var_type}{len_str} = {var_repr}",
+                                                    file=sys.stderr,
+                                                    flush=True,
+                                                )
+                                        else:
+                                            print(
+                                                f"  {var_name}: <not defined>",
+                                                file=sys.stderr,
+                                                flush=True,
+                                            )
+                                    else:
+                                        print(
+                                            f"  {var_name}: {var_info}",
+                                            file=sys.stderr,
+                                            flush=True,
+                                        )
+                        except Exception as e:
+                            print(
+                                f"  Exception while inspecting variables: {e}",
+                                file=sys.stderr,
+                                flush=True,
+                            )
+                        print("-" * 80, file=sys.stderr, flush=True)
+
                     print("=" * 80 + "\n", file=sys.stderr, flush=True)
 
                     # Fail fast if requested
@@ -588,6 +876,9 @@ def _patch_notebook_cells_for_testing(nb):
     - Hardcoded query IDs that might not exist in test data
     - Empty training sets causing sklearn errors
     - Empty arrays from pairwise transforms
+
+    Validation errors raised by patched code will stop execution immediately
+    (fail-fast) unless NOTEBOOK_VALIDATION_FAIL_FAST=false is set.
 
     Args:
         nb: Notebook object (nbformat.NotebookNode) to patch in-place
@@ -639,10 +930,10 @@ def _patch_notebook_cells_for_testing(nb):
                                 f"\n{' ' * indent}# Validate that pairwise transform produced valid training pairs\n"
                                 f"{' ' * indent}if len(features) == 0 or len(predictors) == 0:\n"
                                 f"{' ' * (indent + 4)}raise ValueError(\n"
-                                f"{' ' * (indent + 8)}\"No valid training pairs were generated. This usually means:\\\\n\"\n"
-                                f"{' ' * (indent + 8)}\"  1. All judgments for each query have the same grade (no pairs to compare)\\\\n\"\n"
-                                f"{' ' * (indent + 8)}\"  2. Features were not logged successfully\\\\n\"\n"
-                                f"{' ' * (indent + 8)}\"Please ensure your judgments have varying grades per query and that features were logged.\"\n"
+                                f'{" " * (indent + 8)}"No valid training pairs were generated. This usually means:\\\\n"\n'
+                                f'{" " * (indent + 8)}"  1. All judgments for each query have the same grade (no pairs to compare)\\\\n"\n'
+                                f'{" " * (indent + 8)}"  2. Features were not logged successfully\\\\n"\n'
+                                f'{" " * (indent + 8)}"Please ensure your judgments have varying grades per query and that features were logged."\n'
                                 f"{' ' * (indent + 4)})\n"
                             )
                             new_lines.append(validation_code)
@@ -675,8 +966,8 @@ def _patch_notebook_cells_for_testing(nb):
                         f"{' ' * indent}# Validate that features were logged before proceeding\n"
                         f"{' ' * indent}if not ftr_logger.logged:\n"
                         f"{' ' * (indent + 4)}raise ValueError(\n"
-                        f"{' ' * (indent + 8)}\"No features were logged. This may indicate that documents in the judgments \"\n"
-                        f"{' ' * (indent + 8)}\"file don't exist in the index. Please ensure the index is properly set up.\"\n"
+                        f'{" " * (indent + 8)}"No features were logged. This may indicate that documents in the judgments "\n'
+                        f'{" " * (indent + 8)}"file don\'t exist in the index. Please ensure the index is properly set up."\n'
                         f"{' ' * (indent + 4)})\n"
                     )
                     new_lines.append(validation_code)
@@ -730,6 +1021,24 @@ def run_notebook(notebook_path, timeout=None, save_nb_path=None, fail_fast=None)
             "1",
             "yes",
         )
+
+    # Get validation_fail_fast from environment variable (default: True)
+    # This controls whether validation errors from patched cells stop execution
+    validation_fail_fast = os.environ.get(
+        "NOTEBOOK_VALIDATION_FAIL_FAST", "true"
+    ).lower() in (
+        "true",
+        "1",
+        "yes",
+    )
+
+    # Get debug_mode from environment variable (default: False)
+    # This controls whether variable states are captured and displayed on errors
+    debug_mode = os.environ.get("NOTEBOOK_DEBUG_MODE", "false").lower() in (
+        "true",
+        "1",
+        "yes",
+    )
 
     nb_name, _ = os.path.splitext(os.path.basename(notebook_path))
     dirname = os.path.dirname(notebook_path)
@@ -1193,13 +1502,23 @@ def run_notebook(notebook_path, timeout=None, save_nb_path=None, fail_fast=None)
     log(f"Executing {nb_name} ({len(nb.cells)} cells)...")
     if fail_fast:
         log("Fail-fast mode enabled: will stop on first error")
+    if validation_fail_fast:
+        log(
+            "Validation fail-fast enabled: validation errors will stop execution immediately"
+        )
+    if debug_mode:
+        log("Debug mode enabled: variable states will be captured on errors")
     print(
         f"[{datetime.now().strftime('%H:%M:%S')}] Starting cell-by-cell execution:",
         flush=True,
     )
     # Use custom preprocessor for progress logging and error detection
     proc = PatchedExecutePreprocessor(
-        timeout=timeout, kernel_name="python3", fail_fast=fail_fast
+        timeout=timeout,
+        kernel_name="python3",
+        fail_fast=fail_fast,
+        validation_fail_fast=validation_fail_fast,
+        debug_mode=debug_mode,
     )
     # Only allow errors if not in fail-fast mode
     proc.allow_errors = not fail_fast
