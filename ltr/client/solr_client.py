@@ -47,23 +47,42 @@ class SolrClient(BaseClient):
         solr: Requests session for making HTTP calls.
         solr_base_ep: Base Solr endpoint URL.
         host: Hostname for Solr server.
+        port: Port number for Solr server connection.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, port: int | None = None) -> None:
         """Initialize a SolrClient.
 
         Sets up connection to Solr server, using Docker hostname if LTR_DOCKER
         environment variable is set, otherwise connecting to localhost.
+
+        Args:
+            port: Optional port number. If not provided, uses SOLR_PORT environment
+                variable if set, otherwise defaults to 8983.
         """
         self.docker: bool = os.environ.get("LTR_DOCKER") is not None
         self.solr: requests.Session = requests.Session()
 
+        # Determine port: explicit parameter > environment variable > default
+        if port is None:
+            port_env = os.environ.get("SOLR_PORT")
+            if port_env:
+                try:
+                    port = int(port_env)
+                except ValueError:
+                    raise ValueError(
+                        f"Invalid SOLR_PORT environment variable: '{port_env}'. Must be an integer."
+                    )
+            else:
+                port = 8983
+        self.port = port
+
         if self.docker:
             self.host = "solr"
-            self.solr_base_ep = "http://solr:8983/solr"
+            self.solr_base_ep = f"http://solr:{self.port}/solr"
         else:
             self.host = "localhost"
-            self.solr_base_ep = "http://localhost:8983/solr"
+            self.solr_base_ep = f"http://localhost:{self.port}/solr"
 
     def get_host(self) -> str:
         """Get the Solr hostname.

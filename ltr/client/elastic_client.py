@@ -67,14 +67,17 @@ class ElasticClient(BaseClient):
         configs_dir: Directory containing Elasticsearch configuration files.
         elastic_ep: Base Elasticsearch endpoint URL.
         host: Hostname for Elasticsearch server.
+        port: Port number for Elasticsearch server connection.
     """
 
-    def __init__(self, configs_dir: str = ".") -> None:
+    def __init__(self, configs_dir: str = ".", port: int | None = None) -> None:
         """Initialize an ElasticClient.
 
         Args:
             configs_dir: Directory containing Elasticsearch configuration files
                 (default: current directory, or NOTEBOOK_CONFIGS_DIR env var if set).
+            port: Optional port number. If not provided, uses ELASTICSEARCH_PORT environment
+                variable if set, otherwise defaults to 9200.
         """
         self.docker: bool = os.environ.get("LTR_DOCKER") is not None
         # Use NOTEBOOK_CONFIGS_DIR environment variable if set (for notebook tests)
@@ -84,13 +87,27 @@ class ElasticClient(BaseClient):
             configs_dir = notebook_configs_dir
         self.configs_dir: str = configs_dir  # location of elastic configs
 
+        # Determine port: explicit parameter > environment variable > default
+        if port is None:
+            port_env = os.environ.get("ELASTICSEARCH_PORT")
+            if port_env:
+                try:
+                    port = int(port_env)
+                except ValueError:
+                    raise ValueError(
+                        f"Invalid ELASTICSEARCH_PORT environment variable: '{port_env}'. Must be an integer."
+                    )
+            else:
+                port = 9200
+        self.port = port
+
         if self.docker:
             self.host = "elastic"
         else:
             self.host = "localhost"
 
-        self.elastic_ep: str = f"http://{self.host}:9200/_ltr"
-        self.es: Elasticsearch = Elasticsearch(f"http://{self.host}:9200")
+        self.elastic_ep: str = f"http://{self.host}:{self.port}/_ltr"
+        self.es: Elasticsearch = Elasticsearch(f"http://{self.host}:{self.port}")
 
     def _validate_search_response(
         self, resp: JSONDict, operation: str = "query"

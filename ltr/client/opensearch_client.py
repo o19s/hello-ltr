@@ -78,14 +78,17 @@ class OpenSearchClient(BaseClient):
         configs_dir: Directory containing OpenSearch configuration files.
         opensearch_ep: Base OpenSearch endpoint URL.
         host: Hostname for OpenSearch server.
+        port: Port number for OpenSearch server connection.
     """
 
-    def __init__(self, configs_dir: str = ".") -> None:
+    def __init__(self, configs_dir: str = ".", port: int | None = None) -> None:
         """Initialize an OpenSearchClient.
 
         Args:
             configs_dir: Directory containing OpenSearch configuration files
                 (default: current directory, or NOTEBOOK_CONFIGS_DIR env var if set).
+            port: Optional port number. If not provided, uses OPENSEARCH_PORT environment
+                variable if set, otherwise defaults to 9201.
         """
         self.docker: bool = os.environ.get("LTR_DOCKER") is not None
         # Use NOTEBOOK_CONFIGS_DIR environment variable if set (for notebook tests)
@@ -95,20 +98,33 @@ class OpenSearchClient(BaseClient):
             configs_dir = notebook_configs_dir
         self.configs_dir: str = configs_dir  # location of elastic configs
 
+        # Determine port: explicit parameter > environment variable > default
+        if port is None:
+            port_env = os.environ.get("OPENSEARCH_PORT")
+            if port_env:
+                try:
+                    port = int(port_env)
+                except ValueError:
+                    raise ValueError(
+                        f"Invalid OPENSEARCH_PORT environment variable: '{port_env}'. Must be an integer."
+                    )
+            else:
+                port = 9201
+        self.port = port
+
         if self.docker:
             self.host = "opensearch-node1"
         else:
             self.host = "localhost"
 
-        self.opensearch_ep: str = f"http://{self.host}:9201/_ltr"
+        self.opensearch_ep: str = f"http://{self.host}:{self.port}/_ltr"
         # Create OpenSearch client - note that OpenSearch() constructor doesn't connect immediately
         # Connection happens lazily on first API call, so this shouldn't fail here
-        # In test environments (OPENSEARCH_PORT set), the patched __init__ will replace this client
-        # and handle retry logic. For non-test environments, if creation fails, let it fail immediately.
+        # In test environments, retry logic is handled via dependency injection
         try:
-            self.opensearch: OpenSearch = OpenSearch(f"http://{self.host}:9201")
+            self.opensearch: OpenSearch = OpenSearch(f"http://{self.host}:{self.port}")
         except Exception:
-            # If creation fails, let it fail - patched version will handle retries in test environments
+            # If creation fails, let it fail immediately
             raise
         logger.debug(f"OpenSearch endpoint: {self.opensearch_ep}")
 

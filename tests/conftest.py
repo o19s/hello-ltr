@@ -24,6 +24,14 @@ import pytest
 import requests
 
 from ltr.logger import get_logger
+from tests.port_management import (
+    get_engine_port_config,
+    get_port_env_vars,
+    get_worker_id,
+    get_worker_ports,
+    restore_port_env_vars,
+    set_port_env_vars,
+)
 from tests.test_config import SLOW_PATTERNS
 
 logger = get_logger(__name__)
@@ -73,92 +81,7 @@ def get_service_wait_timeout():
     return int(os.environ.get("SERVICE_WAIT_TIMEOUT", "300"))
 
 
-def get_worker_id():
-    """
-    Get the current pytest-xdist worker ID.
-
-    Returns:
-        str: Worker ID (e.g., "gw0", "gw1") or "main" if not in parallel mode
-    """
-    worker = os.environ.get("PYTEST_XDIST_WORKER")
-    return worker if worker else "main"
-
-
-def get_worker_num():
-    """
-    Get the numeric worker ID for port calculation.
-
-    Returns:
-        int: Worker number (0, 1, 2, ...) or 0 if not in parallel mode
-    """
-    worker_id = get_worker_id()
-    if worker_id == "main":
-        return 0
-
-    try:
-        return int(worker_id.replace("gw", ""))
-    except (ValueError, AttributeError):
-        return 0
-
-
-def get_worker_ports():
-    """
-    Get worker-specific ports for parallel execution.
-
-    When running with pytest-xdist in parallel, each worker needs unique ports
-    to avoid conflicts. This function calculates port offsets based on worker ID.
-
-    Returns:
-        dict: Port values for SOLR_PORT, ELASTICSEARCH_PORT, OPENSEARCH_PORT, etc.
-              If not running in parallel, returns None (use defaults from test.sh)
-
-    Port allocation strategy:
-    - Base ports: Solr=18983, ES=19200, OpenSearch=19201
-    - Worker offset: worker_id * 1000 (e.g., gw0=+0, gw1=+1000, gw2=+2000)
-    - This gives each worker a range of 1000 ports to avoid conflicts
-
-    Note: This is primarily useful when each worker has its own Docker containers.
-    When using test.sh, containers are started once before pytest runs. For best
-    results with Docker, use --dist loadgroup to group tests by engine, ensuring
-    each worker only needs one engine's containers.
-    """
-    worker = os.environ.get("PYTEST_XDIST_WORKER")
-    if not worker:
-        # Not running in parallel, return None to use defaults
-        return None
-
-    # Extract worker number from worker ID (e.g., "gw0" -> 0, "gw1" -> 1)
-    worker_num = get_worker_num()
-
-    # Calculate port offset (1000 ports per worker should be plenty)
-    port_offset = worker_num * 1000
-
-    # Base ports from test.sh defaults
-    base_ports = {
-        "SOLR_PORT": 18983,
-        "ELASTICSEARCH_PORT": 19200,
-        "OPENSEARCH_PORT": 19201,
-        "KIBANA_PORT": 15601,
-        "OPENSEARCH_PA_PORT": 19600,
-        "OPENSEARCH_DASHBOARDS_PORT": 15602,
-    }
-
-    # Apply offset to each port and validate
-    worker_ports = {}
-    max_valid_port = 65535
-    for port_name, base_port in base_ports.items():
-        calculated_port = base_port + port_offset
-        if calculated_port > max_valid_port:
-            max_base_port = max(base_ports.values())
-            max_workers = (max_valid_port - max_base_port) // 1000
-            raise ValueError(
-                f"Calculated port {calculated_port} for {port_name} exceeds maximum port number ({max_valid_port}). "
-                f"Worker {worker_num} with offset {port_offset} would cause overflow. "
-                f"Maximum supported workers: {max_workers}"
-            )
-        worker_ports[port_name] = calculated_port
-
-    return worker_ports
+# Port management functions are now imported from tests.port_management
 
 
 # Cache for docker compose command detection
@@ -689,31 +612,31 @@ def _manage_container_fixture(engine_config, request=None):
             "Test project names must start with 'test-'."
         )
 
-    # Get worker-specific ports
+    # Get worker-specific ports using centralized port management
     worker_ports = get_worker_ports()
     if worker_ports:
         # Use worker-specific ports if available
         ports = {
-            port_name: worker_ports.get(port_name, port_config[port_name])
+            port_name: worker_ports.get(port_name, int(port_config[port_name]))
             for port_name in port_config
         }
     else:
         # Use defaults from environment or port_config
-        ports = {
-            port_name: os.environ.get(port_name, default)
-            for port_name, default in port_config.items()
-        }
+        ports = {}
+        for port_name, default in port_config.items():
+            env_value = os.environ.get(port_name)
+            if env_value:
+                ports[port_name] = int(env_value)
+            else:
+                ports[port_name] = int(default)
 
     # Save original environment variable values to restore later
-    original_env_vars = {}
-    for port_name in port_config:
-        original_env_vars[port_name] = os.environ.get(port_name)
+    original_env_vars = get_port_env_vars(list(port_config.keys()))
 
     # CRITICAL: Set environment variables BEFORE starting containers
     # This ensures patch_clients_for_test_ports() can read the correct ports
     # even if called before containers are ready
-    for port_name, port_value in ports.items():
-        os.environ[port_name] = str(port_value)
+    set_port_env_vars(ports)
 
     # CRITICAL: Patch clients immediately after setting environment variables
     # This ensures any clients imported later will use the correct ports
@@ -779,7 +702,12 @@ def _manage_container_fixture(engine_config, request=None):
                 # This prevents hanging on unhealthy containers
                 all_healthy = True
                 for port_key, service_name, health_endpoint in health_checks:
-                    port = int(ports[port_key])
+                    port_value = ports.get(port_key)
+                    if port_value is None:
+                        raise ValueError(
+                            f"Port {port_key} not found in ports configuration"
+                        )
+                    port = int(port_value)
                     if not wait_for_service(
                         port,
                         service_name,
@@ -873,7 +801,12 @@ def _manage_container_fixture(engine_config, request=None):
                     True  # Default to True (not checked for non-OpenSearch services)
                 )
                 for port_key, service_name, health_endpoint in health_checks:
-                    port = int(ports[port_key])
+                    port_value = ports.get(port_key)
+                    if port_value is None:
+                        raise ValueError(
+                            f"Port {port_key} not found in ports configuration"
+                        )
+                    port = int(port_value)
                     print(
                         f"[Worker {worker_id}] Waiting for {service_name} on port {port}...",
                         file=sys.stderr,
@@ -994,12 +927,7 @@ def _manage_container_fixture(engine_config, request=None):
         # Restore original environment variable values
         # These variables are test-specific (production docker-compose.yml uses hardcoded ports),
         # but we restore original values in case someone had them set for manual testing
-        for port_name, original_value in original_env_vars.items():
-            if original_value is not None:
-                os.environ[port_name] = original_value
-            elif port_name in os.environ:
-                # Remove if it wasn't set originally (clean up test value)
-                del os.environ[port_name]
+        restore_port_env_vars(original_env_vars)
 
         # Clean up containers for this test project ONLY
         # Verify containers exist for our project name before attempting cleanup
@@ -1119,12 +1047,7 @@ def solr_container(request):
     engine_config = {
         "engine": "solr",
         "display_name": "Solr",
-        "port_config": {
-            "SOLR_PORT": "18983",
-        },
-        "health_checks": [
-            ("SOLR_PORT", "Solr", "/solr/admin/info/system"),
-        ],
+        **get_engine_port_config("solr"),
     }
     yield from _manage_container_fixture(engine_config, request)
 
@@ -1140,14 +1063,7 @@ def elasticsearch_container(request):
     engine_config = {
         "engine": "elasticsearch",
         "display_name": "Elasticsearch",
-        "port_config": {
-            "ELASTICSEARCH_PORT": "19200",
-            "KIBANA_PORT": "15601",
-        },
-        "health_checks": [
-            ("ELASTICSEARCH_PORT", "Elasticsearch", "/_cluster/health"),
-            ("KIBANA_PORT", "Kibana", "/api/status"),
-        ],
+        **get_engine_port_config("elasticsearch"),
     }
     yield from _manage_container_fixture(engine_config, request)
 
@@ -1163,15 +1079,7 @@ def opensearch_container(request):
     engine_config = {
         "engine": "opensearch",
         "display_name": "OpenSearch",
-        "port_config": {
-            "OPENSEARCH_PORT": "19201",
-            "OPENSEARCH_PA_PORT": "19600",
-            "OPENSEARCH_DASHBOARDS_PORT": "15602",
-        },
-        "health_checks": [
-            ("OPENSEARCH_PORT", "OpenSearch", "/_cluster/health"),
-            ("OPENSEARCH_DASHBOARDS_PORT", "OpenSearch Dashboards", "/api/status"),
-        ],
+        **get_engine_port_config("opensearch"),
     }
     yield from _manage_container_fixture(engine_config, request)
 

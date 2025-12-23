@@ -7,11 +7,12 @@ is properly configured before running tests.
 
 from __future__ import annotations
 
-import os
 import shutil
 import socket
 import subprocess
 import sys
+
+from tests.port_management import get_port
 
 
 def check_docker_installed() -> tuple[bool, str | None]:
@@ -94,17 +95,15 @@ def check_test_ports() -> tuple[bool, list[str]]:
     """
     errors = []
 
-    # Get test ports from environment or use defaults
-    test_ports = {
-        "SOLR_PORT": int(os.environ.get("SOLR_PORT", 18983)),
-        "ELASTICSEARCH_PORT": int(os.environ.get("ELASTICSEARCH_PORT", 19200)),
-        "OPENSEARCH_PORT": int(os.environ.get("OPENSEARCH_PORT", 19201)),
-    }
-
-    for port_name, port in test_ports.items():
-        available, error = check_port_available(port)
-        if not available:
-            errors.append(f"{port_name} ({port}): {error}")
+    # Get test ports using centralized port management
+    # Check the three main service ports
+    port_names = ["SOLR_PORT", "ELASTICSEARCH_PORT", "OPENSEARCH_PORT"]
+    for port_name in port_names:
+        port = get_port(port_name)
+        if port is not None:
+            available, error = check_port_available(port)
+            if not available:
+                errors.append(f"{port_name} ({port}): {error}")
 
     return len(errors) == 0, errors
 

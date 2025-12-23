@@ -246,19 +246,25 @@ class NotebookDependencyValidator:
             notebook_path_lower = self.notebook_path.lower()
             if "solr" in notebook_path_lower:
                 from ltr.client import SolrClient
+                from tests.port_management import get_port
 
-                self.client_instance = SolrClient()
+                port = get_port("SOLR_PORT", default=8983)
+                self.client_instance = SolrClient(port=port)
             elif "opensearch" in notebook_path_lower:
                 from ltr.client import OpenSearchClient
+                from tests.port_management import get_port
 
-                self.client_instance = OpenSearchClient()
+                port = get_port("OPENSEARCH_PORT", default=9201)
+                self.client_instance = OpenSearchClient(port=port)
             elif (
                 "elasticsearch" in notebook_path_lower
                 or "elastic" in notebook_path_lower
             ):
                 from ltr.client import ElasticClient
+                from tests.port_management import get_port
 
-                self.client_instance = ElasticClient()
+                port = get_port("ELASTICSEARCH_PORT", default=9200)
+                self.client_instance = ElasticClient(port=port)
         except Exception:
             # If client creation fails, validation will be skipped
             self.client_instance = None
@@ -1061,27 +1067,51 @@ def run_notebook(notebook_path, timeout=None, save_nb_path=None, fail_fast=None)
     # Patch notebook cells to handle known test environment issues
     _patch_notebook_cells_for_testing(nb)
 
-    # Inject patch code as first cell to ensure it runs before any notebook code.
-    # This is the SINGLE point where port patching happens - no redundant patches elsewhere.
-    # The patch modifies client classes to use test ports (18983, 19200, 19201)
-    # instead of default ports (8983, 9200, 9201) to avoid conflicts with production services.
+    # Inject setup code as first cell to ensure it runs before any notebook code.
+    # This uses dependency injection via environment variables instead of monkey patching.
+    # Clients now accept port parameters that default to environment variables.
     # project_root should be the parent of 'tests' directory, not the tests directory itself
     project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-    # Build patch cell
-    patch_cell_source = (
-        f"import sys\n"
-        f"sys.path.insert(0, r'{project_root}')\n"
-        f"from tests.patch_clients_for_tests import patch_clients_for_test_ports, patch_requests_for_test_ports\n"
-        f"try:\n"
-        f"    patch_clients_for_test_ports()\n"
-        f"    patch_requests_for_test_ports()\n"
-        f"except Exception as e:\n"
-        f"    import traceback\n"
-        f"    traceback.print_exc(file=sys.stderr)\n"
-        f"    raise"
+
+    # Get test ports from environment (already set by conftest.py)
+    # These will be used by clients via dependency injection (port parameters default to env vars)
+    from tests.port_management import get_port
+
+    solr_port = get_port("SOLR_PORT")
+    elasticsearch_port = get_port("ELASTICSEARCH_PORT")
+    opensearch_port = get_port("OPENSEARCH_PORT")
+
+    # Build setup cell - sets environment variables and patches requests library
+    # Clients will automatically use these ports via their port parameters
+    setup_cell_source = (
+        f"import sys\nimport os\nsys.path.insert(0, r'{project_root}')\n"
     )
-    patch_cell = nbformat.v4.new_code_cell(source=patch_cell_source)
-    nb.cells.insert(0, patch_cell)
+
+    # Set port environment variables if they're available (for dependency injection)
+    if solr_port:
+        setup_cell_source += f"os.environ['SOLR_PORT'] = '{solr_port}'\n"
+    if elasticsearch_port:
+        setup_cell_source += (
+            f"os.environ['ELASTICSEARCH_PORT'] = '{elasticsearch_port}'\n"
+        )
+    if opensearch_port:
+        setup_cell_source += f"os.environ['OPENSEARCH_PORT'] = '{opensearch_port}'\n"
+
+    # Still patch requests library for hardcoded URLs in notebooks
+    # Also patch reset_ltr timing for test environments
+    setup_cell_source += (
+        "from tests.patch_clients_for_tests import patch_requests_for_test_ports, patch_reset_ltr_timing\n"
+        "try:\n"
+        "    patch_requests_for_test_ports()\n"
+        "    patch_reset_ltr_timing()\n"
+        "except Exception as e:\n"
+        "    import traceback\n"
+        "    traceback.print_exc(file=sys.stderr)\n"
+        "    raise"
+    )
+
+    setup_cell = nbformat.v4.new_code_cell(source=setup_cell_source)
+    nb.cells.insert(0, setup_cell)
 
     # Patch configs_dir for Elasticsearch/OpenSearch notebooks
     # This ensures clients can find settings files when running from project root during tests
@@ -1163,8 +1193,29 @@ def run_notebook(notebook_path, timeout=None, save_nb_path=None, fail_fast=None)
                     "        print('[TEST] Successfully created/rebuilt tmdb index')"
                 )
 
+            # Use client factory for dependency injection
+            if "solr" in notebook_path.lower():
+                factory_import = "from tests.client_factory import create_solr_client"
+                client_creation = "_test_client = create_solr_client()"
+            elif "opensearch" in notebook_path.lower():
+                factory_import = (
+                    "from tests.client_factory import create_opensearch_client"
+                )
+                client_creation = "_test_client = create_opensearch_client()"
+            elif (
+                "elasticsearch" in notebook_path.lower()
+                or "elastic" in notebook_path.lower()
+            ):
+                factory_import = (
+                    "from tests.client_factory import create_elastic_client"
+                )
+                client_creation = "_test_client = create_elastic_client()"
+            else:
+                factory_import = client_import
+                client_creation = "_test_client = Client()"
+
             index_setup_cell = nbformat.v4.new_code_cell(
-                source=f"{client_import}\n"
+                source=f"{factory_import}\n"
                 "import os\n"
                 "from ltr import download\n"
                 "from ltr.helpers.movies import indexable_movies\n"
@@ -1172,7 +1223,7 @@ def run_notebook(notebook_path, timeout=None, save_nb_path=None, fail_fast=None)
                 "\n"
                 "# Ensure tmdb index exists for notebooks that need it\n"
                 "# This runs before the notebook's own rebuild code to ensure the index exists\n"
-                "_test_client = Client()\n"
+                f"{client_creation}\n"
                 "# Download data if it doesn't exist\n"
                 "data_file = 'data/tmdb.json'\n"
                 "if not os.path.exists(data_file):\n"
@@ -1197,20 +1248,24 @@ def run_notebook(notebook_path, timeout=None, save_nb_path=None, fail_fast=None)
     # Handle osc-blog notebooks - they need the blog index
     is_osc_blog_notebook = "osc-blog" in notebook_path.lower()
     if needs_index and is_osc_blog_notebook:
-        # Determine client type from notebook path
+        # Determine client type from notebook path and use factory for dependency injection
         if "solr" in notebook_path.lower():
-            client_import = "from ltr.client import SolrClient as Client"
+            factory_import = "from tests.client_factory import create_solr_client"
+            client_creation = "_test_client = create_solr_client()"
         elif "opensearch" in notebook_path.lower():
-            client_import = "from ltr.client import OpenSearchClient as Client"
+            factory_import = "from tests.client_factory import create_opensearch_client"
+            client_creation = "_test_client = create_opensearch_client()"
         elif (
             "elasticsearch" in notebook_path.lower()
             or "elastic" in notebook_path.lower()
         ):
-            client_import = "from ltr.client import ElasticClient as Client"
+            factory_import = "from tests.client_factory import create_elastic_client"
+            client_creation = "_test_client = create_elastic_client()"
         else:
-            client_import = None
+            factory_import = None
+            client_creation = None
 
-        if client_import:
+        if factory_import:
             # Check if notebook will rebuild the index itself
             notebook_will_rebuild = (
                 "rebuild" in notebook_source and "force=True" in notebook_source
@@ -1233,14 +1288,14 @@ def run_notebook(notebook_path, timeout=None, save_nb_path=None, fail_fast=None)
             )
 
             blog_index_setup_cell = nbformat.v4.new_code_cell(
-                source=f"{client_import}\n"
+                source=f"{factory_import}\n"
                 "import os\n"
                 "from ltr import download\n"
                 "from ltr.index import rebuild\n"
                 "\n"
                 "# Ensure blog index exists for osc-blog notebooks\n"
                 "# This runs before the notebook's own rebuild code to ensure the index exists\n"
-                "_test_client = Client()\n"
+                f"{client_creation}\n"
                 "# Download data if it doesn't exist\n"
                 "data_file = 'data/blog.jsonl'\n"
                 "if not os.path.exists(data_file):\n"
