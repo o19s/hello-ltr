@@ -48,6 +48,8 @@ def typo_it(judgment_in_file: str, judgment_out_file: str, rounds: int = 100) ->
     """
     with open(judgment_in_file) as f:
         curr_judgments = list(judgments_from_file(f))
+    if not curr_judgments:
+        raise ValueError(f"No judgments found in {judgment_in_file}")
     last_qid = curr_judgments[-1].qid
     judg_dict = judgments_by_qid(curr_judgments)
 

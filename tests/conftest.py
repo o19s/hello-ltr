@@ -24,6 +24,7 @@ import pytest
 import requests
 
 from ltr.logger import get_logger
+from tests.test_config import SLOW_PATTERNS
 
 logger = get_logger(__name__)
 
@@ -53,16 +54,6 @@ if not HAS_FCNTL:
     except (ImportError, AttributeError):
         pass
 HAS_MSVCRT = _has_msvcrt
-
-# Known slow notebook patterns (notebooks that typically take > 60 seconds)
-SLOW_PATTERNS = [
-    "netfix",
-    "bayesian-optimization",
-    "bigger bot",
-    "lambda-mart",
-    "feature_search",
-    "evaluation",
-]
 
 # Threshold for marking tests as slow based on execution time (seconds)
 SLOW_TEST_THRESHOLD = 60.0
@@ -1490,9 +1481,29 @@ def pytest_configure(config):
     Also sets up worker-specific ports for parallel execution.
     Validates test environment before running tests.
     Sets up signal handlers for cleanup on interruption.
+    Warns when parallel execution is enabled about Docker tests running sequentially.
     """
     # Set up signal handlers for cleanup on interruption (main process only)
     _setup_signal_handlers()
+
+    # Check if parallel execution is enabled
+    # If so, configure Docker tests to run sequentially
+    try:
+        numprocesses = getattr(config.option, "numprocesses", None)
+        if numprocesses and numprocesses != "no":
+            # Parallel execution is enabled
+            # Check if --dist option is set (for loadgroup)
+            dist = getattr(config.option, "dist", None)
+            if not dist or dist == "no":
+                # No distribution mode set - warn user about Docker tests
+                logger.warning(
+                    "Parallel execution detected. Docker tests will run sequentially "
+                    "to prevent system freezing. To group Docker tests, use: "
+                    "--dist loadgroup -m docker"
+                )
+    except AttributeError:
+        # pytest-xdist not available or option not set
+        pass
 
     # Only run environment validation on the main process (not workers)
     # Workers will inherit the validated environment
@@ -1579,6 +1590,10 @@ def pytest_configure(config):
     config.addinivalue_line("markers", "solr: Solr-specific tests")
     config.addinivalue_line("markers", "elasticsearch: Elasticsearch-specific tests")
     config.addinivalue_line("markers", "opensearch: OpenSearch-specific tests")
+    config.addinivalue_line(
+        "markers",
+        "docker: Tests that use Docker containers (run sequentially by default)",
+    )
     config.addinivalue_line("markers", "slow: Slow-running tests (> 5 minutes)")
     config.addinivalue_line(
         "markers", "setup: Setup notebooks that prepare test environments"
@@ -1646,7 +1661,8 @@ def pytest_collection_modifyitems(config, items):
 
     Applies markers dynamically based on test parameters, enables tee-sys capture
     mode for e2e/integration tests to show real-time output, and reorders tests
-    so slow tests run last.
+    so slow tests run last. Also marks Docker tests and groups them together
+    for sequential execution when parallel mode is enabled.
     """
     # Load execution times from cache
     execution_times = _load_test_execution_times(config)
@@ -1662,6 +1678,8 @@ def pytest_collection_modifyitems(config, items):
 
         if test_path and "/tests/integration/" in test_path.replace("\\", "/"):
             item.add_marker(pytest.mark.integration)
+            # Integration tests typically use Docker containers
+            item.add_marker(pytest.mark.docker)
 
         # Mark E2E tests (notebook tests) - check path first
         is_notebook_test = test_path and "/tests/notebooks/" in test_path.replace(
@@ -1690,10 +1708,13 @@ def pytest_collection_modifyitems(config, items):
         # Apply engine markers
         if engine == "solr":
             item.add_marker(pytest.mark.solr)
+            item.add_marker(pytest.mark.docker)  # Solr tests use Docker
         elif engine == "elasticsearch":
             item.add_marker(pytest.mark.elasticsearch)
+            item.add_marker(pytest.mark.docker)  # Elasticsearch tests use Docker
         elif engine == "opensearch":
             item.add_marker(pytest.mark.opensearch)
+            item.add_marker(pytest.mark.docker)  # OpenSearch tests use Docker
 
         # Apply type markers
         if notebook_type == "setup":
@@ -1715,22 +1736,49 @@ def pytest_collection_modifyitems(config, items):
     if has_e2e_or_integration:
         config.option.capture = "tee-sys"
 
-    # Second pass: reorder tests - fast tests first, slow tests last
-    # Maintain relative order within each group
+    # Second pass: reorder tests - separate Docker tests for sequential execution
+    # When parallel execution is enabled, Docker tests should run sequentially
+    # to prevent system freezing. Group them together so they can be run sequentially.
+    docker_tests = []
     fast_tests = []
     slow_tests = []
 
+    # Check if parallel execution is enabled
+    try:
+        numprocesses = getattr(config.option, "numprocesses", None)
+        parallel_enabled = numprocesses and numprocesses != "no"
+    except AttributeError:
+        parallel_enabled = False
+
     for item in items:
+        # Check if test uses Docker (has docker marker)
+        has_docker_marker = any(
+            marker.name == "docker" for marker in item.iter_markers()
+        )
         # Check if test has slow marker
         has_slow_marker = any(marker.name == "slow" for marker in item.iter_markers())
 
-        if has_slow_marker:
-            slow_tests.append(item)
+        if has_docker_marker:
+            # Docker tests - group together for sequential execution
+            docker_tests.append(item)
         else:
-            fast_tests.append(item)
+            # Non-Docker tests - can run in parallel
+            if has_slow_marker:
+                slow_tests.append(item)
+            else:
+                fast_tests.append(item)
 
-    # Reorder: fast tests first, slow tests last
-    items[:] = fast_tests + slow_tests
+    # Reorder: non-Docker tests first (can run in parallel), Docker tests last (sequential)
+    # Within non-Docker tests: fast first, slow last
+    # Docker tests are grouped together to enable sequential execution
+    if parallel_enabled and docker_tests:
+        # When parallel is enabled, put Docker tests at the end so they can be run sequentially
+        # Non-Docker tests can run in parallel, Docker tests will be grouped together
+        items[:] = fast_tests + slow_tests + docker_tests
+    else:
+        # Sequential mode: maintain original ordering (fast first, slow last)
+        # Docker tests are mixed in with others
+        items[:] = fast_tests + slow_tests + docker_tests
 
 
 def pytest_collection_finish(session):

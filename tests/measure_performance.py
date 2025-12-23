@@ -199,7 +199,7 @@ def generate_report(
     report_lines.append("-" * 80)
     report_lines.append(f"Total tests: {len(unit_times)}")
     report_lines.append(
-        f"Total execution time: {unit_total:.2f} seconds ({unit_total/60:.2f} minutes)"
+        f"Total execution time: {unit_total:.2f} seconds ({unit_total / 60:.2f} minutes)"
     )
     if unit_times:
         avg_time = sum(unit_times.values()) / len(unit_times)
@@ -215,7 +215,7 @@ def generate_report(
     report_lines.append("-" * 80)
     report_lines.append(f"Total tests: {len(integration_times)}")
     report_lines.append(
-        f"Total execution time: {integration_total:.2f} seconds ({integration_total/60:.2f} minutes)"
+        f"Total execution time: {integration_total:.2f} seconds ({integration_total / 60:.2f} minutes)"
     )
     if integration_times:
         avg_time = sum(integration_times.values()) / len(integration_times)
@@ -231,20 +231,20 @@ def generate_report(
     report_lines.append("-" * 80)
     report_lines.append(f"Total tests: {len(notebook_times)}")
     report_lines.append(
-        f"Total execution time: {notebook_total:.2f} seconds ({notebook_total/60:.2f} minutes)"
+        f"Total execution time: {notebook_total:.2f} seconds ({notebook_total / 60:.2f} minutes)"
     )
     if notebook_times:
         avg_time = sum(notebook_times.values()) / len(notebook_times)
         max_time = max(notebook_times.values())
         min_time = min(notebook_times.values())
         report_lines.append(
-            f"Average test time: {avg_time:.3f} seconds ({avg_time/60:.2f} minutes)"
+            f"Average test time: {avg_time:.3f} seconds ({avg_time / 60:.2f} minutes)"
         )
         report_lines.append(
-            f"Fastest test: {min_time:.3f} seconds ({min_time/60:.2f} minutes)"
+            f"Fastest test: {min_time:.3f} seconds ({min_time / 60:.2f} minutes)"
         )
         report_lines.append(
-            f"Slowest test: {max_time:.3f} seconds ({max_time/60:.2f} minutes)"
+            f"Slowest test: {max_time:.3f} seconds ({max_time / 60:.2f} minutes)"
         )
     report_lines.append("")
 
@@ -282,7 +282,7 @@ def generate_report(
     total_time = unit_total + integration_total + notebook_total
     report_lines.append(f"Total tests: {total_tests}")
     report_lines.append(
-        f"Total execution time: {total_time:.2f} seconds ({total_time/60:.2f} minutes)"
+        f"Total execution time: {total_time:.2f} seconds ({total_time / 60:.2f} minutes)"
     )
     report_lines.append("=" * 80)
 
@@ -399,7 +399,7 @@ def main():
             "tests/notebooks/test_notebooks.py", parallel=args.parallel
         )
         print(
-            f"Notebook tests completed in {notebook_total:.2f} seconds ({notebook_total/60:.2f} minutes)"
+            f"Notebook tests completed in {notebook_total:.2f} seconds ({notebook_total / 60:.2f} minutes)"
         )
 
     # Generate and print report

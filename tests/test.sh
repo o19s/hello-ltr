@@ -6,13 +6,14 @@
 # conftest.py. All options passed via PYTEST_ARGS environment variable.
 #
 # Usage:
-#   ./tests/test.sh                                    # Run all tests (parallel by default)
+#   ./tests/test.sh                                    # Run all tests (sequential by default for Docker tests)
 #   PYTEST_ARGS="--lf" ./tests/test.sh                # Re-run failed tests
-#   PYTEST_ARGS="-n 1" ./tests/test.sh                # Run sequentially (disable parallel)
+#   PYTEST_ARGS="-n auto" ./tests/test.sh             # Enable parallel execution (non-Docker tests)
+#   PYTEST_ARGS="-n auto -m 'not docker'" ./tests/test.sh  # Run non-Docker tests in parallel
 #   PYTEST_ARGS="-k opensearch" ./tests/test.sh       # Filter tests
 #
 # Environment Variables:
-#   PYTEST_ARGS          Pytest arguments (e.g., "--lf", "-k opensearch", "-n 1" to disable parallel)
+#   PYTEST_ARGS          Pytest arguments (e.g., "--lf", "-k opensearch", "-n auto" to enable parallel)
 #   USE_WORKER_CONTAINERS Use per-worker containers (default: true)
 #
 # Alternative: uv run pytest tests/notebooks/test_notebooks.py

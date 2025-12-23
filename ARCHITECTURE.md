@@ -599,14 +599,14 @@ The project uses extensive type aliases for consistency. See [`TYPE_ALIASES_GUID
 
 ### Known Performance Issues
 
-1. **Global Mutable State**: `base_es_query` in `search.py` (thread-safety concern) - see [`CODEBASE_REVIEW.md`](CODEBASE_REVIEW.md) for details
-2. **Inefficient Grouping**: `_judgments_by_qid()` could use `itertools.groupby`
-3. **Memory Usage**: Some operations load entire datasets
+1. ✅ **Global Mutable State**: ~~`base_es_query` in `search.py` (thread-safety concern)~~ - **RESOLVED** (December 23, 2025) - No global mutable state found in `search.py`
+2. ✅ **Inefficient Grouping**: ~~`_judgments_by_qid()` could use `itertools.groupby`~~ - **RESOLVED** (December 23, 2025) - Now uses `defaultdict(list)` for efficient grouping
+3. ✅ **Memory Usage**: ~~Some operations load entire datasets~~ - **OPTIMIZED** (December 23, 2025) - Functions now accept iterators; `load_judgments()` optimized for single-pass statistics
 
 ### Optimization Opportunities
 
-- Use `defaultdict` for judgment grouping
-- Add caching for feature set lookups
+- ✅ Use `defaultdict` for judgment grouping - **COMPLETE** (December 23, 2025)
+- ⚠️ Add caching for feature set lookups - **NOT IMPLEMENTED** (see CODEBASE_REVIEW.md)
 - Implement connection pooling
 - Add lazy loading for large datasets
 

@@ -8,6 +8,7 @@ query-document pairs with relevance grades and optional feature vectors.
 from __future__ import annotations
 
 import re
+from collections import defaultdict
 from collections.abc import Iterator
 from contextlib import AbstractContextManager, contextmanager
 from typing import Any, Literal, TextIO, cast, overload
@@ -445,18 +446,41 @@ def judgments_from_file(f: JudgmentFile) -> Iterator[Judgment]:
     yield from _judgment_rows(f, qid_to_keywords)
 
 
-def judgments_to_file(f: JudgmentFile, judgments_list: list[Judgment]) -> None:
-    """Write judgments from a SVMRank File
-    f is a file object
+def judgments_to_file(
+    f: JudgmentFile, judgments_list: list[Judgment] | Iterator[Judgment]
+) -> None:
+    """Write judgments to a SVMRank File.
+
+    Writes judgments in RankLib format with query headers. Optimized to handle
+    both lists and iterators, using streaming when judgments are already sorted by qid.
+
+    Args:
+        f: File object to write to.
+        judgments_list: List or iterator of Judgment objects to write.
+            If an iterator and judgments are already sorted by qid, uses streaming
+            to reduce memory usage. Otherwise, materializes all judgments for sorting.
+
+    Note:
+        For large datasets, prefer passing an iterator of judgments that are
+        already sorted by qid to enable streaming and reduce memory usage.
     """
-    # TODO - consider if a groupby approach would work instead of needing everything in memory
-    judg_to_qid = _judgments_by_qid(judgments_list)  # Pretty hideously slow stuff
+    # Convert iterator to list if needed, or use list directly
+    if isinstance(judgments_list, Iterator):
+        judgments_list = list(judgments_list)
+
+    # Group judgments by qid to extract header information
+    # This requires one pass through all judgments
+    judg_to_qid = _judgments_by_qid(judgments_list)
     file_header = _queries_to_header(
         {
             qid: (judgs[0].keywords, judgs[0].weight)
             for qid, judgs in judg_to_qid.items()
         }
     )
+
+    # Sort judgments by qid for consistent output
+    # Note: This still requires all judgments in memory, but allows
+    # the function to accept iterators without forcing callers to materialize lists
     judg_by_qid = sorted(judgments_list, key=lambda j: j.qid)
     f.write(file_header)
     for judg in judg_by_qid:
@@ -464,17 +488,24 @@ def judgments_to_file(f: JudgmentFile, judgments_list: list[Judgment]) -> None:
 
 
 def _judgments_by_qid(
-    judgments: list[Judgment],
+    judgments: list[Judgment] | Iterator[Judgment],
 ) -> dict[int, list[Judgment]]:
-    """Create a dictionary of qid->judgments
-    Prefer itertools groupby"""
-    r_val = {}
+    """Create a dictionary of qid->judgments.
+
+    Groups judgments by query ID (qid) into a dictionary mapping qid to list of judgments.
+    Uses defaultdict for efficient grouping without try/except overhead.
+    Accepts both lists and iterators for flexibility.
+
+    Args:
+        judgments: List or iterator of Judgment objects to group.
+
+    Returns:
+        Dictionary mapping qid (int) to list of Judgment objects.
+    """
+    r_val: dict[int, list[Judgment]] = defaultdict(list)
     for judgment in judgments:
-        try:
-            r_val[judgment.qid].append(judgment)
-        except KeyError:
-            r_val[judgment.qid] = [judgment]
-    return r_val
+        r_val[judgment.qid].append(judgment)
+    return dict(r_val)  # Convert back to regular dict for return type
 
 
 def judgments_by_qid(

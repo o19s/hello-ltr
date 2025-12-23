@@ -8,7 +8,8 @@ The test suite validates that all Jupyter notebooks execute successfully without
 - 36+ notebooks across Solr, Elasticsearch, and OpenSearch
 - Per-worker Docker container isolation (default)
 - Automated setup and teardown
-- Parallel execution support with isolated containers
+- Sequential execution by default (prevents system freezing with Docker tests)
+- Optional parallel execution support with isolated containers
 
 ## Quick Start
 
@@ -36,12 +37,11 @@ pytest --lf tests/notebooks/test_notebooks.py
 # Run only Solr notebooks
 pytest -k solr tests/notebooks/test_notebooks.py
 
-# Run in parallel (4x faster)
-pytest -n auto tests/notebooks/test_notebooks.py
-
 # Retry flaky tests (retry failed tests 3 times with 2 second delay)
 pytest --reruns 3 --reruns-delay 2 tests/notebooks/test_notebooks.py
 ```
+
+**Note:** For parallel execution, see the [Parallel Execution](#parallel-execution-faster-tests) section below.
 
 ### Code Quality Checks
 ```bash
@@ -310,6 +310,9 @@ pytest -k "sandbox" tests/notebooks/test_notebooks.py
 # Run only Solr tests (using markers)
 pytest -m solr tests/notebooks/test_notebooks.py
 
+# Run only Docker tests (run sequentially by default)
+pytest -m docker tests/notebooks/test_notebooks.py
+
 # Run only setup notebooks
 pytest -m setup tests/notebooks/test_notebooks.py
 
@@ -330,17 +333,26 @@ pytest -m "opensearch and not slow" tests/notebooks/test_notebooks.py
 ```
 
 ### Parallel Execution (Faster Tests)
+
+**Note**: Parallel execution is disabled by default to prevent system freezing with Docker tests. Docker tests run sequentially by default.
+
 ```bash
-# Run on all available CPU cores
+# Run non-Docker tests in parallel (recommended)
+pytest -n auto -m "not docker" tests/notebooks/test_notebooks.py
+
+# Run Docker tests sequentially (separate command)
+pytest -m docker tests/notebooks/test_notebooks.py
+
+# Run all tests in parallel (may freeze system with Docker tests)
 pytest -n auto tests/notebooks/test_notebooks.py
 
 # Run on specific number of workers
 pytest -n 4 tests/notebooks/test_notebooks.py
 
 # With Docker wrapper
-PYTEST_ARGS="-n auto" ./tests/test.sh
+PYTEST_ARGS="-n auto -m 'not docker'" ./tests/test.sh
 
-# Group tests by engine (recommended for Docker)
+# Group tests by engine (recommended for Docker when using parallel)
 # Each engine gets its own worker, avoiding port conflicts
 pytest -n auto --dist loadgroup tests/notebooks/test_notebooks.py
 ```
@@ -418,8 +430,7 @@ tests/
 │                            # - Health checks and timing
 ├── test_notebooks.py        # Main test suite (parametrized)
 ├── runner.py                # Notebook execution engine
-├── nb_test_config.py        # NotebookTestConfig class for discovering notebooks
-├── test_config.py           # Test configuration (paths and ignored notebooks)
+├── test_config.py           # Test configuration (paths, ignored notebooks, and NotebookTestConfig)
 ├── patch_clients_for_tests.py  # Port patching for isolation
 ├── test.sh                  # Test runner wrapper (simplified)
 └── README.md               # This file
@@ -485,8 +496,7 @@ The test suite is organized into three main categories:
 **Test Files:**
 - `test_notebooks.py` - Parametrized test suite that executes all notebooks
 - `runner.py` - Notebook execution engine with real-time streaming, error capture, and port patching
-- `nb_test_config.py` - NotebookTestConfig class for discovering notebooks in directories
-- `test_config.py` - Configuration constants (TEST_PATHS and IGNORED_NOTEBOOKS)
+- `test_config.py` - Configuration constants (TEST_PATHS, IGNORED_NOTEBOOKS) and NotebookTestConfig class for discovering notebooks
 
 **Features:**
 - Real-time output streaming (errors visible immediately)
@@ -531,13 +541,18 @@ def test_notebook_executes_without_errors(notebook_path, notebook_type, engine, 
 | `test_index.py`                 | Index rebuild functionality       | Force rebuild, create new index, method ordering                            |
 | `test_evaluate.py`              | Evaluation functions              | evaluate() with all engines, rre_table() data loading                       |
 | `test_ranklib.py`               | RankLib integration               | Training, feature search, model saving, KCV support                         |
-| `test_clickmodels.py`           | Click model algorithms            | Cascade model, User Browse Model, session building                          |
+| `test_clickmodels.py`           | Click model algorithms            | Cascade, UBM, PBM, S-DBN, COEC, Conversion models, session building         |
+| `test_log.py`                   | FeatureLogger                     | Feature logging, batch processing, keyword sanitization, drop_missing       |
+| `test_solr_parse.py`            | Solr parsing utilities            | parse_named_list, parse_termvect_namedlist, dictify, every_other_zipped     |
+| `test_years_as_ratings.py`      | Year-based ratings                | get_classic_rating, get_latest_rating, synthesize                            |
+| `test_mart_model.py`            | MART model analysis               | MARTModel, fold_whoopsies, dedup_whoopsies, Whoopsie                        |
+| `test_inject_typos.py`          | Typo injection                    | typo_it function, duplicate skipping, qid assignment                        |
 | `test_judg_list.py`             | Judgment list parsing             | StringIO reading, file I/O, unsorted detection                              |
 | `test_utils.py`                 | Utility functions                 | Helper functions used across the codebase                                   |
 | `test_notebook_patterns.py`     | Notebook code patterns            | Common patterns and anti-patterns in notebooks                              |
 | `test_package_compatibility.py` | Package compatibility             | NumPy, SciPy, scikit-learn, pandas, matplotlib operations                   |
 
-**Total:** 13 test files, 200+ individual test cases
+**Total:** 18 test files, 352+ individual test cases
 
 **Example:**
 ```python
@@ -1540,7 +1555,7 @@ This section covers common issues and their solutions.
 
 **Solutions:**
 
-1. **Use parallel execution**:
+1. **Use parallel execution** (see [Parallel Execution](#parallel-execution-faster-tests) section):
    ```bash
    pytest -n auto tests/notebooks/test_notebooks.py  # 4x faster
    ```
@@ -2063,18 +2078,15 @@ When reporting test failures or issues:
 ### Best Practices
 
 **Do:**
-- ✅ **Follow AAA Pattern**: Always structure tests with clear Arrange-Act-Assert sections
+- ✅ **Follow AAA Pattern**: Always structure tests with clear Arrange-Act-Assert sections (see [Writing New Tests](#writing-new-tests) for details)
 - ✅ Write tests before fixing bugs (TDD when possible)
 - ✅ Keep tests fast and focused
 - ✅ Use meaningful assertions with clear error messages
-- ✅ Separate test setup from execution from verification
 - ✅ Document why tests are skipped/ignored
 - ✅ Clean up test data and resources
 - ✅ Test error conditions, not just happy paths
 
 **Don't:**
-- ❌ Mix assertions within the Act section (separate concerns)
-- ❌ Perform setup operations in the Assert section
 - ❌ Write tests that depend on external services (use Docker)
 - ❌ Write tests that depend on execution order
 - ❌ Ignore notebooks without documenting why

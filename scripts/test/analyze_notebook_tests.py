@@ -21,12 +21,10 @@ from scripts.test._setup import (  # type: ignore  # noqa: E402, I001
     FAILING_NOTEBOOKS_BY_ENGINE_EXTENDED,
     extract_errors,
     get_test_name,
-    is_slow_notebook,
     print_test_summary,
     save_test_results,
 )
-from tests.nb_test_config import NotebookTestConfig  # noqa: E402
-from tests.test_config import IGNORED_NOTEBOOKS, TEST_PATHS  # noqa: E402
+from tests.test_config import collect_notebooks  # noqa: E402
 
 
 FAILING_NOTEBOOKS = FAILING_NOTEBOOKS_BY_ENGINE_EXTENDED
@@ -36,6 +34,9 @@ def collect_all_notebooks():
     """
     Collect all notebooks to test.
 
+    This function delegates to the consolidated collect_notebooks() function
+    from tests.test_config to avoid code duplication.
+
     Notebooks are ordered to optimize test execution:
     1. Setup notebooks run first
     2. hello-ltr notebooks run before dependent notebooks
@@ -44,44 +45,7 @@ def collect_all_notebooks():
     Slow notebooks are identified by matching patterns in SLOW_PATTERNS
     (e.g., "lambda-mart", "bigger bot", "netfix", "bayesian-optimization").
     """
-    notebooks = []
-
-    for test_path in TEST_PATHS:
-        if not Path(test_path).exists():
-            continue
-
-        try:
-            config = NotebookTestConfig(path=test_path)
-        except Exception:
-            continue
-
-        # Determine engine from path
-        engine = "general"
-        if "solr" in test_path:
-            engine = "solr"
-        elif "elasticsearch" in test_path:
-            engine = "elasticsearch"
-        elif "opensearch" in test_path:
-            engine = "opensearch"
-
-        # Add setup notebook if exists
-        if config.setup:
-            notebooks.append((config.setup, "setup", engine))
-
-        # Add test notebooks (excluding ignored)
-        # Sort: hello-ltr notebooks first, then fast notebooks, then slow notebooks last
-        test_notebooks = [nb for nb in config.notebooks if nb not in IGNORED_NOTEBOOKS]
-        test_notebooks.sort(
-            key=lambda x: (
-                0 if "hello-ltr" in x.lower() else 1,  # hello-ltr first
-                1 if is_slow_notebook(x) else 0,  # slow notebooks last
-                x,  # then alphabetical
-            )
-        )
-        for nb in test_notebooks:
-            notebooks.append((nb, "test", engine))
-
-    return notebooks
+    return collect_notebooks()
 
 
 def collect_failing_notebooks(engine_filter=None):

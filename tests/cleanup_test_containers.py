@@ -269,12 +269,12 @@ def main():
         else:
             failed_count += 1
 
-    print(f"\n{'='*80}", file=sys.stderr)
+    print(f"\n{'=' * 80}", file=sys.stderr)
     print("Cleanup complete:", file=sys.stderr)
     print(f"  ✓ Cleaned: {cleaned_count}", file=sys.stderr)
     if failed_count > 0:
         print(f"  ✗ Failed: {failed_count}", file=sys.stderr)
-    print(f"{'='*80}", file=sys.stderr)
+    print(f"{'=' * 80}", file=sys.stderr)
 
     return 0 if failed_count == 0 else 1
 

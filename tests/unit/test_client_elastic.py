@@ -10,7 +10,11 @@ Tests cover:
 - Feature extraction
 """
 
-from ltr.client.elastic_client import ElasticResp
+from unittest.mock import Mock, patch
+
+import pytest
+
+from ltr.client.elastic_client import ElasticClient, ElasticResp
 from ltr.client.responses import BulkResp, SearchResp
 
 
@@ -74,13 +78,79 @@ class TestElasticClientFeatureSet:
 
 
 class TestElasticClientModelOperations:
-    """Test model submission operations.
+    """Test model submission operations."""
 
-    Note: Model operation tests (test_submit_model, test_submit_ranklib_model, test_submit_xgboost_model)
-    are now consolidated in parametrized tests in tests.unit.client_test_helpers.
-    See test_submit_model(), test_submit_ranklib_model(), and test_submit_xgboost_model()
-    for the shared implementations.
-    """
+    @patch("ltr.client.elastic_client.requests")
+    @patch("ltr.client.elastic_client.Elasticsearch")
+    def test_submit_xgboost_model(self, mock_elasticsearch_class, mock_requests):
+        """Test submit_xgboost_model creates model with correct format."""
+        # Arrange
+        mock_client = Mock()
+        mock_client.perform_request.return_value = (200, {}, {})
+        mock_elasticsearch_class.return_value = mock_client
+
+        # Mock requests.delete, requests.post, and requests.get used by submit_model
+        mock_delete_resp = Mock()
+        mock_delete_resp.status_code = 200
+        mock_post_resp = Mock()
+        mock_post_resp.status_code = 200
+        mock_get_resp = Mock()
+        mock_get_resp.status_code = 200
+        mock_requests.delete.return_value = mock_delete_resp
+        mock_requests.post.return_value = mock_post_resp
+        mock_requests.get.return_value = mock_get_resp
+
+        client = ElasticClient()
+
+        model_payload = {
+            "model": {
+                "name": "test_xgboost",
+                "model": {
+                    "type": "model/xgboost+json",
+                    "definition": {"booster": "gbtree", "objective": "rank:ndcg"},
+                },
+            }
+        }
+
+        # Act
+        client.submit_xgboost_model(
+            "test_featureset", "test_index", "test_model", model_payload
+        )
+
+        # Assert
+        # Verify requests.delete was called to delete existing model
+        assert mock_requests.delete.called
+        # Verify requests.post was called to create the model
+        assert mock_requests.post.called
+        # Verify requests.get was called to verify model creation
+        assert mock_requests.get.called
+
+    @patch("ltr.client.elastic_client.Elasticsearch")
+    def test_submit_xgboost_model_error_handling(self, mock_elasticsearch_class):
+        """Test submit_xgboost_model handles errors correctly."""
+        # Arrange
+        mock_client = Mock()
+        mock_elasticsearch_class.return_value = mock_client
+
+        # Mock submit_model to raise an error
+        with patch.object(
+            ElasticClient, "submit_model", side_effect=Exception("Connection error")
+        ):
+            client = ElasticClient()
+            client.es = mock_client  # ElasticClient uses self.es
+
+            model_payload = {
+                "model": {
+                    "name": "test_xgboost",
+                    "model": {"type": "model/xgboost+json", "definition": {}},
+                }
+            }
+
+            # Act & Assert
+            with pytest.raises(Exception, match="Connection error"):
+                client.submit_xgboost_model(
+                    "test_featureset", "test_index", "test_model", model_payload
+                )
 
 
 class TestElasticClientResponseClasses:
@@ -139,3 +209,91 @@ class TestElasticClientResponseClasses:
         search_resp = SearchResp(resp)
         # Assert
         assert search_resp.status_code == 400
+
+
+class TestElasticClientInvalidInput:
+    """Test invalid input handling in ElasticClient."""
+
+    @patch("ltr.client.elastic_client.Elasticsearch")
+    def test_index_documents_string_doc_src(self, mock_elasticsearch_class):
+        """Test index_documents raises ValidationError for string doc_src."""
+        # Arrange
+        mock_client = Mock()
+        mock_elasticsearch_class.return_value = mock_client
+        client = ElasticClient()
+        # Act & Assert
+        from ltr.validation import ValidationError
+
+        with pytest.raises(ValidationError, match="does not support file paths"):
+            client.index_documents("test_index", "/path/to/file.json")  # type: ignore[arg-type]
+
+    @patch("ltr.client.elastic_client.Elasticsearch")
+    def test_index_documents_missing_id(self, mock_elasticsearch_class):
+        """Test index_documents raises ValidationError when document missing 'id' field."""
+        # Arrange
+        mock_client = Mock()
+        mock_elasticsearch_class.return_value = mock_client
+        client = ElasticClient()
+        docs = [{"title": "Test"}]
+        # Act & Assert
+        from ltr.validation import ValidationError
+
+        with pytest.raises(ValidationError, match="Expecting docs to have field 'id'"):
+            client.index_documents("test_index", docs)
+
+
+class TestElasticClientRetryLogic:
+    """Test retry logic edge cases in ElasticClient."""
+
+    @patch("ltr.client.elastic_client.Elasticsearch")
+    def test_model_query_retry_exhausted(self, mock_elasticsearch_class):
+        """Test model_query retries but eventually fails when max retries exhausted."""
+        # Arrange
+        from ltr.exceptions import ModelError, QueryError
+
+        mock_client = Mock()
+        mock_elasticsearch_class.return_value = mock_client
+        client = ElasticClient()
+        # Mock response that indicates model not found (timing error)
+        # The retry logic checks for "Unknown model" in the error string
+        mock_response = {"error": "Unknown model test_model"}
+        mock_client.search.return_value = mock_response
+        # Act & Assert
+        # The error is raised during validation before retry logic can convert it
+        # So it may raise QueryError or ModelError depending on retry logic
+        with pytest.raises((ModelError, QueryError), match="model|Model"):
+            client.model_query(
+                "test_index", "test_model", {}, {"query": {"match_all": {}}}
+            )
+
+    @patch("ltr.client.elastic_client.requests.get")
+    def test_feature_set_not_found(self, mock_get):
+        """Test feature_set raises QueryError when feature set not found."""
+        # Arrange
+        from ltr.exceptions import QueryError
+
+        mock_response = Mock()
+        mock_response.status_code = 404
+        mock_get.return_value = mock_response
+        client = ElasticClient()
+        # Act & Assert
+        with pytest.raises(QueryError, match="Feature set 'test_featureset' not found"):
+            client.feature_set("test_index", "test_featureset")
+
+    @patch("ltr.client.elastic_client.Elasticsearch")
+    def test_query_non_retryable_error(self, mock_elasticsearch_class):
+        """Test query does not retry on non-retryable errors (e.g., 400 Bad Request)."""
+        # Arrange
+        from elasticsearch.exceptions import RequestError
+
+        mock_client = Mock()
+        mock_elasticsearch_class.return_value = mock_client
+        client = ElasticClient()
+        mock_client.search.side_effect = RequestError(
+            "Bad Request", {"status": 400}, {"error": {"reason": "Invalid query"}}
+        )
+        # Act & Assert
+        from ltr.exceptions import QueryError
+
+        with pytest.raises(QueryError, match="Elasticsearch query failed"):
+            client.query("test_index", {"query": {"invalid": "query"}})

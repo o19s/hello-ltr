@@ -5,7 +5,6 @@ from elasticsearch import Elasticsearch, TransportError
 from ltr.helpers.es_url_parse import parse_url
 from ltr.judgments import (
     Judgment,
-    judgments_by_qid,
     judgments_from_file,
     judgments_to_file,
 )
@@ -123,6 +122,9 @@ def grade_results(results, keywords, qid):
 def load_judgments(judg_file):
     """Load judgments from a file and return statistics.
 
+    Optimized to compute statistics in a single pass where possible, reducing
+    memory overhead for large judgment files.
+
     Args:
         judg_file: Path to the judgments file.
 
@@ -131,23 +133,37 @@ def load_judgments(judg_file):
             - curr_judgments: List of Judgment objects loaded from file.
             - existing_kws: Set of keyword strings already in the file.
             - last_qid: Highest query ID found in the file (0 if file doesn't exist).
+
+    Note:
+        This function still requires all judgments in memory as it returns
+        the full list. For memory-efficient processing of large files, consider
+        using `judgments_from_file()` directly and processing judgments lazily.
     """
     curr_judgments = []
     existing_kws = set()
     last_qid = 0
     try:
         with open(judg_file) as f:
-            curr_judgments = list(judgments_from_file(f))
-            existing_kws = {judg.keywords for judg in curr_judgments}
-            judg_dict = judgments_by_qid(curr_judgments)
-            judg_profile = []
-            for _qid, judglist in judg_dict.items():
-                judg_profile.append((judglist[0], len(judglist)))
+            # Collect judgments and statistics in a single pass where possible
+            judg_dict = {}
+            for judgment in judgments_from_file(f):
+                curr_judgments.append(judgment)
+                existing_kws.add(judgment.keywords)
+                # Track last qid as we iterate
+                if judgment.qid > last_qid:
+                    last_qid = judgment.qid
+                # Group by qid for profile generation
+                if judgment.qid not in judg_dict:
+                    judg_dict[judgment.qid] = []
+                judg_dict[judgment.qid].append(judgment)
+
+            # Generate and print judgment profile
+            judg_profile = [
+                (judglist[0], len(judglist)) for judglist in judg_dict.values()
+            ]
             judg_profile.sort(key=lambda j: j[1], reverse=True)
             for prof in judg_profile:
                 print(f"{prof[0].keywords} has {prof[1]} judgments")
-
-            last_qid = curr_judgments[-1].qid
     except FileNotFoundError:
         pass
 

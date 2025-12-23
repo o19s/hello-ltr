@@ -1,6 +1,5 @@
 """Retry utilities for handling transient failures with exponential backoff."""
 
-import functools
 import time
 from collections.abc import Callable
 from typing import Optional, TypeVar
@@ -66,7 +65,10 @@ def retry_on_connection_error(
                 time.sleep(retry_delay)
                 retry_delay *= backoff_multiplier
                 continue
-            # Not a connection error or last attempt, re-raise with context
+            # Not a connection error - re-raise the original exception
+            if not should_retry:
+                raise last_exception
+            # Last attempt failed - raise RuntimeError with context
             raise RuntimeError(
                 f"Operation failed after {attempt + 1} attempts. "
                 f"Last error: {last_exception}"
@@ -94,8 +96,14 @@ def is_opensearch_connection_error(exception: Exception) -> bool:
         ConnectionError as OpenSearchConnectionError,
     )
     from opensearchpy.exceptions import (
+        NotFoundError,
         TransportError,
     )
+
+    # NotFoundError is not a connection error - it means the resource doesn't exist
+    # and should not be retried
+    if isinstance(exception, NotFoundError):
+        return False
 
     error_str = str(exception)
     return (
@@ -513,136 +521,6 @@ def retry_model_query(
         )
 
     return resp
-
-
-def retry_on_timing_error(
-    max_retries: int = 5,
-    initial_delay: float = 0.2,
-    backoff_multiplier: float = 1.5,
-    is_timing_error: Optional[Callable[[Exception], bool]] = None,
-):
-    """
-    Decorator to retry a function on timing errors with exponential backoff.
-
-    Timing errors are transient errors that occur when resources (models, feature sets)
-    are not yet ready after creation, typically due to internal indexing delays.
-
-    Args:
-        max_retries: Maximum number of retry attempts (default: 5)
-        initial_delay: Initial delay in seconds before first retry (default: 0.2)
-        backoff_multiplier: Multiplier for exponential backoff (default: 1.5)
-        is_timing_error: Optional function to determine if an exception is a timing error.
-                        If None, uses default heuristics (is_feature_set_timing_error,
-                        is_model_timing_error, is_opensearch_timing_error).
-
-    Returns:
-        Decorator function that wraps the target function with retry logic.
-
-    Example:
-        @retry_on_timing_error(max_retries=5, initial_delay=0.2)
-        def create_feature_set(self, index: str, name: str):
-            # Function implementation
-            pass
-    """
-    if is_timing_error is None:
-        # Default: check for any timing error type
-        def default_is_timing_error(e: Exception) -> bool:
-            return (
-                is_feature_set_timing_error(e)
-                or is_model_timing_error(e)
-                or is_opensearch_timing_error(e)
-            )
-
-        is_timing_error = default_is_timing_error
-
-    def decorator(func: Callable[..., T]) -> Callable[..., T]:
-        @functools.wraps(func)
-        def wrapper(*args: object, **kwargs: object) -> T:
-            retry_delay = initial_delay
-            last_exception: Optional[Exception] = None
-
-            for attempt in range(max_retries):
-                try:
-                    return func(*args, **kwargs)
-                except Exception as e:
-                    last_exception = e
-
-                    # Check if this is a timing error
-                    if is_timing_error(e) and attempt < max_retries - 1:
-                        logger.debug(
-                            f"{func.__name__} failed with timing error "
-                            f"(attempt {attempt + 1}/{max_retries}), retrying after {retry_delay:.2f}s..."
-                        )
-                        time.sleep(retry_delay)
-                        retry_delay *= backoff_multiplier
-                        continue
-
-                    # Not a timing error or last attempt, re-raise
-                    raise
-
-            # Should not reach here, but handle case where all retries exhausted
-            if last_exception is not None:
-                raise RuntimeError(
-                    f"{func.__name__} failed after {max_retries} attempts. "
-                    f"Last error: {last_exception}"
-                ) from last_exception
-
-            raise RuntimeError(f"{func.__name__} failed after {max_retries} attempts.")
-
-        return wrapper
-
-    return decorator
-
-
-def retry_on_connection_error_decorator(
-    max_retries: int = 3,
-    initial_delay: float = 0.1,
-    backoff_multiplier: float = 1.5,
-    is_connection_error: Optional[Callable[[Exception], bool]] = None,
-):
-    """
-    Decorator to retry a function on connection errors with exponential backoff.
-
-    Args:
-        max_retries: Maximum number of retry attempts (default: 3)
-        initial_delay: Initial delay in seconds before first retry (default: 0.1)
-        backoff_multiplier: Multiplier for exponential backoff (default: 1.5)
-        is_connection_error: Optional function to determine if an exception is a connection error.
-                            If None, uses default heuristics.
-
-    Returns:
-        Decorator function that wraps the target function with retry logic.
-
-    Example:
-        @retry_on_connection_error_decorator(max_retries=3, initial_delay=0.1)
-        def connect_to_server(self):
-            # Function implementation
-            pass
-    """
-
-    def decorator(func: Callable[..., T]) -> Callable[..., T]:
-        @functools.wraps(func)
-        def wrapper(*args: object, **kwargs: object) -> T:
-            # Use the existing retry_on_connection_error function
-            def call_func() -> T:
-                return func(*args, **kwargs)
-
-            return retry_on_connection_error(
-                call_func,
-                max_retries=max_retries,
-                initial_delay=initial_delay,
-                backoff_multiplier=backoff_multiplier,
-                is_connection_error=is_connection_error,
-            )
-
-        return wrapper
-
-    return decorator
-
-
-# Alias for cleaner usage (matches the recommendation in CODE_REVIEW_ISSUES.md)
-# Note: Using different name to avoid conflict with existing function
-retry_on_connection_error_deco = retry_on_connection_error_decorator
 
 
 def retry_until_true(

@@ -32,26 +32,26 @@ def compare_reports(
     before_count = before_data.get("count", 0)
     after_count = after_data.get("count", 0)
 
-    print(f"\n{'='*80}")
+    print(f"\n{'=' * 80}")
     print(f"Performance Comparison: {test_type.replace('_', ' ').title()}")
-    print(f"{'='*80}")
+    print(f"{'=' * 80}")
     print("\nBefore Resource Limits:")
     print(f"  Total tests: {before_count}")
-    print(f"  Total time: {before_total:.2f} seconds ({before_total/60:.2f} minutes)")
+    print(f"  Total time: {before_total:.2f} seconds ({before_total / 60:.2f} minutes)")
     if before_count > 0:
-        print(f"  Average time: {before_total/before_count:.2f} seconds")
+        print(f"  Average time: {before_total / before_count:.2f} seconds")
 
     print("\nAfter Resource Limits:")
     print(f"  Total tests: {after_count}")
-    print(f"  Total time: {after_total:.2f} seconds ({after_total/60:.2f} minutes)")
+    print(f"  Total time: {after_total:.2f} seconds ({after_total / 60:.2f} minutes)")
     if after_count > 0:
-        print(f"  Average time: {after_total/after_count:.2f} seconds")
+        print(f"  Average time: {after_total / after_count:.2f} seconds")
 
     if before_total > 0 and after_total > 0:
         change = ((after_total - before_total) / before_total) * 100
         change_abs = after_total - before_total
         print("\nChange:")
-        print(f"  Absolute: {change_abs:+.2f} seconds ({change_abs/60:+.2f} minutes)")
+        print(f"  Absolute: {change_abs:+.2f} seconds ({change_abs / 60:+.2f} minutes)")
         print(f"  Percentage: {change:+.1f}%")
 
         if abs(change) > 10:
@@ -67,9 +67,9 @@ def compare_reports(
     after_times = after_data.get("test_times", {})
 
     if before_times and after_times:
-        print(f"\n{'='*80}")
+        print(f"\n{'=' * 80}")
         print("Individual Test Comparisons (showing tests present in both):")
-        print(f"{'='*80}")
+        print(f"{'=' * 80}")
 
         common_tests = set(before_times.keys()) & set(after_times.keys())
         if common_tests:
@@ -142,9 +142,9 @@ def main():
         if not after_integration:
             print("  - After: performance_report_integration_with_limits.json")
 
-    print(f"\n{'='*80}")
+    print(f"\n{'=' * 80}")
     print("Summary")
-    print(f"{'='*80}")
+    print(f"{'=' * 80}")
     print("\nTo get accurate comparison, ensure:")
     print("1. Tests are run with --cache-clear to avoid cached results")
     print("2. Tests are run with same parallelization settings")

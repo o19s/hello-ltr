@@ -119,9 +119,16 @@ class FeatureLogger:
             # This removes anything but alphanumeric and spaces
             keywords = re.sub(r"([^\s\w]|_)+", "", keywords)
 
+            # Generate fuzzy keywords (append ~ to each word)
+            # Handle empty keywords case
+            if keywords.strip():
+                fuzzy_keywords = " ".join([x + "~" for x in keywords.split(" ") if x])
+            else:
+                fuzzy_keywords = ""
+
             params = {
                 "keywords": keywords,
-                "fuzzy_keywords": " ".join([x + "~" for x in keywords.split(" ")]),
+                "fuzzy_keywords": fuzzy_keywords,
                 "keywordsList": [keywords],  # Needed by TSQ for the time being
             }
 

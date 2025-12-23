@@ -5,73 +5,73 @@ description = "Learning to Rank tutorial and examples"
 requires-python = ">=3.9"
 dependencies = [
     "setuptools>=65.0.0",
-    "appnope==0.1.2",
-    "attrs==21.4.0",
+    "appnope>=0.1.4",  # Updated from 0.1.2 - safe patch update
+    "attrs>=24.0.0",  # Updated from 21.4.0 - check compatibility
     "backcall==0.2.0",
-    "bleach==4.1.0",
-    "certifi==2022.12.07",
-    "chardet==4.0.0",
-    "cycler==0.11.0",
+    "bleach>=6.0.0",  # Updated from 4.1.0 - major version bump, check compatibility
+    "certifi>=2025.11.12",
+    "chardet>=5.0.0",  # Updated from 4.0.0 - major version bump, check compatibility
+    "cycler>=0.12.1",  # Updated from 0.11.0 - safe minor update
     "Cython",
     "decorator==4.3.2",
     "defusedxml==0.5.0",
     "elasticsearch==7.16.2",
-    "entrypoints==0.3",
-    "graphviz==0.19.1",
-    "idna==3.3",
+    "entrypoints>=0.4",  # Updated from 0.3 - safe minor update
+    "graphviz>=0.21",  # Updated from 0.19.1 - safe minor update
+    "idna>=3.4",  # Updated from 3.3 - patch version update
     "ipykernel>=6.25.0",
     "ipython>=8.12.0",
     "ipython-genutils==0.2.0",
     "ipywidgets>=8.0.0",
     "jedi>=0.19.0",
-    "Jinja2==3.0.3",
-    "joblib==1.1.1",
-    "jsonschema>=4.17.0",
+    "Jinja2>=3.1.6",  # Updated from 3.0.3 - safe minor update
+    "joblib>=1.5.3",  # Updated from 1.1.1 - safe minor update
+    "jsonschema>=4.25.1",  # Updated from >=4.17.0 - safe minor update
     "jupyter",
-    "jupyter-client>=8.0.0",
+    "jupyter-client>=8.0.0,<8.7.0",  # Keep <8.7.0 for Python 3.9 compatibility (8.7.0 requires Python >=3.10)
     "jupyter-console>=6.6.0",
     "jupyter-core>=5.0.0",
     "kiwisolver>=1.3.2",
-    "Mako==1.1.6",
-    "MarkupSafe==2.0.1",
+    "Mako>=1.3.10",  # Updated from 1.1.6 - safe minor update
+    "MarkupSafe==2.0.1",  # Keep 2.0.1 for Jinja2 3.x compatibility
     "matplotlib>=3.7.2",
     "mistune",
     "mizani==0.9.2",
     "nbconvert>=7.0.0",
     "nbformat>=5.9.0",
     "nbstripout>=0.6.0",
-    "notebook>=7.0.0",
+    "notebook>=7.5.1",  # Updated from >=7.0.0 - safe minor update
     "numpy>=1.24.0,<2.0.0",
     "opensearch-py==2.2.0",
     "pandas>=2.0.3",
-    "pandocfilters==1.5.0",
-    "parso==0.8.3",
-    "pexpect==4.8.0",
+    "pandocfilters>=1.5.1",  # Updated from 1.5.0 - safe patch update
+    "parso>=0.8.5",  # Updated from 0.8.3 - safe patch update
+    "pexpect>=4.9.0",  # Updated from 4.8.0 - safe minor update
     "pickleshare==0.7.5",
     "plotly==5.5.0",
     "plotnine==0.12.2",
-    "prometheus-client==0.13.1",
+    "prometheus-client>=0.23.1",  # Updated from 0.13.1 - safe minor update
     "prompt-toolkit>=3.0.41,<3.1.0",
     "ptyprocess==0.7.0",
-    "Pygments==2.11.2",
-    "pyparsing==3.0.7",
-    "pyrsistent==0.18.1",
-    "python-dateutil==2.8.2",
-    "pytz==2021.3",
+    "Pygments>=2.19.2",  # Updated from 2.11.2 - safe minor update
+    "pyparsing>=3.3.0",  # Updated from 3.0.7 - safe minor update
+    "pyrsistent>=0.20.0",  # Updated from 0.18.1 - safe minor update
+    "python-dateutil>=2.9.0",  # Updated from 2.8.2 - safe patch update
+    "pytz>=2024.1",  # Updated from 2021.3 - timezone data updates
     "pyzmq==25.1.1",
-    "qtconsole==5.2.2",
+    "qtconsole>=5.7.0",  # Updated from 5.2.2 - safe minor update
     "requests>=2.31.0",
     "scikit-learn>=1.3.2",
     "scipy>=1.11.0",
-    "Send2Trash==1.8.0",
-    "six==1.16.0",
+    "Send2Trash>=1.8.3",  # Updated from 1.8.0 - safe patch update
+    "six>=1.17.0",  # Updated from 1.16.0 - safe patch update
     "terminado==0.13.1",
     "testpath==0.5.0",
     "threadpoolctl==3.1.0",
-    "tornado==6.2",
+    "tornado>=6.4.1",  # Updated from 6.2 - automatically updated to 6.5.4 for compatibility
     "tqdm==4.62.3",
     "traitlets==5.9.0",
-    "urllib3==1.26.8",
+    "urllib3==1.26.18",  # Latest 1.x with security fixes; 2.x may break elasticsearch 7.16.2 compatibility
     "wcwidth==0.2.5",
     "webencodings==0.5.1",
     "xgboost==1.7.6",
