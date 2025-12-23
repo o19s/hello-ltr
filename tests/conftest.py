@@ -1105,111 +1105,49 @@ def add_error_context(request):
 
 
 @pytest.fixture
-def cleanup_registry(request):
-    """
-    Registry for cleanup functions that should run after a test completes.
-
-    This fixture allows tests to register cleanup functions that will be
-    executed after the test completes, regardless of whether it passes or fails.
-
-    Usage:
-        def test_something(cleanup_registry):
-            # Create a resource
-            file_path = create_temp_file()
-            # Register cleanup
-            cleanup_registry.register(lambda: os.remove(file_path))
-
-            # Test code...
-            # Cleanup will run automatically after test completes
-
-    Returns:
-        CleanupRegistry: Object with register() method for registering cleanup functions
-    """
-    cleanup_functions = []
-
-    class CleanupRegistry:
-        """Registry for cleanup functions to be executed after tests.
-
-        Provides a way to register cleanup functions that will be called
-        in reverse order after the test completes, even if the test fails.
-        """
-
-        def register(self, cleanup_func, *args, **kwargs):
-            """Register a cleanup function to be called after the test."""
-            if args or kwargs:
-                cleanup_functions.append((cleanup_func, args, kwargs))
-            else:
-                cleanup_functions.append((cleanup_func, (), {}))
-
-    registry = CleanupRegistry()
-
-    yield registry
-
-    # Execute all registered cleanup functions in reverse order
-    for cleanup_func, args, kwargs in reversed(cleanup_functions):
-        try:
-            cleanup_func(*args, **kwargs)
-        except Exception as e:
-            # Log cleanup failures but don't fail the test
-            logger.warning(
-                f"Cleanup function failed (non-critical): {e}", exc_info=True
-            )
-
-
-@pytest.fixture
-def temp_file(cleanup_registry, tmp_path):
+def temp_file(tmp_path):
     """
     Create a temporary file that is automatically cleaned up after the test.
 
-    This fixture provides a temporary file path and ensures it's cleaned up
-    after the test completes, even if the test fails.
+    This fixture provides a temporary file path. Cleanup is handled automatically
+    by pytest's tmp_path fixture, which cleans up the entire temporary directory
+    after the test completes.
 
     Usage:
         def test_something(temp_file):
             # temp_file is a Path object pointing to a temporary file
             temp_file.write_text("test content")
-            # File is automatically deleted after test
+            # File is automatically deleted after test (via tmp_path cleanup)
 
     Returns:
         pathlib.Path: Path to a temporary file
     """
     temp_file_path = tmp_path / "test_file"
     temp_file_path.touch()
-
-    # Register cleanup (though tmp_path fixture already handles this)
-    # This is explicit for clarity and documentation
-    cleanup_registry.register(lambda: temp_file_path.unlink(missing_ok=True))
-
     return temp_file_path
 
 
 @pytest.fixture
-def temp_dir(cleanup_registry, tmp_path):
+def temp_dir(tmp_path):
     """
     Create a temporary directory that is automatically cleaned up after the test.
 
-    This fixture provides a temporary directory path and ensures it's cleaned up
-    after the test completes, even if the test fails.
+    This fixture provides a temporary directory path. Cleanup is handled automatically
+    by pytest's tmp_path fixture, which cleans up the entire temporary directory
+    after the test completes.
 
     Usage:
         def test_something(temp_dir):
             # temp_dir is a Path object pointing to a temporary directory
             (temp_dir / "subdir").mkdir()
             (temp_dir / "file.txt").write_text("content")
-            # Directory and contents are automatically deleted after test
+            # Directory and contents are automatically deleted after test (via tmp_path cleanup)
 
     Returns:
         pathlib.Path: Path to a temporary directory
     """
-    import shutil
-
     temp_dir_path = tmp_path / "test_dir"
     temp_dir_path.mkdir()
-
-    # Register cleanup (though tmp_path fixture already handles this)
-    # This is explicit for clarity and documentation
-    cleanup_registry.register(lambda: shutil.rmtree(temp_dir_path, ignore_errors=True))
-
     return temp_dir_path
 
 
