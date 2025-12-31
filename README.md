@@ -1,6 +1,6 @@
 # Hello LTR :)
 
-**Last Updated:** December 21, 2025
+**Last Updated:** December 31, 2025
 
 The overall goal of this project is to demonstrate all the steps required to work with LTR in Elasticsearch, Solr, or OpenSearch. There are two modes of running this project. You can run and edit notebooks in a docker container or you can do local development on the notebooks and connect to the search engine(s) running in Docker.
 
@@ -301,7 +301,7 @@ For comprehensive documentation, see:
 
 - **[Architecture Documentation](ARCHITECTURE.md)** - System architecture, design patterns, and component overview
 - **[Architecture Decision Records](adr/README.md)** - Historical record of key architectural decisions
-- **[Codebase Review](CODEBASE_REVIEW.md)** - Complete code quality and security analysis
+- **[Advanced Usage Patterns](ADVANCED_USAGE.md)** - Advanced usage patterns and direct client access
 - **[CI/CD Documentation](.github/README.md)** - GitHub Actions workflows and Dependabot configuration
 - **[Type Aliases Guide](TYPE_ALIASES_GUIDE.md)** - Type system documentation and usage
 - **[Test Suite Documentation](tests/README.md)** - Testing infrastructure and usage

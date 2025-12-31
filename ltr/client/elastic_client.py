@@ -31,9 +31,14 @@ from ltr.types import (
     ModelPayload,
     QueryParams,
 )
-from ltr.validation import ValidationError
+from ltr.validation import (
+    ValidationError,
+    validate_index_name,
+    validate_model_name,
+)
 
 from .base_client import BaseClient
+from .elastic_base_client import ElasticBaseClient
 from .responses import APIResp, BulkResp
 
 logger = get_logger(__name__)
@@ -51,7 +56,7 @@ MODEL_QUERY_RETRY_DELAY = 0.5  # 500ms initial delay
 ElasticResp = APIResp
 
 
-class ElasticClient(BaseClient):
+class ElasticClient(ElasticBaseClient, BaseClient):
     """Elasticsearch client for Learn-to-Rank operations.
 
     Implements the BaseClient interface for Elasticsearch, providing methods
@@ -109,37 +114,6 @@ class ElasticClient(BaseClient):
         self.elastic_ep: str = f"http://{self.host}:{self.port}/_ltr"
         self.es: Elasticsearch = Elasticsearch(f"http://{self.host}:{self.port}")
 
-    def _validate_search_response(
-        self, resp: JSONDict, operation: str = "query"
-    ) -> None:
-        """Validate Elasticsearch search response structure.
-
-        Checks for error responses and missing 'hits' key, raising ValueError
-        with descriptive messages if validation fails.
-
-        Args:
-            resp: Elasticsearch search API response dictionary.
-            operation: Operation name for error messages (e.g., "query", "model query").
-
-        Raises:
-            ValueError: If response contains an error or is missing the 'hits' key.
-        """
-        if "error" in resp:
-            error_detail = resp.get("error", {})
-            if isinstance(error_detail, dict):
-                error_msg: str = error_detail.get("reason", str(error_detail))
-            else:
-                error_msg = str(error_detail)
-            raise QueryError(
-                f"Elasticsearch {operation} failed: {error_msg}",
-                client_name="elastic",
-            )
-        if "hits" not in resp:
-            raise QueryError(
-                f"Unexpected response structure: missing 'hits' key. Response: {json.dumps(resp, indent=2)[:500]}",
-                client_name="elastic",
-            )
-
     def get_host(self) -> str:
         """Get the Elasticsearch hostname.
 
@@ -164,7 +138,11 @@ class ElasticClient(BaseClient):
 
         Returns:
             bool: True if the index exists, False otherwise.
+
+        Raises:
+            ValidationError: If the index name is invalid.
         """
+        index = validate_index_name(index)
         return self.es.indices.exists(index=index)
 
     def delete_index(self, index: str) -> None:
@@ -173,10 +151,14 @@ class ElasticClient(BaseClient):
         Args:
             index: Index name to delete.
 
+        Raises:
+            ValidationError: If the index name is invalid.
+
         Note:
             Does not raise exceptions if the index doesn't exist (404) or
             if there are other client errors (400).
         """
+        index = validate_index_name(index)
         resp = self.es.indices.delete(index=index, ignore=[400, 404])
         resp_msg(
             msg=f"Deleted index {index}",
@@ -194,51 +176,14 @@ class ElasticClient(BaseClient):
                 "{index}_settings.json" in the configs_dir directory.
 
         Raises:
+            ValidationError: If the index name is invalid.
             FileNotFoundError: If the configuration file cannot be found.
             RuntimeError: If index creation fails (HTTP status >= 400).
             LTRIndexError: If index creation appears to succeed but verification fails
                 (index cannot be found after creation).
         """
-        cfg_json_path = os.path.join(self.configs_dir, f"{index}_settings.json")
-
-        # If the config file doesn't exist at the specified path, try common alternative locations
-        # This handles cases where tests run from project root but configs are in notebook directories
-        if not os.path.exists(cfg_json_path):
-            # Try to find the project root by looking for pyproject.toml
-            project_root = os.getcwd()
-            search_dir = project_root
-            # Navigate up to project root if we're in a subdirectory (max 10 levels)
-            for _ in range(10):
-                if os.path.exists(os.path.join(search_dir, "pyproject.toml")):
-                    project_root = search_dir
-                    break
-                parent = os.path.dirname(search_dir)
-                if parent == search_dir:  # Reached filesystem root
-                    break
-                search_dir = parent
-
-            # Try standard notebook locations relative to project root
-            possible_paths = [
-                os.path.join(
-                    project_root,
-                    f"notebooks/elasticsearch/{index}/{index}_settings.json",
-                ),
-                os.path.join(
-                    project_root, f"notebooks/opensearch/{index}/{index}_settings.json"
-                ),
-                # Check osc-blog directory for blog index
-                os.path.join(
-                    project_root,
-                    f"notebooks/elasticsearch/osc-blog/{index}_settings.json",
-                ),
-                os.path.join(
-                    project_root, f"notebooks/opensearch/osc-blog/{index}_settings.json"
-                ),
-            ]
-            for alt_path in possible_paths:
-                if os.path.exists(alt_path):
-                    cfg_json_path = alt_path
-                    break
+        index = validate_index_name(index)
+        cfg_json_path = self._resolve_config_path(index, self.configs_dir)
 
         with open(cfg_json_path) as src:
             settings = json.load(src)
@@ -285,9 +230,11 @@ class ElasticClient(BaseClient):
                 identifies it. File paths (str) are not supported.
 
         Raises:
+            ValidationError: If the index name is invalid.
             ValueError: If a document is missing the required "id" field, or if
                 doc_src is a string (file paths not supported).
         """
+        index = validate_index_name(index)
 
         def bulk_docs(
             doc_src: Iterable[JSONDict],
@@ -333,8 +280,10 @@ class ElasticClient(BaseClient):
             index: Index name (unused, kept for API compatibility).
 
         Raises:
+            ValidationError: If the index name is invalid.
             RuntimeError: If LTR store initialization fails (HTTP status >= 400).
         """
+        index = validate_index_name(index)
         resp = requests.delete(self.elastic_ep)
         resp_msg(
             msg="Removed Default LTR feature store".format(), resp=resp, throw=False
@@ -357,8 +306,11 @@ class ElasticClient(BaseClient):
             ftr_config: Feature configuration dictionary with featureset.features structure.
 
         Raises:
+            ValidationError: If the index name or feature set name is invalid.
             RuntimeError: If the index doesn't exist or feature set creation fails.
         """
+        index = validate_index_name(index)
+        name = validate_model_name(name)
         # Check if index exists before attempting to create feature set
         # Elasticsearch LTR validates feature sets against indices, so the index must exist
         if not self.check_index_exists(index):
@@ -453,60 +405,13 @@ class ElasticClient(BaseClient):
         query_retry_delay = QUERY_RETRY_DELAY
 
         # Extract required parameters from feature set configuration
-        # First check if validation section provides default params
-        test_query_params = {}
-        if isinstance(ftr_config, dict) and "validation" in ftr_config:
-            validation: JSONDict = ftr_config.get("validation", {})
-            if isinstance(validation, dict) and "params" in validation:
-                params = validation["params"]
-                if isinstance(params, dict):
-                    test_query_params = params.copy()
-
-        # If no validation params, extract from features
-        if not test_query_params and isinstance(ftr_config, dict):
-            featureset: JSONDict = ftr_config.get("featureset", {})
-            if isinstance(featureset, dict):
-                features: list[JSONDict] = featureset.get("features", [])
-                # Collect all unique params from all features
-                required_params: set[str] = set()
-                for feature in features:
-                    if isinstance(feature, dict) and "params" in feature:
-                        feature_params: list[str] = feature.get("params", [])
-                        if isinstance(feature_params, list):
-                            required_params.update(feature_params)
-
-                # Provide default values for required params
-                # Detect param types based on naming conventions and template usage
-                for param in required_params:
-                    if param not in test_query_params:
-                        # Check if param name suggests it should be an array/list
-                        param_lower: str = param.lower()
-                        if "list" in param_lower or "array" in param_lower:
-                            # Param name suggests it's an array (e.g., "keywordsList")
-                            test_query_params[param] = []
-                        else:
-                            # Default to empty string for most params (keywords, query, etc.)
-                            # This allows the query to execute even if the param value isn't meaningful
-                            test_query_params[param] = ""
+        test_query_params = self._extract_feature_set_params(ftr_config)
 
         # Verify feature set is usable in queries using shared helper
         def execute_verification_query() -> JSONDict:
-            test_params = {
-                "query": {
-                    "bool": {
-                        "filter": [
-                            {
-                                "sltr": {
-                                    "_name": "test_features",
-                                    "featureset": name,
-                                    "params": test_query_params,
-                                }
-                            }
-                        ]
-                    }
-                },
-                "size": 0,  # Don't return documents, just verify query works
-            }
+            test_params = self._build_feature_set_verification_query(
+                name, test_query_params
+            )
             test_resp = self.es.search(index=index, body=test_params)
             # Check if query succeeded (no error in response)
             if "error" not in test_resp:
@@ -540,25 +445,6 @@ class ElasticClient(BaseClient):
             initial_delay=query_retry_delay,
         )
 
-    def get_feature_name(self, config: FeatureConfig, ftr_idx: int) -> str:
-        """Get the name of a feature by its index.
-
-        Args:
-            config: Feature set configuration dictionary.
-            ftr_idx: Feature index (1-based).
-
-        Returns:
-            str: Name of the feature at the specified index.
-
-        Raises:
-            ValueError: If config is a list instead of a dictionary.
-        """
-        if isinstance(config, list):
-            raise ValidationError(
-                "ElasticClient.get_feature_name requires a dict config"
-            )
-        return config["featureset"]["features"][int(ftr_idx) - 1]["name"]
-
     def log_query(
         self,
         index: str,
@@ -586,9 +472,12 @@ class ElasticClient(BaseClient):
                 field containing the logged feature values.
 
         Raises:
+            ValidationError: If the index name or feature set name is invalid.
             RuntimeError: If the feature set is not usable after retries.
             ValueError: If the response contains an error or has an invalid structure.
         """
+        index = validate_index_name(index)
+        featureset = validate_model_name(featureset)
         query_params = params.copy() if params else {}
         query_body = {
             "query": {
@@ -680,8 +569,12 @@ class ElasticClient(BaseClient):
             model_payload: Model configuration dictionary.
 
         Raises:
+            ValidationError: If the index name, feature set name, or model name is invalid.
             RuntimeError: If model creation appears to succeed but verification fails.
         """
+        featureset = validate_model_name(featureset)
+        index = validate_index_name(index)
+        model_name = validate_model_name(model_name)
         model_ep = f"{self.elastic_ep}/_model/"
         create_ep = f"{self.elastic_ep}/_featureset/{featureset}/_createmodel"
 
@@ -735,54 +628,6 @@ class ElasticClient(BaseClient):
                 context={"featureset": featureset, "index": index},
             ) from e
 
-    def submit_ranklib_model(
-        self, featureset: str, index: str, model_name: str, model_payload: str
-    ) -> None:
-        """Submit a RankLib model to Elasticsearch LTR.
-
-        Args:
-            featureset: Name of the feature set to associate the model with.
-            index: Index name (unused, kept for API compatibility).
-            model_name: Name of the model to create.
-            model_payload: RankLib model definition string.
-
-        Raises:
-            RuntimeError: If model creation or verification fails (see submit_model).
-        """
-        params = {
-            "model": {
-                "name": model_name,
-                "model": {"type": "model/ranklib", "definition": model_payload},
-            }
-        }
-        self.submit_model(featureset, index, model_name, params)
-
-    def submit_xgboost_model(
-        self,
-        featureset: str,
-        index: str,
-        model_name: str,
-        model_payload: ModelPayload,
-    ) -> None:
-        """Submit an XGBoost model to Elasticsearch LTR.
-
-        Args:
-            featureset: Name of the feature set to associate the model with.
-            index: Index name (unused, kept for API compatibility).
-            model_name: Name of the model to create.
-            model_payload: XGBoost model definition (JSON format).
-
-        Raises:
-            RuntimeError: If model creation or verification fails (see submit_model).
-        """
-        params = {
-            "model": {
-                "name": model_name,
-                "model": {"type": "model/xgboost+json", "definition": model_payload},
-            }
-        }
-        self.submit_model(featureset, index, model_name, params)
-
     def model_query(
         self,
         index: str,
@@ -809,9 +654,12 @@ class ElasticClient(BaseClient):
                 a format consistent with Solr.
 
         Raises:
+            ValidationError: If the index name or model name is invalid.
             RuntimeError: If the model is not available after retries.
             ValueError: If the response contains an error or has an invalid structure.
         """
+        index = validate_index_name(index)
+        model = validate_model_name(model)
         params = {
             "query": query,
             "rescore": {
@@ -860,10 +708,12 @@ class ElasticClient(BaseClient):
                 a format consistent with Solr.
 
         Raises:
+            ValidationError: If the index name is invalid.
             QueryError: If the query fails due to network errors, index not found,
                 or other client-related issues.
             ValueError: If the response contains an error or has an invalid structure.
         """
+        index = validate_index_name(index)
         try:
             resp = self.es.search(index=index, body=query)
         except Exception as e:
@@ -909,8 +759,11 @@ class ElasticClient(BaseClient):
                 - raw_feature_set: Full feature set configuration dictionary
 
         Raises:
+            ValidationError: If the index name or feature set name is invalid.
             RuntimeError: If the feature set is not found.
         """
+        index = validate_index_name(index)
+        name = validate_model_name(name)
         resp = requests.get(f"{self.elastic_ep}/_featureset/{name}")
 
         # Check HTTP status code first
@@ -965,7 +818,11 @@ class ElasticClient(BaseClient):
 
         Returns:
             dict: Document source dictionary.
+
+        Raises:
+            ValidationError: If the index name is invalid.
         """
+        index = validate_index_name(index)
         resp = self.es.get(index=index, id=doc_id)
         # resp_msg(msg="Fetched Doc".format(docId), resp=ElasticResp(resp), throw=False)
         return resp["_source"]

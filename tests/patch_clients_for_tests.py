@@ -31,6 +31,7 @@ and uses client factory functions for dependency injection.
 
 import os
 import time
+from typing import Optional
 
 from ltr.logger import get_logger
 from tests.port_management import get_port
@@ -42,18 +43,28 @@ REQUESTS_MAX_RETRIES = 3
 
 
 def patch_requests_for_test_ports():
-    """Patch requests library to rewrite URLs with hardcoded ports."""
+    """
+    Patch requests library to rewrite URLs with hardcoded ports.
+
+    Returns:
+        bool: True if patching succeeded or was not needed, False if patching failed
+
+    Raises:
+        RuntimeError: If patching fails and validation detects the failure
+    """
     solr_port = get_port("SOLR_PORT")
     elasticsearch_port = get_port("ELASTICSEARCH_PORT")
     opensearch_port = get_port("OPENSEARCH_PORT")
 
     if not any([solr_port, elasticsearch_port, opensearch_port]):
-        return
+        logger.debug("No test ports set, skipping requests patching")
+        return True
 
     try:
         import requests
     except ImportError:
-        return
+        logger.warning("requests module not available, skipping patching")
+        return False
 
     # Store original request method
     if not hasattr(requests.Session, "_original_request"):
@@ -186,6 +197,102 @@ def patch_requests_for_test_ports():
     requests.put = patched_put
     requests.delete = patched_delete
 
+    # Validate that patching succeeded
+    try:
+        assert hasattr(requests, "_original_get"), "Failed to store original get method"
+        assert hasattr(
+            requests, "_original_post"
+        ), "Failed to store original post method"
+        assert hasattr(requests, "_original_put"), "Failed to store original put method"
+        assert hasattr(
+            requests, "_original_delete"
+        ), "Failed to store original delete method"
+        assert hasattr(
+            requests.Session, "_original_request"
+        ), "Failed to store original Session.request method"
+        assert requests.get is not requests._original_get, "GET method was not patched"  # type: ignore[attr-defined]
+        assert requests.post is not requests._original_post, (  # type: ignore[attr-defined]
+            "POST method was not patched"
+        )
+        assert requests.put is not requests._original_put, "PUT method was not patched"  # type: ignore[attr-defined]
+        assert requests.delete is not requests._original_delete, (  # type: ignore[attr-defined]
+            "DELETE method was not patched"
+        )
+        assert requests.Session.request is not requests.Session._original_request, (  # type: ignore[attr-defined]
+            "Session.request was not patched"
+        )
+
+        logger.debug(
+            f"Successfully patched requests library for test ports "
+            f"(Solr: {solr_port}, Elasticsearch: {elasticsearch_port}, OpenSearch: {opensearch_port})"
+        )
+        return True
+    except AssertionError as e:
+        error_msg = f"Patching validation failed: {e}"
+        logger.error(error_msg)
+        raise RuntimeError(error_msg) from e
+    except Exception as e:
+        error_msg = f"Unexpected error during patching validation: {e}"
+        logger.error(error_msg)
+        raise RuntimeError(error_msg) from e
+
+
+def _patch_reset_ltr_for_client(
+    module_name: str, client_class_name: str, result_key: str, extra_delay: float
+) -> Optional[bool]:
+    """
+    Helper function to patch reset_ltr method for a specific client.
+
+    Args:
+        module_name: Name of the client module (e.g., "ltr.client.elastic_client")
+        client_class_name: Name of the client class (e.g., "ElasticClient")
+        result_key: Key to use in result dictionary (e.g., "elasticsearch")
+        extra_delay: Extra delay to add after reset_ltr (in seconds)
+
+    Returns:
+        Optional[bool]: True if patching succeeded, False if failed, None if not attempted
+    """
+    import importlib
+
+    try:
+        client_module = importlib.import_module(module_name)
+        client_class = getattr(client_module, client_class_name)
+        original_reset_ltr = client_class.reset_ltr
+
+        def patched_reset_ltr(self, index: str) -> None:
+            """Patched reset_ltr with longer delay for test environments."""
+            original_reset_ltr(self, index)
+            if extra_delay > 0:
+                time.sleep(extra_delay)
+
+        client_class.reset_ltr = patched_reset_ltr
+
+        # Validate patching succeeded
+        if client_class.reset_ltr is not original_reset_ltr:
+            logger.debug(
+                f"Successfully patched {client_class_name}.reset_ltr with {extra_delay}s delay"
+            )
+            return True
+        else:
+            logger.warning(
+                f"Failed to patch {client_class_name}.reset_ltr - method reference unchanged"
+            )
+            return False
+    except ImportError as e:
+        logger.warning(f"Failed to import {module_name}: {e}")
+        return False
+    except AttributeError as e:
+        logger.warning(
+            f"Failed to patch {client_class_name}.reset_ltr - attribute error: {e}"
+        )
+        return False
+    except Exception as e:
+        logger.error(
+            f"Unexpected error patching {client_class_name}.reset_ltr: {e}",
+            exc_info=True,
+        )
+        return False
+
 
 def patch_reset_ltr_timing():
     """
@@ -196,13 +303,18 @@ def patch_reset_ltr_timing():
 
     Note: This is a minimal patch that only affects timing, not port configuration.
     Port configuration is now handled via dependency injection.
+
+    Returns:
+        dict[str, Optional[bool]]: Dictionary with keys 'elasticsearch' and 'opensearch' indicating
+              whether patching succeeded for each client (True/False/None if not attempted)
     """
-    import importlib
+    result: dict[str, Optional[bool]] = {"elasticsearch": None, "opensearch": None}
 
     # Check if we should apply timing patches
     extra_delay = float(os.environ.get("TEST_RESET_LTR_DELAY", "0.3"))
     if extra_delay <= 0:
-        return
+        logger.debug("TEST_RESET_LTR_DELAY is 0 or negative, skipping timing patches")
+        return result
 
     # Only patch if test ports are set (indicating we're running tests)
     solr_port = get_port("SOLR_PORT")
@@ -211,43 +323,25 @@ def patch_reset_ltr_timing():
 
     if not any([solr_port, elasticsearch_port, opensearch_port]):
         # Not running tests, don't patch
-        return
+        logger.debug("No test ports set, skipping timing patches")
+        return result
 
     # Patch ElasticClient reset_ltr timing
     if elasticsearch_port:
-        try:
-            elastic_client_module = importlib.import_module("ltr.client.elastic_client")
-            original_reset_ltr = elastic_client_module.ElasticClient.reset_ltr
-
-            def patched_reset_ltr(self, index: str) -> None:
-                """Patched reset_ltr with longer delay for test environments."""
-                original_reset_ltr(self, index)
-                if extra_delay > 0:
-                    time.sleep(extra_delay)
-
-            elastic_client_module.ElasticClient.reset_ltr = patched_reset_ltr
-        except Exception:
-            # If patching fails, continue without it
-            pass
+        result["elasticsearch"] = _patch_reset_ltr_for_client(
+            "ltr.client.elastic_client", "ElasticClient", "elasticsearch", extra_delay
+        )
 
     # Patch OpenSearchClient reset_ltr timing
     if opensearch_port:
-        try:
-            opensearch_client_module = importlib.import_module(
-                "ltr.client.opensearch_client"
-            )
-            original_reset_ltr = opensearch_client_module.OpenSearchClient.reset_ltr
+        result["opensearch"] = _patch_reset_ltr_for_client(
+            "ltr.client.opensearch_client",
+            "OpenSearchClient",
+            "opensearch",
+            extra_delay,
+        )
 
-            def patched_reset_ltr(self, index: str) -> None:
-                """Patched reset_ltr with longer delay for test environments."""
-                original_reset_ltr(self, index)
-                if extra_delay > 0:
-                    time.sleep(extra_delay)
-
-            opensearch_client_module.OpenSearchClient.reset_ltr = patched_reset_ltr
-        except Exception:
-            # If patching fails, continue without it
-            pass
+    return result
 
 
 # Backward compatibility: patch_clients_for_test_ports now only patches requests
@@ -261,6 +355,16 @@ def patch_clients_for_test_ports():
 
     Note: This function is kept for backward compatibility but is no longer needed
     for client port configuration. Use dependency injection instead.
+
+    Returns:
+        dict: Dictionary with patching results:
+            - 'requests': bool indicating if requests patching succeeded
+            - 'reset_ltr_timing': dict with 'elasticsearch' and 'opensearch' results
     """
-    patch_requests_for_test_ports()
-    patch_reset_ltr_timing()
+    requests_result = patch_requests_for_test_ports()
+    reset_ltr_result = patch_reset_ltr_timing()
+
+    return {
+        "requests": requests_result,
+        "reset_ltr_timing": reset_ltr_result,
+    }

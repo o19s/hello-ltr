@@ -1,0 +1,7 @@
+- Review the changes that have been made (only staged) and update the CHANGELOG.md accordingly.
+    - Also review previous commits until one hits an updated version, include the changes that have occurred after that updated version.
+- Report if the version has not been incremented since the last git commit.
+- Recommend how the version should be incremented (e.g. is it a minor or major update?).
+- Update documentation to reflect the latest changes.
+- Do we need to add or update any ADRs?
+- Provide a succinct git commit message I could use, it should be based off the CHANGELOG.md.

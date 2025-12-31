@@ -11,11 +11,11 @@ test data before running tests.
 """
 
 from ltr import download
-from ltr.client.solr_client import SolrClient
 from ltr.helpers.movies import indexable_movies
 from ltr.index import rebuild
+from tests.client_factory import create_solr_client
 
-client = SolrClient()
+client = create_solr_client()
 
 corpus = "http://es-learn-to-rank.labs.o19s.com/tmdb.json"
 download([corpus], dest="data/")

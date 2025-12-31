@@ -25,10 +25,12 @@ def mock_opensearch_client():
             - mock_class: Mock class that was patched
 
     Example:
+        from tests.client_factory import create_opensearch_client
+
         def test_something(mock_opensearch_client):
             mock_client, mock_class = mock_opensearch_client
             mock_client.search.return_value = {"hits": {"hits": []}}
-            client = OpenSearchClient()
+            client = create_opensearch_client()
             # ... test code ...
     """
     with patch("ltr.client.opensearch_client.OpenSearch") as mock_class:
@@ -52,10 +54,12 @@ def mock_elasticsearch_client():
             - mock_class: Mock class that was patched
 
     Example:
+        from tests.client_factory import create_elastic_client
+
         def test_something(mock_elasticsearch_client):
             mock_client, mock_class = mock_elasticsearch_client
             mock_client.search.return_value = {"hits": {"hits": []}}
-            client = ElasticClient()
+            client = create_elastic_client()
             # ... test code ...
     """
     with patch("ltr.client.elastic_client.Elasticsearch") as mock_class:

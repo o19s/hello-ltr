@@ -14,7 +14,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from ltr.client.solr_client import SolrClient
+from tests.client_factory import create_solr_client
 
 
 class TestSolrClientInitialization:
@@ -45,7 +45,7 @@ class TestSolrClientDocumentIndexing:
     def test_index_documents_single_batch(self, mock_resp_msg, mock_get, mock_post):
         """Test indexing documents in a single batch."""
         # Arrange
-        client = SolrClient()
+        client = create_solr_client()
         docs = [{"id": "1", "title": "Test"}, {"id": "2", "title": "Test2"}]
         mock_post.return_value = Mock(status_code=200)
         mock_get.return_value = Mock(status_code=200)
@@ -63,7 +63,7 @@ class TestSolrClientDocumentIndexing:
     ):
         """Test that release_date is formatted with T00:00:00Z."""
         # Arrange
-        client = SolrClient()
+        client = create_solr_client()
         docs = [{"id": "1", "release_date": "2020-01-01"}]
         mock_post.return_value = Mock(status_code=200)
         mock_get.return_value = Mock(status_code=200)
@@ -98,7 +98,7 @@ class TestSolrClientDocumentIndexing:
     def test_index_documents_large_batch(self, mock_resp_msg, mock_get, mock_post):
         """Test indexing documents triggers multiple batches."""
         # Arrange
-        client = SolrClient()
+        client = create_solr_client()
         # Create 6000 docs to trigger batch flush (BATCH_SIZE=5000)
         docs = [{"id": str(i), "title": f"Test{i}"} for i in range(6000)]
         mock_post.return_value = Mock(status_code=200)
@@ -122,7 +122,7 @@ class TestSolrClientLTR:
     def test_validate_featureset_valid(self):
         """Test validate_featureset passes with correct store name."""
         # Arrange
-        client = SolrClient()
+        client = create_solr_client()
         config = [
             {"name": "feature1", "store": "mystore"},
             {"name": "feature2", "store": "mystore"},
@@ -133,7 +133,7 @@ class TestSolrClientLTR:
     def test_validate_featureset_invalid(self):
         """Test validate_featureset raises ValueError with wrong store name."""
         # Arrange
-        client = SolrClient()
+        client = create_solr_client()
         config = [
             {"name": "feature1", "store": "wrongstore"},
             {"name": "feature2", "store": "mystore"},
@@ -145,7 +145,7 @@ class TestSolrClientLTR:
     def test_get_feature_name_index_1_based(self):
         """Test get_feature_name uses 1-based indexing."""
         # Arrange
-        client = SolrClient()
+        client = create_solr_client()
         config = [{"name": "feature1"}, {"name": "feature2"}]
         # Act
         name = client.get_feature_name(config, 2)
@@ -175,7 +175,7 @@ class TestSolrClientFeatureSet:
     def test_feature_set(self, mock_resp_msg, mock_get):
         """Test feature_set returns mapping and raw features."""
         # Arrange
-        client = SolrClient()
+        client = create_solr_client()
         mock_response = Mock()
         mock_response.status_code = 200
         mock_response.json.return_value = {
@@ -193,7 +193,7 @@ class TestSolrClientFeatureSet:
     def test_get_feature_stores(self, mock_get):
         """Test get_feature_stores returns list of stores."""
         # Arrange
-        client = SolrClient()
+        client = create_solr_client()
         mock_response = Mock()
         mock_response.json.return_value = {"featureStores": ["store1", "store2"]}
         mock_get.return_value = mock_response
@@ -206,7 +206,7 @@ class TestSolrClientFeatureSet:
     def test_get_models(self, mock_get):
         """Test get_models returns list of model names."""
         # Arrange
-        client = SolrClient()
+        client = create_solr_client()
         mock_response = Mock()
         mock_response.json.return_value = {
             "models": [{"name": "model1"}, {"name": "model2"}]
@@ -221,7 +221,7 @@ class TestSolrClientFeatureSet:
     def test_analyze(self, mock_post):
         """Test analyze returns token stream result."""
         # Arrange
-        client = SolrClient()
+        client = create_solr_client()
         mock_response = Mock()
         mock_response.json.return_value = {
             "analysis": {
@@ -249,7 +249,7 @@ class TestSolrClientFeatureSet:
     def test_term_vectors_skip_to(self, mock_post):
         """Test term_vectors_skip_to returns cursor mark."""
         # Arrange
-        client = SolrClient()
+        client = create_solr_client()
         mock_response = Mock()
         mock_response.json.return_value = {"nextCursorMark": "cursor123"}
         mock_post.return_value = mock_response
@@ -263,7 +263,7 @@ class TestSolrClientFeatureSet:
     def test_term_vectors(self, mock_post):
         """Test term_vectors returns term vector data."""
         # Arrange
-        client = SolrClient()
+        client = create_solr_client()
         mock_response = Mock()
         # Solr named list format: alternating key-value pairs
         mock_response.json.return_value = {
@@ -298,7 +298,7 @@ class TestSolrClientFeatureSet:
     def test_term_vectors_error_handling(self, mock_post):
         """Test term_vectors handles errors correctly."""
         # Arrange
-        client = SolrClient()
+        client = create_solr_client()
         mock_post.side_effect = Exception("Connection error")
         # Act & Assert
         # term_vectors is a generator, so we need to iterate to trigger the exception
@@ -312,7 +312,7 @@ class TestSolrClientInvalidInput:
     def test_model_query_invalid_query_type(self):
         """Test model_query raises TypeError for non-dict query."""
         # Arrange
-        client = SolrClient()
+        client = create_solr_client()
         # Act & Assert
         with pytest.raises(TypeError, match="query must be a dict"):
             client.model_query("test_index", "model1", {}, "not a dict")  # type: ignore[arg-type]
@@ -320,7 +320,7 @@ class TestSolrClientInvalidInput:
     def test_model_query_missing_q_key(self):
         """Test model_query raises ValidationError when query dict missing 'q' key."""
         # Arrange
-        client = SolrClient()
+        client = create_solr_client()
         # Act & Assert
         from ltr.validation import ValidationError
 
@@ -330,7 +330,7 @@ class TestSolrClientInvalidInput:
     def test_index_documents_invalid_doc_src_type(self):
         """Test index_documents raises ValidationError for string doc_src."""
         # Arrange
-        client = SolrClient()
+        client = create_solr_client()
         # Act & Assert
         from ltr.validation import ValidationError
 
@@ -340,7 +340,7 @@ class TestSolrClientInvalidInput:
     def test_get_feature_name_invalid_config_type(self):
         """Test get_feature_name raises ValidationError for non-list config."""
         # Arrange
-        client = SolrClient()
+        client = create_solr_client()
         # Act & Assert
         from ltr.validation import ValidationError
 
@@ -350,7 +350,7 @@ class TestSolrClientInvalidInput:
     def test_validate_featureset_missing_store(self):
         """Test validate_featureset raises ValidationError when feature missing store."""
         # Arrange
-        client = SolrClient()
+        client = create_solr_client()
         config = [{"name": "feature1", "store": "wrong_store"}]
         # Act & Assert
         from ltr.validation import ValidationError
@@ -367,7 +367,7 @@ class TestSolrClientRetryLogic:
     def test_check_index_exists_retry_exhausted(self, mock_post, mock_get):
         """Test check_index_exists retries on connection errors but eventually fails."""
         # Arrange
-        client = SolrClient()
+        client = create_solr_client()
         mock_get.side_effect = ConnectionError("Connection refused")
         # Act & Assert
         # SolrClient.check_index_exists doesn't have retry logic, so it should fail immediately
@@ -378,7 +378,7 @@ class TestSolrClientRetryLogic:
     def test_query_non_retryable_error(self, mock_post):
         """Test query does not retry on non-retryable errors (e.g., 400 Bad Request)."""
         # Arrange
-        client = SolrClient()
+        client = create_solr_client()
         mock_response = Mock()
         mock_response.status_code = 400
         mock_response.json.return_value = {"error": {"msg": "Bad Request"}}

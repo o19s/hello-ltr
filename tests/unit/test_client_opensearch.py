@@ -16,6 +16,7 @@ from unittest.mock import Mock, patch
 import pytest
 
 from ltr.client.opensearch_client import OpenSearchClient
+from tests.client_factory import create_opensearch_client
 
 
 class TestOpenSearchClientInitialization:
@@ -34,7 +35,7 @@ class TestOpenSearchClientInitialization:
         mock_opensearch_class.return_value = mock_client
 
         # Act
-        client = OpenSearchClient(configs_dir="/custom/path")
+        client = create_opensearch_client(configs_dir="/custom/path")
 
         # Assert
         assert client.configs_dir == "/custom/path"
@@ -49,7 +50,7 @@ class TestOpenSearchClientInitialization:
         mock_opensearch_class.return_value = mock_client
 
         # Act
-        client = OpenSearchClient(configs_dir=".")
+        client = create_opensearch_client(configs_dir=".")
 
         # Assert
         assert client.configs_dir == "/notebook/configs"
@@ -64,7 +65,7 @@ class TestOpenSearchClientInitialization:
         mock_opensearch_class.return_value = mock_client
 
         # Act
-        client = OpenSearchClient(configs_dir="/explicit/path")
+        client = create_opensearch_client(configs_dir="/explicit/path")
 
         # Assert
         assert client.configs_dir == "/explicit/path"
@@ -133,7 +134,7 @@ class TestOpenSearchClientModelOperations:
 
         # Mock the submit_model method which submit_xgboost_model calls
         with patch.object(OpenSearchClient, "submit_model") as mock_submit_model:
-            client = OpenSearchClient()
+            client = create_opensearch_client()
             client.opensearch = mock_client  # Set the mocked client
 
             model_payload = {
@@ -173,7 +174,7 @@ class TestOpenSearchClientModelOperations:
         with patch.object(
             OpenSearchClient, "submit_model", side_effect=Exception("Connection error")
         ):
-            client = OpenSearchClient()
+            client = create_opensearch_client()
             client.opensearch = mock_client
 
             model_payload = {
@@ -200,7 +201,7 @@ class TestOpenSearchClientErrorHandling:
         mock_client = Mock()
         mock_client.search.return_value = {"hits": {"hits": []}}
         mock_opensearch_class.return_value = mock_client
-        client = OpenSearchClient()
+        client = create_opensearch_client()
 
         # Act
         results = client.query("test_index", {"query": {"match_all": {}}})
@@ -217,7 +218,7 @@ class TestOpenSearchClientErrorHandling:
 
         mock_client.get.side_effect = NotFoundError("Document not found", {}, {})
         mock_opensearch_class.return_value = mock_client
-        client = OpenSearchClient()
+        client = create_opensearch_client()
 
         # Act & Assert
         with pytest.raises(NotFoundError):
@@ -230,7 +231,7 @@ class TestOpenSearchClientErrorHandling:
         mock_client = Mock()
         mock_client.indices.exists.side_effect = Exception("Connection failed")
         mock_opensearch_class.return_value = mock_client
-        client = OpenSearchClient()
+        client = create_opensearch_client()
 
         # Act & Assert
         with pytest.raises(Exception, match="Connection failed"):
@@ -246,7 +247,7 @@ class TestOpenSearchClientInvalidInput:
         # Arrange
         mock_client = Mock()
         mock_opensearch_class.return_value = mock_client
-        client = OpenSearchClient()
+        client = create_opensearch_client()
         # Act & Assert
         from ltr.validation import ValidationError
 
@@ -259,7 +260,7 @@ class TestOpenSearchClientInvalidInput:
         # Arrange
         mock_client = Mock()
         mock_opensearch_class.return_value = mock_client
-        client = OpenSearchClient()
+        client = create_opensearch_client()
         docs = [{"title": "Test"}]
         # Act & Assert
         from ltr.validation import ValidationError
@@ -279,7 +280,7 @@ class TestOpenSearchClientRetryLogic:
 
         mock_client = Mock()
         mock_opensearch_class.return_value = mock_client
-        client = OpenSearchClient()
+        client = create_opensearch_client()
         mock_client.search.side_effect = ConnectionError("Connection refused")
         # Act & Assert
         # Should retry and eventually raise LTRConnectionError after max retries
@@ -294,7 +295,7 @@ class TestOpenSearchClientRetryLogic:
         # Arrange
         mock_client = Mock()
         mock_opensearch_class.return_value = mock_client
-        client = OpenSearchClient()
+        client = create_opensearch_client()
         # First two calls fail, third succeeds
         mock_response = {
             "hits": {
@@ -323,7 +324,7 @@ class TestOpenSearchClientRetryLogic:
 
         mock_client = Mock()
         mock_opensearch_class.return_value = mock_client
-        client = OpenSearchClient()
+        client = create_opensearch_client()
         # RequestError with "Bad Request" contains "request" which might match connection error patterns
         # But it should still be retried because is_opensearch_connection_error checks for RequestError
         # Actually, RequestError is not a connection error, but the retry logic may still catch it
@@ -344,7 +345,7 @@ class TestOpenSearchClientRetryLogic:
 
         mock_client = Mock()
         mock_opensearch_class.return_value = mock_client
-        client = OpenSearchClient()
+        client = create_opensearch_client()
         # Mock response that indicates model not found (timing error)
         # The retry logic checks for "Unknown model" in the error string
         mock_response = {"error": "Unknown model test_model"}

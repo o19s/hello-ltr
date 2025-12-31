@@ -14,7 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - CI/CD workflow with GitHub Actions (`.github/workflows/tests.yml`) for automated testing
 - Dependabot configuration for automated dependency updates (`.github/dependabot.yml`)
 - Input validation module (`ltr/validation.py`) for security and data integrity
-- Type stubs for third-party libraries (pandas, plotly, plotnine) in `stubs/` directory
+- Type stubs for third-party libraries (pandas, plotly, plotnine, sklearn) in `stubs/` directory
 - CI linting workflow
 - Naming conventions documentation (`NAMING_CONVENTIONS.md`)
 - Pre-commit hooks infrastructure (commit-msg hook, wrapper script, setup script)
@@ -30,6 +30,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Comprehensive docstrings throughout the codebase
 - Comprehensive test coverage for validation module (`tests/unit/test_validation.py`)
 - Significant expansion of judgment list tests (`tests/unit/test_judg_list.py`)
+- Centralized exception classes (`ltr/exceptions.py`) with structured exception hierarchy
+- Retry logic with exponential backoff (`ltr/helpers/retry.py`) for handling transient failures
+- Response type definitions (`ltr/client/responses.py`) for Elasticsearch/OpenSearch clients
+- Client factory functions for test environments (`tests/client_factory.py`) using dependency injection
+- Fast fail for validation error handling in tests
+- Debug mode for tests with enhanced verbosity
+- Performance optimization: using `defaultdict` for efficient judgment grouping in `_judgments_by_qid`
+- `ElasticBaseClient` mixin class (`ltr/client/elastic_base_client.py`) for shared Elasticsearch/OpenSearch functionality, reducing code duplication
+- Modular test fixture architecture with separate modules for container management, health checks, file locking, and pytest hooks
+- Enhanced error handling in RankLib integration with detailed error messages and timeout handling
+- Comprehensive test coverage for download, exceptions, logger, client factory, and patch utilities
+- Advanced usage documentation (`ADVANCED_USAGE.md`) covering direct client access, custom retry logic, and advanced patterns
+- Notebook testing recommendations document (`NOTEBOOK_TESTING_RECOMMENDATIONS.md`) with tool evaluation and best practices
+- Script to update notebooks with factory functions (`scripts/dev/update_notebooks_factory_functions.py`)
+- Dependency update tracking document (`REMAINING_DEPENDENCY_UPDATES.md`)
 
 ### Changed
 - Migrated from `requirements.txt` to `pyproject.toml` for dependency management
@@ -56,6 +71,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Added Retry Pattern with Exponential Backoff to design patterns section
   - Fixed date inconsistencies throughout document
 - Updated main README with improved documentation
+- Replaced monkey patching with dependency injection for client ports in tests
+- Disabled parallelization for Docker tests by default to reduce resource consumption and prevent timeouts
+- Refactored Elasticsearch and OpenSearch clients for improved error handling and retry logic
+- Simplified test fixtures: removed `cleanup_registry` fixture, now using pytest's built-in `tmp_path` fixture
+- Refactored test infrastructure: split monolithic `tests/conftest.py` into modular fixture modules (`tests/fixtures/`) for better maintainability
+- Refactored Elasticsearch and OpenSearch clients to use `ElasticBaseClient` mixin, reducing code duplication
+- Enhanced RankLib error handling with detailed error messages, timeout support, and better exception handling
+- Updated all notebooks to use factory functions for client creation
+- Updated dependencies
 
 ### Fixed
 - Fixed bug in Dockerfile requiring use of `uv`
@@ -68,6 +92,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed port availability handling when running tests
 - Fixed Docker container dependency issues
 - Fixed linting and typing errors throughout codebase
+- Fixed RankLib error handling when None values are passed, preventing runtime errors
+- Improved error messages for RankLib download and training operations
 
 ### Security
 - Updated code when interacting with shell to do so in a less exploitable manner

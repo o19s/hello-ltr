@@ -1,6 +1,6 @@
 # Type Aliases Guide
 
-**Last Updated:** December 21, 2025
+**Last Updated:** December 31, 2025
 
 ## Overview
 
@@ -26,13 +26,13 @@ This codebase uses type aliases defined in `ltr/types.py` to improve code readab
 - `SearchResults` - `list[dict[str, Any]]` - List of search results
 
 ### Document Source Types (for indexing)
-- `DocSourceIterable` - `Iterable[dict[str, Any]]` - Iterable of document dictionaries
+- `DocSourceIterable` - `Iterable[JSONDict]` - Iterable of document dictionaries
 - `DocSourceCallable` - `Callable[[], DocSourceIterable]` - Callable returning doc iterable
 - `DocSource` - `Union[str, DocSourceIterable, DocSourceCallable]` - All doc source types
 
 ### Feature & Model Types
 - `FeatureMapping` - `dict[str, Any]` - Feature mapping dictionary
-- `FeatureList` - `list[dict[str, Any]]` - List of feature dictionaries
+- `FeatureList` - `list[JSONDict]` - List of feature dictionaries
 - `FeatureConfig` - `Union[FeatureList, JSONDict]` - Feature configuration (list or dict)
 - `ModelPayload` - `dict[str, Any]` - Model payload dictionary
 - `FeatureSetResult` - `tuple[FeatureList, list[Any]]` - Feature set method return type
@@ -42,16 +42,16 @@ This codebase uses type aliases defined in `ltr/types.py` to improve code readab
 - `QueryKeywordMap` - `dict[int, tuple[str, int]]` - Dictionary mapping query IDs to (keywords, weight) tuples
 
 ### Click Model Session Types
-- `DocTuple` - `Union[tuple[Any, bool], tuple[Any, bool, Any]]` - Document tuple: (doc_id, click) or (doc_id, click, conversion)
+- `DocTuple` - `Union[tuple[Hashable, bool], tuple[Hashable, bool, Any]]` - Document tuple: (doc_id, click) or (doc_id, click, conversion)
 - `DocTupleList` - `list[DocTuple]` - List of document tuples
-- `SessionTuple` - `tuple[Any, DocTupleList]` - Session tuple: (query, list of doc tuples)
+- `SessionTuple` - `tuple[Hashable, DocTupleList]` - Session tuple: (query, list of doc tuples)
 - `SessionTupleList` - `list[SessionTuple]` - List of session tuples
 
 ### Click Model Types
-- `QueryDocPair` - `tuple[str, Any]` - Query-document pair: (query_id, doc_id) tuple used as dictionary keys
+- `QueryDocPair` - `tuple[Hashable, Hashable]` - Query-document pair: (query_id, doc_id) tuple used as dictionary keys (both must be hashable: str, int, etc.)
 - `AttractivenessMap` - `dict[QueryDocPair, float]` - Dictionary mapping query-document pairs to attractiveness/satisfaction values
 - `CTRByRank` - `dict[int, float]` - Dictionary mapping rank positions to CTR (Click-Through Rate) values
-- `CostMap` - `dict[str, float]` - Dictionary mapping document IDs to cost values
+- `CostMap` - `dict[Hashable, float]` - Dictionary mapping document IDs to cost values
 - `FeatureImpactMap` - `dict[str, float]` - Dictionary mapping feature IDs to impact/importance values
 - `UBMRankPair` - `tuple[int, int]` - UBM rank pair: (last_click_position, current_rank) tuple
 
@@ -76,7 +76,7 @@ def query(self, index: str, query: QueryParams) -> JSONDictList:
 ### Complex Types
 ```python
 # Before
-def build_one(sess_tuple: tuple[Any, list[Union[tuple[Any, bool], tuple[Any, bool, Any]]]]) -> Session:
+def build_one(sess_tuple: tuple[Hashable, list[Union[tuple[Hashable, bool], tuple[Hashable, bool, Any]]]]) -> Session:
     ...
 
 # After
@@ -112,6 +112,6 @@ Create a new type alias when:
 ## Related Documentation
 
 - **Type System**: See [`ARCHITECTURE.md#type-system`](ARCHITECTURE.md#type-system) for type system overview
-- **Type Checking**: See [`CODEBASE_REVIEW.md`](CODEBASE_REVIEW.md) section 5.1 for type checking configuration and status
+- **Type Checking**: See [`ARCHITECTURE.md#type-system`](ARCHITECTURE.md#type-system) for type checking configuration and status
 - **Source Code**: See [`ltr/types.py`](ltr/types.py) for the complete type alias definitions
 

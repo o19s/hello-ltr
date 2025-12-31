@@ -30,10 +30,16 @@ class TestCheckForRankyMcRankFace:
 
     @patch("ltr.ranklib.download")
     @patch("tempfile.gettempdir")
-    def test_check_for_rankymcrankface_downloads_jar(self, mock_tempdir, mock_download):
+    @patch("os.path.exists")
+    @patch("os.access")
+    def test_check_for_rankymcrankface_downloads_jar(
+        self, mock_access, mock_exists, mock_tempdir, mock_download
+    ):
         """Test check_for_rankymcrankface downloads jar file."""
         # Arrange
         mock_tempdir.return_value = "/tmp"
+        mock_exists.return_value = True  # JAR file exists after download
+        mock_access.return_value = True  # JAR file is readable
         # Act
         result = check_for_rankymcrankface()
         # Assert
@@ -49,10 +55,14 @@ class TestWriteTrainingSet:
     @patch("ltr.judgments.judgments_to_file")
     @patch("tempfile.gettempdir")
     @patch("builtins.open", new_callable=mock_open)
-    def test_write_training_set(self, mock_file, mock_tempdir, mock_judgments_to_file):
+    @patch("os.path.exists")
+    def test_write_training_set(
+        self, mock_exists, mock_file, mock_tempdir, mock_judgments_to_file
+    ):
         """Test write_training_set writes training set to file."""
         # Arrange
         mock_tempdir.return_value = "/tmp"
+        mock_exists.return_value = True  # File exists after write
         training_set = [Mock(), Mock()]
         # Act
         result = write_training_set(training_set)  # type: ignore[arg-type]
@@ -69,11 +79,22 @@ class TestTrainModel:
     @patch("subprocess.run")
     @patch("ltr.ranklib.write_training_set")
     @patch("ltr.ranklib.check_for_rankymcrankface")
+    @patch("shutil.which")
+    @patch("os.path.exists")
+    @patch("os.path.getsize")
     def test_train_model_basic(
-        self, mock_check, mock_write, mock_subprocess, mock_parse
+        self,
+        mock_getsize,
+        mock_exists,
+        mock_which,
+        mock_check,
+        mock_write,
+        mock_subprocess,
+        mock_parse,
     ):
         """Test train_model with basic parameters."""
         # Arrange
+        mock_which.return_value = "/usr/bin/java"  # Java is available
         mock_check.return_value = "/tmp/ranky.jar"
         mock_write.return_value = "/tmp/training.txt"
         mock_result = Mock()
@@ -84,6 +105,8 @@ class TestTrainModel:
         mock_parsed_result = Mock()
         mock_parsed_result.trainingLogs = [Mock()]  # Non-empty logs
         mock_parse.return_value = mock_parsed_result
+        mock_exists.return_value = True  # Model file exists
+        mock_getsize.return_value = 100  # Model file has content
         # Create minimal valid training set (2 judgments with features)
         training_set = [
             Judgment(
@@ -109,17 +132,27 @@ class TestTrainModel:
         assert "/tmp/training.txt" in cmd_str
         assert "-save" in cmd_str
         assert "/tmp/model.txt" in cmd_str
+        # Verify timeout parameter is passed
+        call_kwargs = mock_subprocess.call_args[1]
+        assert "timeout" in call_kwargs
+        assert call_kwargs["timeout"] == 300
 
     @patch("ltr.ranklib.parse_training_log")
     @patch("subprocess.run")
     @patch("ltr.ranklib.write_training_set")
     @patch("ltr.ranklib.check_for_rankymcrankface")
+    @patch("shutil.which")
     @patch("builtins.open", new_callable=mock_open)
     @patch("tempfile.gettempdir")
+    @patch("os.path.exists")
+    @patch("os.path.getsize")
     def test_train_model_with_features(
         self,
+        mock_getsize,
+        mock_exists,
         mock_tempdir,
         mock_file,
+        mock_which,
         mock_check,
         mock_write,
         mock_subprocess,
@@ -128,6 +161,7 @@ class TestTrainModel:
         """Test train_model with features parameter."""
         # Arrange
         mock_tempdir.return_value = "/tmp"
+        mock_which.return_value = "/usr/bin/java"  # Java is available
         mock_check.return_value = "/tmp/ranky.jar"
         mock_write.return_value = "/tmp/training.txt"
         mock_result = Mock()
@@ -138,6 +172,8 @@ class TestTrainModel:
         mock_parsed_result = Mock()
         mock_parsed_result.trainingLogs = [Mock()]  # Non-empty logs
         mock_parse.return_value = mock_parsed_result
+        mock_exists.return_value = True  # Model file exists
+        mock_getsize.return_value = 100  # Model file has content
         # Create minimal valid training set (2 judgments with features)
         training_set = [
             Judgment(
@@ -156,16 +192,22 @@ class TestTrainModel:
         cmd_str = " ".join(call_args)
         assert "-feature" in cmd_str
         mock_file.assert_called()
+        # Verify timeout parameter is passed
+        call_kwargs = mock_subprocess.call_args[1]
+        assert "timeout" in call_kwargs
+        assert call_kwargs["timeout"] == 300
 
     @patch("ltr.ranklib.parse_training_log")
     @patch("subprocess.run")
     @patch("ltr.ranklib.write_training_set")
     @patch("ltr.ranklib.check_for_rankymcrankface")
+    @patch("shutil.which")
     def test_train_model_with_kcv(
-        self, mock_check, mock_write, mock_subprocess, mock_parse
+        self, mock_which, mock_check, mock_write, mock_subprocess, mock_parse
     ):
         """Test train_model with kcv parameter."""
         # Arrange
+        mock_which.return_value = "/usr/bin/java"  # Java is available
         mock_check.return_value = "/tmp/ranky.jar"
         mock_write.return_value = "/tmp/training.txt"
         mock_result = Mock()
@@ -193,6 +235,41 @@ class TestTrainModel:
         cmd_str = " ".join(call_args)
         assert "-kcv" in cmd_str
         assert "5" in cmd_str
+        # Verify timeout parameter is passed
+        call_kwargs = mock_subprocess.call_args[1]
+        assert "timeout" in call_kwargs
+        assert call_kwargs["timeout"] == 300
+
+    @patch("ltr.ranklib.parse_training_log")
+    @patch("subprocess.run")
+    @patch("ltr.ranklib.write_training_set")
+    @patch("ltr.ranklib.check_for_rankymcrankface")
+    @patch("shutil.which")
+    def test_train_model_timeout(
+        self, mock_which, mock_check, mock_write, mock_subprocess, mock_parse
+    ):
+        """Test train_model handles timeout correctly."""
+        # Arrange
+        import subprocess
+
+        mock_which.return_value = "/usr/bin/java"  # Java is available
+        mock_check.return_value = "/tmp/ranky.jar"
+        mock_write.return_value = "/tmp/training.txt"
+        mock_subprocess.side_effect = subprocess.TimeoutExpired(cmd="java", timeout=300)
+        # Create minimal valid training set (2 judgments with features)
+        training_set = [
+            Judgment(
+                grade=3, qid=1, keywords="test", doc_id="doc1", features=[1.0, 2.0, 3.0]
+            ),
+            Judgment(
+                grade=2, qid=1, keywords="test", doc_id="doc2", features=[4.0, 5.0, 6.0]
+            ),
+        ]
+        # Act & Assert
+        from ltr.exceptions import ModelError
+
+        with pytest.raises(ModelError, match="timed out"):
+            train_model(training_set, "/tmp/model.txt")
 
 
 class TestSaveModel:

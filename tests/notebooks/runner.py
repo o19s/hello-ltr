@@ -245,26 +245,20 @@ class NotebookDependencyValidator:
         try:
             notebook_path_lower = self.notebook_path.lower()
             if "solr" in notebook_path_lower:
-                from ltr.client import SolrClient
-                from tests.port_management import get_port
+                from tests.client_factory import create_solr_client
 
-                port = get_port("SOLR_PORT", default=8983)
-                self.client_instance = SolrClient(port=port)
+                self.client_instance = create_solr_client()
             elif "opensearch" in notebook_path_lower:
-                from ltr.client import OpenSearchClient
-                from tests.port_management import get_port
+                from tests.client_factory import create_opensearch_client
 
-                port = get_port("OPENSEARCH_PORT", default=9201)
-                self.client_instance = OpenSearchClient(port=port)
+                self.client_instance = create_opensearch_client()
             elif (
                 "elasticsearch" in notebook_path_lower
                 or "elastic" in notebook_path_lower
             ):
-                from ltr.client import ElasticClient
-                from tests.port_management import get_port
+                from tests.client_factory import create_elastic_client
 
-                port = get_port("ELASTICSEARCH_PORT", default=9200)
-                self.client_instance = ElasticClient(port=port)
+                self.client_instance = create_elastic_client()
         except Exception:
             # If client creation fails, validation will be skipped
             self.client_instance = None
@@ -1151,20 +1145,24 @@ def run_notebook(notebook_path, timeout=None, save_nb_path=None, fail_fast=None)
     is_tmdb_notebook = "tmdb" in notebook_path.lower()
 
     if needs_index and is_tmdb_notebook:
-        # Determine client type from notebook path
+        # Determine client type from notebook path and use factory functions for dependency injection
+        factory_import = None
+        client_creation = None
+
         if "solr" in notebook_path.lower():
-            client_import = "from ltr.client import SolrClient as Client"
+            factory_import = "from tests.client_factory import create_solr_client"
+            client_creation = "_test_client = create_solr_client()"
         elif "opensearch" in notebook_path.lower():
-            client_import = "from ltr.client import OpenSearchClient as Client"
+            factory_import = "from tests.client_factory import create_opensearch_client"
+            client_creation = "_test_client = create_opensearch_client()"
         elif (
             "elasticsearch" in notebook_path.lower()
             or "elastic" in notebook_path.lower()
         ):
-            client_import = "from ltr.client import ElasticClient as Client"
-        else:
-            client_import = None
+            factory_import = "from tests.client_factory import create_elastic_client"
+            client_creation = "_test_client = create_elastic_client()"
 
-        if client_import:
+        if factory_import and client_creation:
             # Check if notebook will rebuild the index itself
             # If it does, we only create the index if it doesn't exist (don't force rebuild)
             # This avoids conflicts where we create it, then notebook deletes and fails to recreate
@@ -1192,27 +1190,6 @@ def run_notebook(notebook_path, timeout=None, save_nb_path=None, fail_fast=None)
                     "        rebuild(_test_client, index='tmdb', doc_src=movies, force=True)\n"
                     "        print('[TEST] Successfully created/rebuilt tmdb index')"
                 )
-
-            # Use client factory for dependency injection
-            if "solr" in notebook_path.lower():
-                factory_import = "from tests.client_factory import create_solr_client"
-                client_creation = "_test_client = create_solr_client()"
-            elif "opensearch" in notebook_path.lower():
-                factory_import = (
-                    "from tests.client_factory import create_opensearch_client"
-                )
-                client_creation = "_test_client = create_opensearch_client()"
-            elif (
-                "elasticsearch" in notebook_path.lower()
-                or "elastic" in notebook_path.lower()
-            ):
-                factory_import = (
-                    "from tests.client_factory import create_elastic_client"
-                )
-                client_creation = "_test_client = create_elastic_client()"
-            else:
-                factory_import = client_import
-                client_creation = "_test_client = Client()"
 
             index_setup_cell = nbformat.v4.new_code_cell(
                 source=f"{factory_import}\n"

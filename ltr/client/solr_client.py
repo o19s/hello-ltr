@@ -24,7 +24,11 @@ from ltr.types import (
     ModelPayload,
     QueryParams,
 )
-from ltr.validation import ValidationError
+from ltr.validation import (
+    ValidationError,
+    validate_index_name,
+    validate_model_name,
+)
 
 from .base_client import BaseClient
 
@@ -108,7 +112,11 @@ class SolrClient(BaseClient):
 
         Returns:
             bool: True if the core exists, False otherwise.
+
+        Raises:
+            ValidationError: If the index name is invalid.
         """
+        index = validate_index_name(index)
         resp = requests.get(
             f"{self.solr_base_ep}/admin/cores?action=STATUS&core={index}"
         )
@@ -121,7 +129,11 @@ class SolrClient(BaseClient):
 
         Args:
             index: Core name to delete.
+
+        Raises:
+            ValidationError: If the index name is invalid.
         """
+        index = validate_index_name(index)
         params = {
             "action": "UNLOAD",
             "core": index,
@@ -145,10 +157,12 @@ class SolrClient(BaseClient):
             index: Core name to create. A configset with the same name must exist.
 
         Raises:
+            ValidationError: If the index name is invalid.
             RuntimeError: If core creation fails (HTTP status >= 400).
             LTRIndexError: If core creation appears to succeed but verification fails
                 (core cannot be found after creation).
         """
+        index = validate_index_name(index)
         params = {
             "action": "CREATE",
             "name": index,
@@ -201,8 +215,10 @@ class SolrClient(BaseClient):
                 an iterable. File paths (str) are not supported.
 
         Raises:
+            ValidationError: If the index name is invalid.
             ValueError: If doc_src is a string (file paths not supported).
         """
+        index = validate_index_name(index)
 
         def commit() -> None:
             """Commit pending changes to the index."""
@@ -250,8 +266,10 @@ class SolrClient(BaseClient):
             index: Core name to reset LTR for.
 
         Raises:
+            ValidationError: If the index name is invalid.
             RuntimeError: If model or feature store deletion fails (HTTP status >= 400).
         """
+        index = validate_index_name(index)
         models = self.get_models(index)
         for model in models:
             resp = requests.delete(
@@ -274,8 +292,10 @@ class SolrClient(BaseClient):
             config: List of feature configuration dictionaries.
 
         Raises:
-            ValueError: If any feature doesn't have the correct store name.
+            ValidationError: If the feature store name is invalid, or if any feature
+                doesn't have the correct store name.
         """
+        name = validate_model_name(name)
         for feature in config:
             if "store" not in feature or feature["store"] != name:
                 raise ValidationError(
@@ -294,8 +314,11 @@ class SolrClient(BaseClient):
                 must have "store" set to the feature store name.
 
         Raises:
-            ValueError: If any feature doesn't have the correct store name.
+            ValidationError: If the index name or feature store name is invalid, or if
+                any feature doesn't have the correct store name.
         """
+        index = validate_index_name(index)
+        name = validate_model_name(name)
         if isinstance(ftr_config, dict):
             raise ValidationError(
                 "SolrClient.create_featureset requires a list of features"
@@ -348,9 +371,12 @@ class SolrClient(BaseClient):
                 field containing the logged feature values.
 
         Raises:
+            ValidationError: If the index name or feature set name is invalid.
             RuntimeError: If the feature set is not usable after retries, if no response
                 is received after all retries, or if the response structure is invalid.
         """
+        index = validate_index_name(index)
+        featureset = validate_model_name(featureset)
         query_params = params.copy() if params else {}
         efi_options = []
         for key, val in query_params.items():
@@ -494,8 +520,12 @@ class SolrClient(BaseClient):
             model_payload: Model configuration dictionary.
 
         Raises:
+            ValidationError: If the index name, feature set name, or model name is invalid.
             RuntimeError: If model creation or deletion fails (HTTP status >= 400).
         """
+        featureset = validate_model_name(featureset)
+        index = validate_index_name(index)
+        model_name = validate_model_name(model_name)
         url = f"{self.solr_base_ep}/{index}/schema/model-store"
         resp = requests.delete(f"{url}/{model_name}")
         resp_msg(msg=f"Deleted Model {model_name}", resp=resp)
@@ -518,8 +548,12 @@ class SolrClient(BaseClient):
             model_payload: RankLib model definition string.
 
         Raises:
+            ValidationError: If the index name, feature set name, or model name is invalid.
             RuntimeError: If feature store retrieval or model submission fails.
         """
+        featureset = validate_model_name(featureset)
+        index = validate_index_name(index)
+        model_name = validate_model_name(model_name)
         resp = requests.get(
             f"{self.solr_base_ep}/{index}/schema/feature-store/{featureset}"
         )
@@ -558,10 +592,13 @@ class SolrClient(BaseClient):
             list: List of document dictionaries with scores.
 
         Raises:
+            ValidationError: If the index name or model name is invalid.
             TypeError: If query is not a dictionary.
             ValueError: If query dict does not contain a "q" key.
             RuntimeError: If the Solr response indicates an error or has unexpected structure.
         """
+        index = validate_index_name(index)
+        model = validate_model_name(model)
         # Extract query string from QueryParams dict
         # Solr's model_query expects a query string in the "q" parameter
         if not isinstance(query, dict):
@@ -625,10 +662,12 @@ class SolrClient(BaseClient):
                 a format consistent with Elasticsearch/OpenSearch (score -> _score).
 
         Raises:
+            ValidationError: If the index name is invalid.
             QueryError: If the query fails due to network errors, index not found,
                 or other client-related issues.
             ValueError: If JSON parsing fails or response structure is invalid.
         """
+        index = validate_index_name(index)
         url = f"{self.solr_base_ep}/{index}/select?"
 
         try:
@@ -798,7 +837,11 @@ class SolrClient(BaseClient):
 
         Returns:
             dict: Analysis result containing token stream information.
+
+        Raises:
+            ValidationError: If the index name is invalid.
         """
+        index = validate_index_name(index)
         # http://localhost:8983/solr/msmarco/analysis/field
         url = f"{self.solr_base_ep}/{index}/analysis/field?"
 
@@ -824,7 +867,11 @@ class SolrClient(BaseClient):
 
         Returns:
             str: Cursor mark string for the skip position.
+
+        Raises:
+            ValidationError: If the index name is invalid.
         """
+        index = validate_index_name(index)
         url = f"{self.solr_base_ep}/{index}/tvrh/"
         query = {
             "q": q,
@@ -853,7 +900,11 @@ class SolrClient(BaseClient):
         Yields:
             tuple: Pairs of (doc_id, term_vector_dict) for each document.
                 Term vector dict contains term frequencies and positions for the field.
+
+        Raises:
+            ValidationError: If the index name is invalid.
         """
+        index = validate_index_name(index)
         # http://localhost:8983/solr/msmarco/tvrh?q=*:*&start=0&rows=10&fl=id,body&tvComponent=true&tv.positions=true
         url = f"{self.solr_base_ep}/{index}/tvrh/"
 
@@ -897,7 +948,11 @@ class SolrClient(BaseClient):
 
         Returns:
             list: List of feature store names.
+
+        Raises:
+            ValidationError: If the index name is invalid.
         """
+        index = validate_index_name(index)
         resp = requests.get(f"{self.solr_base_ep}/{index}/schema/feature-store")
         response = resp.json()
         return response["featureStores"]
@@ -910,7 +965,11 @@ class SolrClient(BaseClient):
 
         Returns:
             list: List of model names.
+
+        Raises:
+            ValidationError: If the index name is invalid.
         """
+        index = validate_index_name(index)
         resp = requests.get(f"{self.solr_base_ep}/{index}/schema/model-store")
         response = resp.json()
         return [model["name"] for model in response["models"]]
@@ -928,8 +987,11 @@ class SolrClient(BaseClient):
                 - raw_feature_set: Full feature store configuration list
 
         Raises:
+            ValidationError: If the index name or feature store name is invalid.
             RuntimeError: If the feature store retrieval fails (HTTP status >= 400).
         """
+        index = validate_index_name(index)
+        name = validate_model_name(name)
         resp = requests.get(f"{self.solr_base_ep}/{index}/schema/feature-store/{name}")
         resp_msg(msg=f"Feature Set {name}...", resp=resp)
 
@@ -954,8 +1016,10 @@ class SolrClient(BaseClient):
             dict: Document dictionary.
 
         Raises:
+            ValidationError: If the index name is invalid.
             IndexError: If the document is not found.
         """
+        index = validate_index_name(index)
         params = {"q": f"id:{doc_id}", "wt": "json"}
 
         resp_json = requests.post(

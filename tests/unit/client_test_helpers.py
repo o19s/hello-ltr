@@ -5,8 +5,11 @@ This module provides parametrized test functions to reduce duplication
 across Solr, OpenSearch, and Elastic client test files.
 """
 
+from __future__ import annotations
+
 import os
 from contextlib import contextmanager
+from typing import Callable, Union
 from unittest.mock import Mock, mock_open, patch
 
 import pytest
@@ -14,6 +17,39 @@ import pytest
 from ltr.client.elastic_client import ElasticClient
 from ltr.client.opensearch_client import OpenSearchClient
 from ltr.client.solr_client import SolrClient
+from tests.client_factory import (
+    create_elastic_client,
+    create_opensearch_client,
+    create_solr_client,
+)
+
+# Type alias for client classes
+ClientClass = type[Union[SolrClient, OpenSearchClient, ElasticClient]]
+
+
+def _get_client_factory(
+    client_class: ClientClass,
+) -> Callable[[], SolrClient | OpenSearchClient | ElasticClient]:
+    """
+    Get the factory function for a client class.
+
+    Uses explicit dependency injection via factory functions instead of direct instantiation.
+
+    Args:
+        client_class: The client class (SolrClient, OpenSearchClient, or ElasticClient)
+
+    Returns:
+        Callable: Factory function that creates a client instance
+    """
+    if client_class is SolrClient:
+        return create_solr_client
+    elif client_class is OpenSearchClient:
+        return create_opensearch_client
+    elif client_class is ElasticClient:
+        return create_elastic_client
+    else:
+        # Fallback to direct instantiation if unknown class
+        return lambda: client_class()
 
 
 def _get_requests_patch_path(client_type_or_patch_path, method):
@@ -44,6 +80,8 @@ def _create_client_with_patch(client_class, patch_path):
     """
     Context manager to create a client with optional patching.
 
+    Uses factory functions for explicit dependency injection instead of direct instantiation.
+
     Args:
         client_class: The client class to instantiate
         patch_path: Path to patch (None for SolrClient which doesn't need patching)
@@ -51,11 +89,14 @@ def _create_client_with_patch(client_class, patch_path):
     Yields:
         Client instance
     """
+    # Use factory functions for explicit dependency injection
+    factory_func = _get_client_factory(client_class)
+
     if patch_path:
         with patch(patch_path):
-            yield client_class()
+            yield factory_func()
     else:
-        yield client_class()
+        yield factory_func()
 
 
 def _assert_endpoint(client, expected_endpoint):
@@ -189,7 +230,7 @@ def test_check_index_exists_false(client_class, patch_path, client_type):
     if client_type == "solr":
         # Solr uses requests.get and checks response content
         with patch("ltr.client.solr_client.requests.get") as mock_get:
-            client = client_class()
+            client = _get_client_factory(client_class)()
             mock_response = Mock()
             # Content without "instanceDir" - this would be the response when index doesn't exist
             mock_response.content = b"no match here"
@@ -204,7 +245,7 @@ def test_check_index_exists_false(client_class, patch_path, client_type):
             mock_client = Mock()
             mock_client.indices.exists.return_value = False
             mock_client_class.return_value = mock_client
-            client = client_class()
+            client = _get_client_factory(client_class)()
             # Act
             result = client.check_index_exists("test_index")
             # Assert
@@ -232,7 +273,7 @@ def test_check_index_exists_true(client_class, patch_path, client_type):
     if client_type == "solr":
         # Solr uses requests.get and checks response content
         with patch("ltr.client.solr_client.requests.get") as mock_get:
-            client = client_class()
+            client = _get_client_factory(client_class)()
             mock_response = Mock()
             mock_response.content = b"instanceDir"
             mock_get.return_value = mock_response
@@ -247,7 +288,7 @@ def test_check_index_exists_true(client_class, patch_path, client_type):
             mock_client = Mock()
             mock_client.indices.exists.return_value = True
             mock_client_class.return_value = mock_client
-            client = client_class()
+            client = _get_client_factory(client_class)()
             # Act
             result = client.check_index_exists("test_index")
             # Assert
@@ -278,7 +319,7 @@ def test_delete_index(client_class, patch_path, client_type):
             patch("ltr.client.solr_client.requests.get") as mock_get,
             patch("ltr.helpers.handle_resp.resp_msg"),
         ):
-            client = client_class()
+            client = _get_client_factory(client_class)()
             mock_response = Mock()
             mock_response.status_code = 200
             mock_get.return_value = mock_response
@@ -299,7 +340,7 @@ def test_delete_index(client_class, patch_path, client_type):
             mock_client = Mock()
             mock_client.indices.delete.return_value = {"acknowledged": True}
             mock_client_class.return_value = mock_client
-            client = client_class()
+            client = _get_client_factory(client_class)()
             # Act
             client.delete_index("test_index")
             # Assert
@@ -331,7 +372,7 @@ def test_create_index(client_class, patch_path, client_type):
             patch("ltr.client.solr_client.requests.get") as mock_get,
             patch("ltr.helpers.handle_resp.resp_msg"),
         ):
-            client = client_class()
+            client = _get_client_factory(client_class)()
             mock_response = Mock()
             mock_response.status_code = 200
             mock_get.return_value = mock_response
@@ -388,7 +429,7 @@ def test_reset_ltr(client_class, patch_path, client_type):
             patch("ltr.client.solr_client.requests.delete") as mock_delete,
             patch("ltr.helpers.handle_resp.resp_msg"),
         ):
-            client = client_class()
+            client = _get_client_factory(client_class)()
             # Mock get_models and get_feature_stores responses
             mock_get.side_effect = [
                 Mock(json=lambda: {"models": [{"name": "model1"}, {"name": "model2"}]}),
@@ -407,7 +448,7 @@ def test_reset_ltr(client_class, patch_path, client_type):
             patch(_get_requests_patch_path(client_type, "put")) as mock_put,
             patch("ltr.helpers.handle_resp.resp_msg"),
         ):
-            client = client_class()
+            client = _get_client_factory(client_class)()
             mock_delete.return_value = Mock(status_code=200)
             mock_put.return_value = Mock(status_code=200)
             # Act
@@ -440,7 +481,7 @@ def test_create_featureset(client_class, patch_path, client_type):
             patch("ltr.client.solr_client.requests.put") as mock_put,
             patch("ltr.helpers.handle_resp.resp_msg"),
         ):
-            client = client_class()
+            client = _get_client_factory(client_class)()
             config = [{"name": "feature1", "store": "mystore"}]
             mock_put.return_value = Mock(status_code=200)
             # Act
@@ -457,7 +498,7 @@ def test_create_featureset(client_class, patch_path, client_type):
             patch(_get_requests_patch_path(client_type, "post")) as mock_post,
             patch("ltr.helpers.handle_resp.resp_msg"),
         ):
-            client = client_class()
+            client = _get_client_factory(client_class)()
             config = {"featureset": {"features": []}}
             mock_post.return_value = Mock(status_code=200)
             # Act
@@ -506,7 +547,7 @@ def test_get_feature_name(client_class, patch_path, client_type, config):
     _ = client_type  # Mark as intentionally unused
     with _create_client_with_patch(client_class, patch_path) as client:
         # Act
-        name = client.get_feature_name(config, "1")
+        name = client.get_feature_name(config, 1)
         # Assert
         assert name == "feature1"
 
@@ -534,7 +575,7 @@ def test_query(client_class, patch_path, client_type):
             patch("ltr.client.solr_client.requests.post") as mock_post,
             patch("ltr.helpers.handle_resp.resp_msg"),
         ):
-            client = client_class()
+            client = _get_client_factory(client_class)()
             mock_response = Mock()
             mock_response.json.return_value = {
                 "response": {"docs": [{"id": "1", "score": 0.5}]}
@@ -555,7 +596,7 @@ def test_query(client_class, patch_path, client_type):
                 "hits": {"hits": [{"_source": {"id": "1"}, "_score": 0.5}]}
             }
             mock_client_class.return_value = mock_client
-            client = client_class()
+            client = _get_client_factory(client_class)()
             query = {"query": {"match_all": {}}}
             # Act
             results = client.query("test_index", query)
@@ -585,7 +626,7 @@ def test_log_query_with_ids(client_class, patch_path, client_type):
     if client_type == "solr":
         # Solr uses requests.post
         with patch("ltr.client.solr_client.requests.post") as mock_post:
-            client = client_class()
+            client = _get_client_factory(client_class)()
             mock_response = Mock()
             mock_response.json.return_value = {
                 "response": {
@@ -620,7 +661,7 @@ def test_log_query_with_ids(client_class, patch_path, client_type):
                 }
             }
             mock_client_class.return_value = mock_client
-            client = client_class()
+            client = _get_client_factory(client_class)()
             # Act
             results = client.log_query("test_index", "featureset", ["1"], {})
             # Assert
@@ -652,7 +693,7 @@ def test_model_query(client_class, patch_path, client_type):
             patch("ltr.client.solr_client.requests.post") as mock_post,
             patch("ltr.helpers.handle_resp.resp_msg"),
         ):
-            client = client_class()
+            client = _get_client_factory(client_class)()
             mock_response = Mock()
             mock_response.status_code = 200
             mock_response.json.return_value = {"response": {"docs": [{"id": "1"}]}}
@@ -675,7 +716,7 @@ def test_model_query(client_class, patch_path, client_type):
                 "hits": {"hits": [{"_source": {"id": "1"}, "_score": 0.5}]}
             }
             mock_client_class.return_value = mock_client
-            client = client_class()
+            client = _get_client_factory(client_class)()
             query = {"query": {"match_all": {}}}
             # Act
             results = client.model_query("test_index", "mymodel", {}, query)
@@ -941,7 +982,7 @@ def test_get_doc(client_class, patch_path, client_type):
     if client_type == "solr":
         # Solr uses requests.post
         with patch("ltr.client.solr_client.requests.post") as mock_post:
-            client = client_class()
+            client = _get_client_factory(client_class)()
             mock_response = Mock()
             mock_response.json.return_value = {
                 "response": {"docs": [{"id": "123", "title": "Test"}]}
@@ -959,7 +1000,7 @@ def test_get_doc(client_class, patch_path, client_type):
             mock_client = Mock()
             mock_client.get.return_value = {"_source": {"id": "123", "title": "Test"}}
             mock_client_class.return_value = mock_client
-            client = client_class()
+            client = _get_client_factory(client_class)()
             # Act
             doc = client.get_doc("123", "test_index")
             # Assert
@@ -1024,7 +1065,7 @@ def test_log_query_without_ids(client_class, patch_path, client_type):
     if client_type == "solr":
         # Solr uses requests.post and checks for *:* query
         with patch("ltr.client.solr_client.requests.post") as mock_post:
-            client = client_class()
+            client = _get_client_factory(client_class)()
             mock_response = Mock()
             mock_response.json.return_value = {"response": {"docs": []}}
             mock_post.return_value = mock_response
@@ -1039,7 +1080,7 @@ def test_log_query_without_ids(client_class, patch_path, client_type):
             mock_client = Mock()
             mock_client.search.return_value = {"hits": {"hits": []}}
             mock_client_class.return_value = mock_client
-            client = client_class()
+            client = _get_client_factory(client_class)()
             # Act
             client.log_query("test_index", "featureset", None, {})
             # Assert

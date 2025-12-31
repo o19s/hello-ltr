@@ -1,7 +1,7 @@
 # Architecture Documentation
 
 **Project:** hello-ltr (Learning to Rank tutorial and examples)  
-**Last Updated:** December 21, 2025
+**Last Updated:** December 31, 2025
 
 ---
 
@@ -385,19 +385,31 @@ Centralized type aliases for:
 
 **Example**: `es_ltr_query()` vs `solr_ltr_query()` - same purpose, different implementation
 
-### 3. Factory Pattern (Implicit)
+### 3. Factory Pattern (Explicit)
 
-**Used in**: Client instantiation
+**Used in**: Client instantiation via factory functions
 
-**Pattern**: Each client has its own constructor, but could be abstracted:
+**Pattern**: Factory functions provide explicit dependency injection for port configuration:
 
 ```python
-# Current (implicit factory)
-client = ElasticClient(url="http://localhost:9200")
+# Factory functions in ltr.client module
+from ltr.client import create_solr_client, create_elastic_client, create_opensearch_client
 
-# Potential explicit factory
-client = create_client("elastic", url="http://localhost:9200")
+# Uses environment variables for port configuration (test environments)
+# Falls back to default ports (development environments)
+client = create_solr_client()  # Uses SOLR_PORT env var or default 8983
+client = create_elastic_client()  # Uses ELASTICSEARCH_PORT env var or default 9200
+client = create_opensearch_client()  # Uses OPENSEARCH_PORT env var or default 9201
+
+# Factory functions enable explicit dependency injection instead of runtime patching
+# All notebooks use factory functions for consistent port configuration
 ```
+
+**Benefits**:
+- Explicit dependency injection (ports via constructor parameters)
+- Environment-aware (test ports vs development ports)
+- No runtime patching needed for notebooks
+- Consistent pattern across all client creation
 
 ### 4. Iterator Pattern
 
@@ -430,8 +442,6 @@ client = create_client("elastic", url="http://localhost:9200")
 ## Integration Points
 
 ### External Dependencies
-
-**Note:** For detailed dependency analysis, version concerns, and recommendations, see [`CODEBASE_REVIEW.md#dependencies`](CODEBASE_REVIEW.md#dependencies).
 
 1. **Search Engines** (via HTTP APIs):
    - Elasticsearch 7.16.2
@@ -543,8 +553,6 @@ The project uses extensive type aliases for consistency. See [`TYPE_ALIASES_GUID
 
 ### Type Checking
 
-**Note:** For detailed type checking configuration and current status, see [`CODEBASE_REVIEW.md`](CODEBASE_REVIEW.md) section 5.1 (Test Infrastructure Components - Type Checking in Tests).
-
 - **Tool**: Pyright (configured in `standard` mode)
 - **Coverage**: All library code and Python files in notebooks (excludes `.ipynb` files)
 - **Status**: 0 errors, 2 warnings (library-related)
@@ -586,7 +594,7 @@ The project uses extensive type aliases for consistency. See [`TYPE_ALIASES_GUID
 
 ## Performance Considerations
 
-**Note:** For test performance metrics, see [`tests/performance/PERFORMANCE_RESULTS.md`](tests/performance/PERFORMANCE_RESULTS.md). For code performance issues and recommendations, see [`CODEBASE_REVIEW.md#performance`](CODEBASE_REVIEW.md#performance).
+**Note:** For test performance metrics, see [`tests/performance/PERFORMANCE_RESULTS.md`](tests/performance/PERFORMANCE_RESULTS.md).
 
 ### Current Optimizations
 
@@ -597,16 +605,8 @@ The project uses extensive type aliases for consistency. See [`TYPE_ALIASES_GUID
   - Handles connection errors, timeouts, and timing-related errors
   - Configurable retry attempts and backoff multipliers
 
-### Known Performance Issues
-
-1. ✅ **Global Mutable State**: ~~`base_es_query` in `search.py` (thread-safety concern)~~ - **RESOLVED** (December 23, 2025) - No global mutable state found in `search.py`
-2. ✅ **Inefficient Grouping**: ~~`_judgments_by_qid()` could use `itertools.groupby`~~ - **RESOLVED** (December 23, 2025) - Now uses `defaultdict(list)` for efficient grouping
-3. ✅ **Memory Usage**: ~~Some operations load entire datasets~~ - **OPTIMIZED** (December 23, 2025) - Functions now accept iterators; `load_judgments()` optimized for single-pass statistics
-
 ### Optimization Opportunities
 
-- ✅ Use `defaultdict` for judgment grouping - **COMPLETE** (December 23, 2025)
-- ⚠️ Add caching for feature set lookups - **NOT IMPLEMENTED** (see CODEBASE_REVIEW.md)
 - Implement connection pooling
 - Add lazy loading for large datasets
 
@@ -636,7 +636,7 @@ The project uses extensive type aliases for consistency. See [`TYPE_ALIASES_GUID
 
 ## Testing Architecture
 
-**Note:** For comprehensive testing documentation, see [`tests/README.md`](tests/README.md) for test suite details and [`CODEBASE_REVIEW.md`](CODEBASE_REVIEW.md) section 5.1 for infrastructure status and improvements.
+**Note:** For comprehensive testing documentation, see [`tests/README.md`](tests/README.md) for test suite details and [`TESTING_FRAMEWORK_ANALYSIS.md`](TESTING_FRAMEWORK_ANALYSIS.md) for infrastructure analysis.
 
 ### Test Structure
 
@@ -659,7 +659,7 @@ tests/
 - **Docker**: Isolated search engine instances (per-worker containers)
 - **Pytest**: Test framework with fixtures
 - **Parallel Execution**: pytest-xdist with 12 workers
-- **Coverage**: pytest-cov (32.24% overall coverage - see [`CODEBASE_REVIEW.md`](CODEBASE_REVIEW.md) section 5.1 for details)
+- **Coverage**: pytest-cov (32.24% overall coverage - see [`tests/README.md`](tests/README.md) and [`TODO_MAYBE.md`](TODO_MAYBE.md) for details)
 
 ---
 
@@ -676,24 +676,26 @@ tests/
 
 ### Technical Debt
 
-See `CODEBASE_REVIEW.md` for detailed technical debt items, including:
-- Global mutable state
+See [`TODO_MAYBE.md`](TODO_MAYBE.md) and [`REMAINING_DEPENDENCY_UPDATES.md`](REMAINING_DEPENDENCY_UPDATES.md) for detailed technical debt items, including:
 - Error handling improvements
 - Dependency updates
-- API documentation generation
+- Test coverage improvements
+- Type checking enhancements
 
 ---
 
 ## References
 
 - **Architecture Decision Records**: See `adr/README.md` for historical architectural decisions
-- **Codebase Review**: See `CODEBASE_REVIEW.md` for detailed code analysis
 - **Test Documentation**: See `tests/README.md` for testing architecture
+- **Testing Analysis**: See `TESTING_FRAMEWORK_ANALYSIS.md` for detailed test infrastructure analysis
 - **User Guide**: See `README.md` for usage instructions
 - **Type Guide**: See `TYPE_ALIASES_GUIDE.md` for type system details
+- **Technical Debt**: See `TODO_MAYBE.md` for potential improvements
+- **Dependency Updates**: See `REMAINING_DEPENDENCY_UPDATES.md` for dependency status
 
 ---
 
-**Document Version**: 1.1  
-**Last Updated**: December 21, 2025
+**Document Version**: 1.2  
+**Last Updated**: December 31, 2025
 

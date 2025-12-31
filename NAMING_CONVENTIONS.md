@@ -1,6 +1,6 @@
 # Naming Conventions Guide
 
-**Last Updated:** December 21, 2025
+**Last Updated:** December 31, 2025
 
 This document outlines the naming conventions used in this project. All code should follow PEP 8 naming conventions unless explicitly documented exceptions apply.
 
@@ -89,6 +89,28 @@ def predict(self, X, use_original=False):  # ✅ Allowed in notebooks - ML conve
 
 **Suppression**: All instances are suppressed with `# noqa: N803` comments.
 
+### 3. AST Visitor Methods
+
+**Location**: `scripts/analysis/find_undocumented.py`
+
+**Violation**: Method names like `visit_FunctionDef`, `visit_AsyncFunctionDef`, `visit_ClassDef` (violates N802)
+
+**Reason**: Python's `ast.NodeVisitor` class requires visitor methods to match the exact AST node type names (e.g., `FunctionDef`, `AsyncFunctionDef`, `ClassDef`). These method names must follow the pattern `visit_<NodeType>` where `<NodeType>` is the exact class name from the `ast` module.
+
+**Allowed Usage**:
+```python
+class DocstringChecker(ast.NodeVisitor):
+    def visit_FunctionDef(self, node: ast.FunctionDef) -> None:  # ✅ Allowed - matches AST API
+        pass
+    
+    def visit_ClassDef(self, node: ast.ClassDef) -> None:  # ✅ Allowed - matches AST API
+        pass
+```
+
+**When to Use**: Only when implementing AST visitor classes that inherit from `ast.NodeVisitor`. All other code should use `snake_case` for method names.
+
+**Suppression**: All instances are suppressed with `# noqa: N802` comments.
+
 ## Enforcement
 
 ### Automated Checks
@@ -110,7 +132,7 @@ Naming conventions are enforced automatically:
 
 - **New violations**: Will cause CI/CD to fail. Fix violations before merging.
 - **Existing violations**: Documented in this document (see [Intentional Violations](#intentional-violations) section) with reasoning
-- **Suppressing violations**: Use `# noqa: N803` (or appropriate code) with a comment explaining why
+- **Suppressing violations**: Use `# noqa: N803` (or appropriate code like `N802` for AST visitors) with a comment explaining why
 
 ## Best Practices
 

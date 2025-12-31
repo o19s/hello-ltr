@@ -424,16 +424,23 @@ pytest -vv -s -x tests/notebooks/test_notebooks.py
 
 ```
 tests/
-├── conftest.py              # Pytest fixtures and configuration
-│                            # - Per-worker container fixtures (default)
-│                            # - Port management and isolation
-│                            # - Health checks and timing
-├── test_notebooks.py        # Main test suite (parametrized)
-├── runner.py                # Notebook execution engine
-├── test_config.py           # Test configuration (paths, ignored notebooks, and NotebookTestConfig)
-├── patch_clients_for_tests.py  # Port patching for isolation
-├── test.sh                  # Test runner wrapper (simplified)
-└── README.md               # This file
+├── conftest.py                    # Pytest fixtures (simplified, 202 lines)
+│                                  # - Container fixtures (solr, elasticsearch, opensearch)
+│                                  # - Notebook runner fixture
+│                                  # - Utility fixtures (temp_file, temp_dir)
+├── fixtures/                      # Modular test infrastructure
+│   ├── container_management.py   # Docker Compose and container lifecycle
+│   ├── container_fixtures.py     # Container fixture implementation
+│   ├── health_checks.py          # Service health check utilities
+│   ├── file_locking.py           # Platform-specific file locking
+│   └── pytest_hooks.py           # All pytest hooks
+├── notebooks/
+│   ├── test_notebooks.py         # Main test suite (parametrized)
+│   └── runner.py                 # Notebook execution engine
+├── test_config.py                # Test configuration (paths, ignored notebooks)
+├── patch_clients_for_tests.py    # Port patching for isolation
+├── test.sh                       # Test runner wrapper (simplified)
+└── README.md                     # This file
 ```
 
 ### Container Management
@@ -468,12 +475,13 @@ tests/
 - Prevents conflicts with production services
 - Patches: Solr (8983→18983), ES (9200→19200), OpenSearch (9201→19201)
 
-**4. Container Fixtures ([conftest.py](conftest.py))**
+**4. Container Fixtures ([conftest.py](conftest.py) + [fixtures/](fixtures/))**
 - Per-worker container isolation (default)
 - Automatic container startup and cleanup
 - Health checks with timing logs
 - Port management and conflict prevention
 - File locking for parallel execution safety
+- **Modular organization**: Container management, health checks, file locking, and pytest hooks are in separate modules in `tests/fixtures/`
 
 **5. Test Runner ([test.sh](test.sh))**
 - Simplified wrapper for pytest
@@ -556,9 +564,11 @@ def test_notebook_executes_without_errors(notebook_path, notebook_type, engine, 
 
 **Example:**
 ```python
+from tests.client_factory import create_solr_client
+
 def test_solr_client_initializes_with_localhost():
     """Test client initializes with localhost when not in Docker."""
-    client = SolrClient()
+    client = create_solr_client()
     assert client.get_host() == 'localhost'
     assert client.port == 8983
 ```
@@ -583,7 +593,14 @@ def test_solr_client_initializes_with_localhost():
 
 ### Test Fixtures
 
-Fixtures are defined in `tests/conftest.py` and provide reusable test setup and teardown.
+Fixtures are defined in `tests/conftest.py` (202 lines) and provide reusable test setup and teardown. The test infrastructure has been modularized for better maintainability:
+
+- **`conftest.py`**: Main fixture definitions (container fixtures, notebook runner, utility fixtures)
+- **`tests/fixtures/container_management.py`**: Docker Compose and container lifecycle management
+- **`tests/fixtures/container_fixtures.py`**: Container fixture implementation
+- **`tests/fixtures/health_checks.py`**: Service health check utilities
+- **`tests/fixtures/file_locking.py`**: Platform-specific file locking
+- **`tests/fixtures/pytest_hooks.py`**: All pytest hooks (configure, collection, reporting, etc.)
 
 #### Container Fixtures (Session Scope)
 
@@ -597,9 +614,11 @@ Fixtures are defined in `tests/conftest.py` and provide reusable test setup and 
    - **Health Check:** `/solr/admin/info/system`
    - **Usage:**
      ```python
+     from tests.client_factory import create_solr_client
+     
      def test_something(solr_container):
          # Container is ready, SOLR_PORT is set
-         client = SolrClient()
+         client = create_solr_client()
          # Use client...
      ```
 
@@ -609,9 +628,11 @@ Fixtures are defined in `tests/conftest.py` and provide reusable test setup and 
    - **Health Checks:** `/_cluster/health`, `/api/status`
    - **Usage:**
      ```python
+     from tests.client_factory import create_elastic_client
+     
      def test_something(elasticsearch_container):
          # Containers are ready
-         client = ElasticClient()
+         client = create_elastic_client()
          # Use client...
      ```
 
@@ -621,9 +642,11 @@ Fixtures are defined in `tests/conftest.py` and provide reusable test setup and 
    - **Health Checks:** `/_cluster/health`, `/api/status`
    - **Usage:**
      ```python
+     from tests.client_factory import create_opensearch_client
+     
      def test_something(opensearch_container):
          # Containers are ready
-         client = OpenSearchClient()
+         client = create_opensearch_client()
          # Use client...
      ```
 
@@ -1996,9 +2019,10 @@ If a notebook should not be tested automatically:
 
 1. **Keep components focused**:
    - `runner.py`: Notebook execution only
-   - `conftest.py`: Pytest fixtures and configuration
+   - `conftest.py`: Pytest fixtures (simplified, imports from fixtures modules)
    - `test_notebooks.py`: Test parametrization and collection
    - `patch_clients_for_tests.py`: Port patching logic
+   - `tests/fixtures/`: Modular test infrastructure (container management, hooks, health checks, etc.)
 
 2. **Add fixtures to `conftest.py`**:
    ```python

@@ -16,6 +16,7 @@ import pytest
 
 from ltr.client.elastic_client import ElasticClient, ElasticResp
 from ltr.client.responses import BulkResp, SearchResp
+from tests.client_factory import create_elastic_client
 
 
 class TestElasticClientInitialization:
@@ -100,7 +101,7 @@ class TestElasticClientModelOperations:
         mock_requests.post.return_value = mock_post_resp
         mock_requests.get.return_value = mock_get_resp
 
-        client = ElasticClient()
+        client = create_elastic_client()
 
         model_payload = {
             "model": {
@@ -136,7 +137,7 @@ class TestElasticClientModelOperations:
         with patch.object(
             ElasticClient, "submit_model", side_effect=Exception("Connection error")
         ):
-            client = ElasticClient()
+            client = create_elastic_client()
             client.es = mock_client  # ElasticClient uses self.es
 
             model_payload = {
@@ -220,7 +221,7 @@ class TestElasticClientInvalidInput:
         # Arrange
         mock_client = Mock()
         mock_elasticsearch_class.return_value = mock_client
-        client = ElasticClient()
+        client = create_elastic_client()
         # Act & Assert
         from ltr.validation import ValidationError
 
@@ -233,7 +234,7 @@ class TestElasticClientInvalidInput:
         # Arrange
         mock_client = Mock()
         mock_elasticsearch_class.return_value = mock_client
-        client = ElasticClient()
+        client = create_elastic_client()
         docs = [{"title": "Test"}]
         # Act & Assert
         from ltr.validation import ValidationError
@@ -253,7 +254,7 @@ class TestElasticClientRetryLogic:
 
         mock_client = Mock()
         mock_elasticsearch_class.return_value = mock_client
-        client = ElasticClient()
+        client = create_elastic_client()
         # Mock response that indicates model not found (timing error)
         # The retry logic checks for "Unknown model" in the error string
         mock_response = {"error": "Unknown model test_model"}
@@ -275,7 +276,7 @@ class TestElasticClientRetryLogic:
         mock_response = Mock()
         mock_response.status_code = 404
         mock_get.return_value = mock_response
-        client = ElasticClient()
+        client = create_elastic_client()
         # Act & Assert
         with pytest.raises(QueryError, match="Feature set 'test_featureset' not found"):
             client.feature_set("test_index", "test_featureset")
@@ -288,7 +289,7 @@ class TestElasticClientRetryLogic:
 
         mock_client = Mock()
         mock_elasticsearch_class.return_value = mock_client
-        client = ElasticClient()
+        client = create_elastic_client()
         mock_client.search.side_effect = RequestError(
             "Bad Request", {"status": 400}, {"error": {"reason": "Invalid query"}}
         )
