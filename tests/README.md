@@ -235,7 +235,7 @@ For CI/CD environments (GitHub Actions, Jenkins, etc.):
 ```bash
 AUTO_CLEANUP_CONFLICTS=true      # Auto-cleanup without prompts
 SERVICE_WAIT_TIMEOUT=600         # Longer timeout for CI
-NOTEBOOK_TIMEOUT_MINUTES=10      # Extended timeout for CI (default: 5 minutes)
+NOTEBOOK_TIMEOUT_MINUTES=10      # Extended per-cell timeout for CI (default: 5 minutes)
 ```
 
 **CI Setup Script:**
@@ -694,7 +694,7 @@ def test_my_notebook(notebook_runner):
 - Cell-by-cell progress logging
 - Error capture with context (cell index, source code)
 - Validation error handling (stops execution on validation failures by default)
-- Configurable timeout (default: 5 minutes from `NOTEBOOK_TIMEOUT_MINUTES`)
+- Configurable per-cell timeout (default: 5 minutes from `NOTEBOOK_TIMEOUT_MINUTES`)
 
 ### Running Specific Test Scenarios
 
@@ -936,7 +936,10 @@ See `IGNORED_NOTEBOOKS` in [test_config.py](test_config.py) for the full list wi
 ## Environment Variables
 
 ### Test Execution
-- `NOTEBOOK_TIMEOUT_MINUTES`: Timeout per notebook in minutes (default: 5)
+- `NOTEBOOK_TIMEOUT_MINUTES`: Timeout per **cell** in minutes (default: 5). This is
+  passed to nbclient, which applies it to each cell individually -- it is not a
+  budget for the notebook as a whole. The whole-test bound is `timeout` in
+  `pytest.ini`, which must stay larger than this.
 - `NOTEBOOK_FAIL_FAST`: Enable fail-fast mode - stop on first error (default: false)
 - `NOTEBOOK_VALIDATION_FAIL_FAST`: Enable fail-fast for validation errors (default: true)
   - When enabled, validation errors (empty training sets, missing dependencies, failed operations) stop execution immediately
@@ -949,6 +952,27 @@ See `IGNORED_NOTEBOOKS` in [test_config.py](test_config.py) for the full list wi
   - Useful for understanding test environment differences and debugging failures
   - Example: `NOTEBOOK_DEBUG_MODE=true pytest tests/notebooks/test_notebooks.py`
 - `PYTEST_ARGS`: Additional pytest arguments for test.sh
+
+### Test-Mode Training Limits
+
+Notebooks that call `train()` or `feature_search()` are rewritten on the fly to
+train something small, so tests exercise the code path without doing real work.
+
+- `NOTEBOOK_MAX_QUERIES`: Queries kept in the training set (default: 2)
+- `NOTEBOOK_MAX_JUDGMENTS_PER_QUERY`: Judgments kept per query (default: 2)
+- `NOTEBOOK_MAX_KCV_FOLDS`: Cross-validation folds (default: 2)
+- `NOTEBOOK_MAX_TREES` / `NOTEBOOK_MAX_LEAFS` / `NOTEBOOK_MAX_BAG`: Model size (default: 1)
+- `NOTEBOOK_MAX_FEATURES`: Features considered by `feature_search` (default: 2)
+
+**`kcv` has a hard floor of 2 and must not exceed `NOTEBOOK_MAX_QUERIES`.**
+RankLib cannot build k folds from fewer than k queries, and it fails in the worst
+possible way: the empty fold makes `LambdaMART.sortSamplesByFeature` throw
+`ArrayIndexOutOfBoundsException` inside a thread-pool worker, and since that pool
+is never shut down the JVM hangs rather than exiting. The notebook then sits
+until an outer timeout kills it, with nothing useful in the output.
+
+If you lower `NOTEBOOK_MAX_QUERIES` below 2, the harness drops `kcv` entirely and
+trains without cross-validation, which is the only safe option at that size.
 
 ### Service Ports
 - `SOLR_PORT`: Test port for Solr (default: 18983)
