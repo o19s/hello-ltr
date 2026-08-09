@@ -14,6 +14,7 @@ from tests.notebooks.runner import (
     PatchedExecutePreprocessor,
     inspect_notebook_variables,
     run_notebook,
+    safe_kcv_folds,
 )
 
 
@@ -327,3 +328,43 @@ class TestDependencyValidatorWithoutClient:
         assert not met
         assert err is not None
         assert "never_created" in err
+
+
+class TestSafeKcvFolds:
+    """Tests the cross-validation fold clamp.
+
+    Regression coverage for the hang in "netfix movies-random-forests" and the
+    other kcv-using notebooks. The harness shrinks the training set to
+    NOTEBOOK_MAX_QUERIES queries and used to force kcv to 1, which RankLib
+    cannot train on: the empty fold throws ArrayIndexOutOfBoundsException inside
+    a thread-pool worker that is never shut down, so the JVM hangs instead of
+    exiting and the notebook burns the entire RankLib timeout with no useful
+    error. Confirmed against RankLib directly -- -kcv 1 hangs, -kcv 2 finishes
+    in about a second.
+    """
+
+    def test_one_fold_is_raised_to_two(self):
+        """A fold count of 1 is always invalid, whatever was requested."""
+        assert safe_kcv_folds(1, 2) == 2
+
+    def test_folds_capped_at_query_count(self):
+        """More folds than queries leaves empty folds, which is what hangs."""
+        assert safe_kcv_folds(5, 2) == 2
+
+    def test_folds_preserved_when_training_set_is_big_enough(self):
+        assert safe_kcv_folds(5, 10) == 5
+
+    def test_too_few_queries_disables_cross_validation(self):
+        """Below 2 queries no valid split exists, so kcv must be dropped."""
+        assert safe_kcv_folds(2, 1) is None
+        assert safe_kcv_folds(2, 0) is None
+
+    def test_result_is_never_the_value_that_hangs(self):
+        """Whatever the inputs, never emit a fold count RankLib chokes on."""
+        for requested in range(0, 12):
+            for queries in range(0, 12):
+                folds = safe_kcv_folds(requested, queries)
+                if folds is None:
+                    continue
+                assert folds >= 2, (requested, queries, folds)
+                assert folds <= queries, (requested, queries, folds)

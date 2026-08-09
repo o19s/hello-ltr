@@ -55,6 +55,37 @@ def hours(hours):
     return hours * 60 * 60
 
 
+def safe_kcv_folds(requested_folds: int, max_queries: int) -> Optional[int]:
+    """Clamp cross-validation folds to a value RankLib can actually train on.
+
+    RankLib cannot build k folds from fewer than k queries, and it fails in the
+    worst possible way rather than raising: the empty fold makes
+    LambdaMART.sortSamplesByFeature throw ArrayIndexOutOfBoundsException inside a
+    thread-pool worker, and because that pool is never shut down the JVM hangs
+    instead of exiting. The notebook then sits until an outer timeout kills it,
+    with nothing useful in the output.
+
+    Because the test harness shrinks the training set to NOTEBOOK_MAX_QUERIES
+    queries, the fold count has to be clamped against that, not just against the
+    value the notebook asked for. A fold count of 1 is always invalid.
+
+    Verified directly against RankLib using the training set the harness
+    produces: -kcv 1 hangs until killed, -kcv 2 finishes in about a second.
+
+    Args:
+        requested_folds: Fold count requested via NOTEBOOK_MAX_KCV_FOLDS
+        max_queries: Queries the harness keeps in the training set
+
+    Returns:
+        int: A fold count between 2 and max_queries, or None if the training set
+        is too small for any valid split, meaning the caller should drop kcv and
+        train without cross-validation.
+    """
+    if max_queries < 2:
+        return None
+    return max(2, min(requested_folds, max_queries))
+
+
 def inspect_notebook_variables(kernel_manager) -> dict[str, Any]:
     """Inspect common notebook variables to help with debugging.
 
@@ -1035,10 +1066,23 @@ def run_notebook(notebook_path, timeout=None, save_nb_path=None, fail_fast=None)
     import time
     from datetime import datetime
 
-    # Get timeout from environment variable or use default of 5 minutes
+    # Per-CELL timeout, not per-notebook: this is handed to nbclient, which
+    # applies it to each cell individually. See NOTEBOOK_TIMEOUT_MINUTES in
+    # tests/README.md and the nesting note in pytest.ini.
     if timeout is None:
         timeout_minutes = float(os.environ.get("NOTEBOOK_TIMEOUT_MINUTES", "5"))
         timeout = int(timeout_minutes * 60)
+
+    # Keep RankLib's own timeout just inside the per-cell limit so that a stuck
+    # training run reports "RankLib training timed out" -- which names the
+    # culprit -- rather than nbclient killing the cell with no explanation.
+    # ltr/ranklib.py defaults to 1800s, far outside the cell budget, so without
+    # this the useful error could never win the race. Applied in the injected
+    # setup cell rather than here: setting it on this process would leak into
+    # the rest of the pytest session and change what unrelated tests observe.
+    ranklib_timeout = os.environ.get("LTR_RANKLIB_TIMEOUT") or str(
+        max(60, int(timeout * 0.8))
+    )
 
     # Get fail_fast from parameter, environment variable, or default to False
     if fail_fast is None:
@@ -1116,6 +1160,9 @@ def run_notebook(notebook_path, timeout=None, save_nb_path=None, fail_fast=None)
         )
     if opensearch_port:
         setup_cell_source += f"os.environ['OPENSEARCH_PORT'] = '{opensearch_port}'\n"
+
+    # Bound RankLib inside the per-cell timeout so its own error wins the race
+    setup_cell_source += f"os.environ['LTR_RANKLIB_TIMEOUT'] = '{ranklib_timeout}'\n"
 
     # Still patch requests library for hardcoded URLs in notebooks
     # Also patch reset_ltr timing for test environments
@@ -1335,7 +1382,10 @@ def run_notebook(notebook_path, timeout=None, save_nb_path=None, fail_fast=None)
 
     if uses_train or uses_feature_search:
         # Get test mode limits from environment or use defaults
-        max_test_folds = int(os.environ.get("NOTEBOOK_MAX_KCV_FOLDS", "1"))
+        max_test_folds = safe_kcv_folds(
+            int(os.environ.get("NOTEBOOK_MAX_KCV_FOLDS", "2")),
+            int(os.environ.get("NOTEBOOK_MAX_QUERIES", "2")),
+        )
         max_test_trees = int(os.environ.get("NOTEBOOK_MAX_TREES", "1"))
         max_test_bag = int(os.environ.get("NOTEBOOK_MAX_BAG", "1"))
         max_test_leafs = int(os.environ.get("NOTEBOOK_MAX_LEAFS", "1"))
@@ -1366,14 +1416,22 @@ def run_notebook(notebook_path, timeout=None, save_nb_path=None, fail_fast=None)
             patch_source += "    leafs_val = leafs if leafs is not None else kwargs.get('leafs', 10)\n"
             patch_source += "    features_val = features if features is not None else kwargs.get('features', None)\n"
             patch_source += "    # Reduce expensive parameters\n"
-            patch_source += (
-                f"    if kcv_val is not None and kcv_val > {max_test_folds}:\n"
-            )
-            patch_source += f"        print(f'[TEST MODE] Reducing kcv from {{kcv_val}} to {max_test_folds} for faster testing')\n"
-            patch_source += f"        kcv = {max_test_folds}\n"
-            patch_source += (
-                "        kwargs.pop('kcv', None)  # Remove from kwargs if present\n"
-            )
+            if max_test_folds is None:
+                # No valid fold count for this training set size -- strip kcv so
+                # RankLib trains without cross-validation instead of hanging.
+                patch_source += "    if kcv_val is not None:\n"
+                patch_source += "        print('[TEST MODE] Dropping kcv: too few queries for cross-validation')\n"
+                patch_source += "        kcv = None\n"
+                patch_source += "        kwargs.pop('kcv', None)\n"
+            else:
+                patch_source += (
+                    f"    if kcv_val is not None and kcv_val > {max_test_folds}:\n"
+                )
+                patch_source += f"        print(f'[TEST MODE] Reducing kcv from {{kcv_val}} to {max_test_folds} for faster testing')\n"
+                patch_source += f"        kcv = {max_test_folds}\n"
+                patch_source += (
+                    "        kwargs.pop('kcv', None)  # Remove from kwargs if present\n"
+                )
             patch_source += (
                 f"    if trees_val is not None and trees_val > {max_test_trees}:\n"
             )
@@ -1436,14 +1494,22 @@ def run_notebook(notebook_path, timeout=None, save_nb_path=None, fail_fast=None)
             patch_source += "    leafs_val = leafs if leafs is not None else kwargs.get('leafs', 10)\n"
             patch_source += "    features_val = features if features is not None else kwargs.get('features', None)\n"
             patch_source += "    # Reduce expensive parameters\n"
-            patch_source += (
-                f"    if kcv_val is not None and kcv_val > {max_test_folds}:\n"
-            )
-            patch_source += f"        print(f'[TEST MODE] Reducing kcv from {{kcv_val}} to {max_test_folds} for faster testing')\n"
-            patch_source += f"        kcv = {max_test_folds}\n"
-            patch_source += (
-                "        kwargs.pop('kcv', None)  # Remove from kwargs if present\n"
-            )
+            if max_test_folds is None:
+                # No valid fold count for this training set size -- strip kcv so
+                # RankLib trains without cross-validation instead of hanging.
+                patch_source += "    if kcv_val is not None:\n"
+                patch_source += "        print('[TEST MODE] Dropping kcv: too few queries for cross-validation')\n"
+                patch_source += "        kcv = None\n"
+                patch_source += "        kwargs.pop('kcv', None)\n"
+            else:
+                patch_source += (
+                    f"    if kcv_val is not None and kcv_val > {max_test_folds}:\n"
+                )
+                patch_source += f"        print(f'[TEST MODE] Reducing kcv from {{kcv_val}} to {max_test_folds} for faster testing')\n"
+                patch_source += f"        kcv = {max_test_folds}\n"
+                patch_source += (
+                    "        kwargs.pop('kcv', None)  # Remove from kwargs if present\n"
+                )
             patch_source += (
                 f"    if trees_val is not None and trees_val > {max_test_trees}:\n"
             )
@@ -1517,9 +1583,17 @@ def run_notebook(notebook_path, timeout=None, save_nb_path=None, fail_fast=None)
         training_set_patch += (
             "# Wrap FeatureLogger to limit queries and judgments per query\n"
         )
-        training_set_patch += "# Use module-level counter so limit applies across all FeatureLogger instances\n"
+        # The query budget is PER LOGGER, not shared across all of them. It used
+        # to be a module-level counter, which meant the first FeatureLogger in a
+        # notebook consumed the whole budget and every later one was handed an
+        # empty training set, so train() failed with "Training set is empty".
+        # Notebooks that log features more than once -- tale-of-two-queries and
+        # netfix movies both build two loggers -- could never pass. Per-instance
+        # still bounds the work (loggers x max_queries) without starving anyone.
+        training_set_patch += (
+            "# Per-instance query budget: a shared counter would starve later loggers\n"
+        )
         training_set_patch += "import ltr.log\n"
-        training_set_patch += "ltr.log._test_query_count = 0\n"
         training_set_patch += f"ltr.log._test_max_queries = {max_test_queries}\n"
         training_set_patch += (
             f"ltr.log._test_max_judgments_per_query = {max_test_judgments_per_query}\n"
@@ -1528,15 +1602,23 @@ def run_notebook(notebook_path, timeout=None, save_nb_path=None, fail_fast=None)
             "from ltr.log import FeatureLogger as _OriginalFeatureLogger\n"
         )
         training_set_patch += "class LimitedFeatureLogger(_OriginalFeatureLogger):\n"
+        training_set_patch += "    def __init__(self, *args, **kwargs):\n"
+        training_set_patch += "        super().__init__(*args, **kwargs)\n"
+        training_set_patch += "        self._test_query_count = 0\n"
         training_set_patch += "    def log_for_qid(self, qid, judgments, keywords):\n"
-        training_set_patch += "        # Limit number of queries processed (shared across all instances)\n"
+        training_set_patch += (
+            "        # Budget is per logger instance, so a notebook that builds\n"
+        )
+        training_set_patch += (
+            "        # several loggers gets a usable training set from each\n"
+        )
         training_set_patch += "        import ltr.log\n"
         training_set_patch += (
-            "        if ltr.log._test_query_count >= ltr.log._test_max_queries:\n"
+            "        if self._test_query_count >= ltr.log._test_max_queries:\n"
         )
-        training_set_patch += "            print(f'[TEST MODE] Skipping query {qid} - already processed {ltr.log._test_max_queries} queries for faster testing')\n"
+        training_set_patch += "            print(f'[TEST MODE] Skipping query {qid} - this logger already processed {ltr.log._test_max_queries} queries for faster testing')\n"
         training_set_patch += "            return [], list(judgments)  # Return empty training set, all judgments discarded\n"
-        training_set_patch += "        ltr.log._test_query_count += 1\n"
+        training_set_patch += "        self._test_query_count += 1\n"
         training_set_patch += "        # Limit judgments per query\n"
         training_set_patch += "        judgments_list = list(judgments)\n"
         training_set_patch += (
