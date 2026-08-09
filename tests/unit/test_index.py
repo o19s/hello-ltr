@@ -36,11 +36,17 @@ class TestRebuild:
         # Act
         rebuild(mock_client, "test_index", doc_src, force=True)
         # Assert
-        assert mock_client.delete_index.called, f"Expected delete_index to be called when force=True and index exists. Calls: {mock_client.delete_index.call_args_list}"
+        assert mock_client.delete_index.called, (
+            f"Expected delete_index to be called when force=True and index exists. Calls: {mock_client.delete_index.call_args_list}"
+        )
         mock_client.delete_index.assert_called_once_with("test_index")
-        assert mock_client.create_index.called, f"Expected create_index to be called after delete. Calls: {mock_client.create_index.call_args_list}"
+        assert mock_client.create_index.called, (
+            f"Expected create_index to be called after delete. Calls: {mock_client.create_index.call_args_list}"
+        )
         mock_client.create_index.assert_called_once_with("test_index")
-        assert mock_client.index_documents.called, f"Expected index_documents to be called with doc_src. Calls: {mock_client.index_documents.call_args_list}"
+        assert mock_client.index_documents.called, (
+            f"Expected index_documents to be called with doc_src. Calls: {mock_client.index_documents.call_args_list}"
+        )
         mock_client.index_documents.assert_called_once_with(
             "test_index", doc_src=doc_src
         )

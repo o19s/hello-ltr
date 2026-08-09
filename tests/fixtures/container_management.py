@@ -198,9 +198,9 @@ def manage_docker_compose(
     return result
 
 
-def get_container_cleanup_registry() -> (
-    set[tuple[str, str, frozenset[tuple[str, str]] | None]]
-):
+def get_container_cleanup_registry() -> set[
+    tuple[str, str, frozenset[tuple[str, str]] | None]
+]:
     """
     Get the global container cleanup registry.
 

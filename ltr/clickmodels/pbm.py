@@ -70,9 +70,9 @@ def update_attractiveness(sessions: list[Session], model: Model) -> None:
                 att = 1
             else:
                 exam_raw = model.ranks[rank]
-                assert isinstance(
-                    exam_raw, float
-                ), "Expected float from DefaultList[int] index"
+                assert isinstance(exam_raw, float), (
+                    "Expected float from DefaultList[int] index"
+                )
                 exam: float = exam_raw
                 assert exam <= 1.0
                 doc_a = model.attracts[query_doc_key]
@@ -124,17 +124,17 @@ def update_examines(sessions: list[Session], model: Model) -> None:
         for rank, doc in enumerate(session.docs):
             if doc.click:
                 prob_raw = new_rank_probs[rank]
-                assert isinstance(
-                    prob_raw, float
-                ), "Expected float from DefaultList[int] index"
+                assert isinstance(prob_raw, float), (
+                    "Expected float from DefaultList[int] index"
+                )
                 new_rank_probs[rank] = prob_raw + 1.0
             else:
                 # attractiveness at this query/doc pair
                 a_qd = model.attracts[(session.query, doc.doc_id)]
                 rank_exam_raw = model.ranks[rank]
-                assert isinstance(
-                    rank_exam_raw, float
-                ), "Expected float from DefaultList[int] index"
+                assert isinstance(rank_exam_raw, float), (
+                    "Expected float from DefaultList[int] index"
+                )
                 rank_exam: float = rank_exam_raw
                 numerator = (1 - a_qd) * rank_exam
                 denominator = 1 - (a_qd * rank_exam)
@@ -149,9 +149,9 @@ def update_examines(sessions: list[Session], model: Model) -> None:
                 #
                 #  - If its not examined much, wont contribute much
                 prob_raw = new_rank_probs[rank]
-                assert isinstance(
-                    prob_raw, float
-                ), "Expected float from DefaultList[int] index"
+                assert isinstance(prob_raw, float), (
+                    "Expected float from DefaultList[int] index"
+                )
                 new_rank_probs[rank] = prob_raw + (numerator / denominator)
     for i in range(len(new_rank_probs)):
         prob_raw = new_rank_probs[i]

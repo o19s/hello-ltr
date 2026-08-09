@@ -27,15 +27,15 @@ class TestEsLtrQuery:
         # Act
         query = es_ltr_query(keywords, model_name)
         # Assert
-        assert (
-            query["query"]["sltr"]["params"]["keywords"] == "test query"
-        ), f"Keywords mismatch. Expected 'test query', got {query['query']['sltr']['params'].get('keywords', 'MISSING')}"
-        assert (
-            query["query"]["sltr"]["params"]["keywordsList"] == ["test query"]
-        ), f"KeywordsList mismatch. Expected ['test query'], got {query['query']['sltr']['params'].get('keywordsList', 'MISSING')}"
-        assert (
-            query["query"]["sltr"]["model"] == "mymodel"
-        ), f"Model name mismatch. Expected 'mymodel', got {query['query']['sltr'].get('model', 'MISSING')}"
+        assert query["query"]["sltr"]["params"]["keywords"] == "test query", (
+            f"Keywords mismatch. Expected 'test query', got {query['query']['sltr']['params'].get('keywords', 'MISSING')}"
+        )
+        assert query["query"]["sltr"]["params"]["keywordsList"] == ["test query"], (
+            f"KeywordsList mismatch. Expected ['test query'], got {query['query']['sltr']['params'].get('keywordsList', 'MISSING')}"
+        )
+        assert query["query"]["sltr"]["model"] == "mymodel", (
+            f"Model name mismatch. Expected 'mymodel', got {query['query']['sltr'].get('model', 'MISSING')}"
+        )
 
     def test_es_ltr_query_uses_base_structure(self):
         """Test es_ltr_query uses base query structure."""
@@ -61,18 +61,18 @@ class TestEsLtrQuery:
         query1 = es_ltr_query(keywords1, model1)
         query2 = es_ltr_query(keywords2, model2)
         # Assert - each query should have its own values
-        assert (
-            query1["query"]["sltr"]["params"]["keywords"] == "keywords1"
-        ), "First query should have first keywords"
-        assert (
-            query1["query"]["sltr"]["model"] == "model1"
-        ), "First query should have first model"
-        assert (
-            query2["query"]["sltr"]["params"]["keywords"] == "keywords2"
-        ), "Second query should have second keywords"
-        assert (
-            query2["query"]["sltr"]["model"] == "model2"
-        ), "Second query should have second model"
+        assert query1["query"]["sltr"]["params"]["keywords"] == "keywords1", (
+            "First query should have first keywords"
+        )
+        assert query1["query"]["sltr"]["model"] == "model1", (
+            "First query should have first model"
+        )
+        assert query2["query"]["sltr"]["params"]["keywords"] == "keywords2", (
+            "Second query should have second keywords"
+        )
+        assert query2["query"]["sltr"]["model"] == "model2", (
+            "Second query should have second model"
+        )
         # Verify queries are independent (not same object)
         assert query1 is not query2, "Queries should be different objects"
 
@@ -139,16 +139,16 @@ class TestSearch:
         # Act
         search(mock_client, "test query", "mymodel", index="tmdb", fields=tmdb_fields)
         # Assert
-        assert (
-            mock_client.query.called
-        ), "Expected query() to be called on Elasticsearch client"
+        assert mock_client.query.called, (
+            "Expected query() to be called on Elasticsearch client"
+        )
         call_args = mock_client.query.call_args
-        assert (
-            call_args[0][0] == "tmdb"
-        ), f"Index mismatch. Expected 'tmdb', got {call_args[0][0]!r}. Full call args: {call_args}"
-        assert (
-            call_args[0][1]["query"]["sltr"]["model"] == "mymodel"
-        ), f"Model mismatch. Expected 'mymodel', got {call_args[0][1]['query']['sltr'].get('model', 'MISSING')}. Full query: {call_args[0][1]}"
+        assert call_args[0][0] == "tmdb", (
+            f"Index mismatch. Expected 'tmdb', got {call_args[0][0]!r}. Full call args: {call_args}"
+        )
+        assert call_args[0][1]["query"]["sltr"]["model"] == "mymodel", (
+            f"Model mismatch. Expected 'mymodel', got {call_args[0][1]['query']['sltr'].get('model', 'MISSING')}. Full query: {call_args[0][1]}"
+        )
 
     def test_search_opensearch_client(self):
         """Test search with OpenSearch client."""

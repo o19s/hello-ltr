@@ -200,16 +200,16 @@ def patch_requests_for_test_ports():
     # Validate that patching succeeded
     try:
         assert hasattr(requests, "_original_get"), "Failed to store original get method"
-        assert hasattr(
-            requests, "_original_post"
-        ), "Failed to store original post method"
+        assert hasattr(requests, "_original_post"), (
+            "Failed to store original post method"
+        )
         assert hasattr(requests, "_original_put"), "Failed to store original put method"
-        assert hasattr(
-            requests, "_original_delete"
-        ), "Failed to store original delete method"
-        assert hasattr(
-            requests.Session, "_original_request"
-        ), "Failed to store original Session.request method"
+        assert hasattr(requests, "_original_delete"), (
+            "Failed to store original delete method"
+        )
+        assert hasattr(requests.Session, "_original_request"), (
+            "Failed to store original Session.request method"
+        )
         assert requests.get is not requests._original_get, "GET method was not patched"  # type: ignore[attr-defined]
         assert requests.post is not requests._original_post, (  # type: ignore[attr-defined]
             "POST method was not patched"
