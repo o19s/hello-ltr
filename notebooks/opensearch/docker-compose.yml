@@ -1,9 +1,5 @@
 services:
   opensearch-node1:
-    #image: opensearch-custom-plugin
-    #opensearchproject/opensearch:2.6.0
-#    image: opensearchproject/opensearch:1.3.9
-    #image: opensearchproject/opensearch:2.8.0
     build: ./.docker/opensearch-docker/.
     environment:
       - cluster.name=opensearch-cluster
@@ -31,8 +27,6 @@ services:
       - opensearch-net
 
   opensearch-dashboards:
-#    image: opensearchproject/opensearch-dashboards:1.3.9
-#    image: opensearchproject/opensearch-dashboards:2.5.0
     build: ./.docker/osd-docker/.
     ports:
       # Use environment variable instead of hard-coded port to allow multiple instances

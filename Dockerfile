@@ -1,4 +1,4 @@
-FROM python:3.9.17-slim-bookworm
+FROM python:3.11-slim-bookworm
 
 # Get openjdk
 ENV JAVA_HOME=/opt/java/openjdk
