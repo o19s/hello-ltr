@@ -1583,9 +1583,17 @@ def run_notebook(notebook_path, timeout=None, save_nb_path=None, fail_fast=None)
         training_set_patch += (
             "# Wrap FeatureLogger to limit queries and judgments per query\n"
         )
-        training_set_patch += "# Use module-level counter so limit applies across all FeatureLogger instances\n"
+        # The query budget is PER LOGGER, not shared across all of them. It used
+        # to be a module-level counter, which meant the first FeatureLogger in a
+        # notebook consumed the whole budget and every later one was handed an
+        # empty training set, so train() failed with "Training set is empty".
+        # Notebooks that log features more than once -- tale-of-two-queries and
+        # netfix movies both build two loggers -- could never pass. Per-instance
+        # still bounds the work (loggers x max_queries) without starving anyone.
+        training_set_patch += (
+            "# Per-instance query budget: a shared counter would starve later loggers\n"
+        )
         training_set_patch += "import ltr.log\n"
-        training_set_patch += "ltr.log._test_query_count = 0\n"
         training_set_patch += f"ltr.log._test_max_queries = {max_test_queries}\n"
         training_set_patch += (
             f"ltr.log._test_max_judgments_per_query = {max_test_judgments_per_query}\n"
@@ -1594,15 +1602,23 @@ def run_notebook(notebook_path, timeout=None, save_nb_path=None, fail_fast=None)
             "from ltr.log import FeatureLogger as _OriginalFeatureLogger\n"
         )
         training_set_patch += "class LimitedFeatureLogger(_OriginalFeatureLogger):\n"
+        training_set_patch += "    def __init__(self, *args, **kwargs):\n"
+        training_set_patch += "        super().__init__(*args, **kwargs)\n"
+        training_set_patch += "        self._test_query_count = 0\n"
         training_set_patch += "    def log_for_qid(self, qid, judgments, keywords):\n"
-        training_set_patch += "        # Limit number of queries processed (shared across all instances)\n"
+        training_set_patch += (
+            "        # Budget is per logger instance, so a notebook that builds\n"
+        )
+        training_set_patch += (
+            "        # several loggers gets a usable training set from each\n"
+        )
         training_set_patch += "        import ltr.log\n"
         training_set_patch += (
-            "        if ltr.log._test_query_count >= ltr.log._test_max_queries:\n"
+            "        if self._test_query_count >= ltr.log._test_max_queries:\n"
         )
-        training_set_patch += "            print(f'[TEST MODE] Skipping query {qid} - already processed {ltr.log._test_max_queries} queries for faster testing')\n"
+        training_set_patch += "            print(f'[TEST MODE] Skipping query {qid} - this logger already processed {ltr.log._test_max_queries} queries for faster testing')\n"
         training_set_patch += "            return [], list(judgments)  # Return empty training set, all judgments discarded\n"
-        training_set_patch += "        ltr.log._test_query_count += 1\n"
+        training_set_patch += "        self._test_query_count += 1\n"
         training_set_patch += "        # Limit judgments per query\n"
         training_set_patch += "        judgments_list = list(judgments)\n"
         training_set_patch += (
