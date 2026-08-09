@@ -3,12 +3,19 @@
 This module tests file download functionality including error handling.
 """
 
+import importlib
 from unittest.mock import Mock, patch
 
 import pytest
 import requests
 
 from ltr.download import download, download_one
+
+# ltr/__init__.py does `from .download import download`, which rebinds the
+# attribute `ltr.download` to the function and shadows the submodule of the same
+# name, so string patch targets naming that submodule cannot be resolved by
+# mock.patch. Grab the real module object and patch attributes on it instead.
+download_module = importlib.import_module("ltr.download")
 
 
 class TestDownloadOne:
@@ -19,7 +26,7 @@ class TestDownloadOne:
         dest = tmp_path / "new_dir"
         url = "http://example.com/test.txt"
 
-        with patch("ltr.download.requests.get") as mock_get:
+        with patch.object(download_module.requests, "get") as mock_get:
             mock_response = Mock()
             mock_response.iter_content.return_value = [b"test content"]
             mock_get.return_value = mock_response
@@ -45,7 +52,7 @@ class TestDownloadOne:
 
         url = "http://example.com/test.txt"
 
-        with patch("ltr.download.requests.get") as mock_get:
+        with patch.object(download_module.requests, "get") as mock_get:
             download_one(uri=url, dest=str(dest_dir), force=False)
             # Should not call requests.get if file exists
             mock_get.assert_not_called()
@@ -60,7 +67,7 @@ class TestDownloadOne:
         url = "http://example.com/test.txt"
         new_content = b"new content"
 
-        with patch("ltr.download.requests.get") as mock_get:
+        with patch.object(download_module.requests, "get") as mock_get:
             mock_response = Mock()
             mock_response.iter_content.return_value = [new_content]
             mock_get.return_value = mock_response
@@ -78,7 +85,7 @@ class TestDownloadOne:
         url = "http://example.com/test.txt"
         file_content = b"test file content"
 
-        with patch("ltr.download.requests.get") as mock_get:
+        with patch.object(download_module.requests, "get") as mock_get:
             mock_response = Mock()
             mock_response.iter_content.return_value = [file_content]
             mock_get.return_value = mock_response
@@ -97,7 +104,7 @@ class TestDownloadOne:
         url = "http://example.com/large.txt"
         chunks = [b"chunk1", b"chunk2", b"chunk3"]
 
-        with patch("ltr.download.requests.get") as mock_get:
+        with patch.object(download_module.requests, "get") as mock_get:
             mock_response = Mock()
             mock_response.iter_content.return_value = chunks
             mock_get.return_value = mock_response
@@ -115,7 +122,7 @@ class TestDownloadOne:
         url = "http://example.com/test.txt"
         chunks = [b"content", b"", b"more"]
 
-        with patch("ltr.download.requests.get") as mock_get:
+        with patch.object(download_module.requests, "get") as mock_get:
             mock_response = Mock()
             mock_response.iter_content.return_value = chunks
             mock_get.return_value = mock_response
@@ -132,7 +139,7 @@ class TestDownloadOne:
         dest_dir.mkdir()
         url = "http://example.com/path/to/file.json"
 
-        with patch("ltr.download.requests.get") as mock_get:
+        with patch.object(download_module.requests, "get") as mock_get:
             mock_response = Mock()
             mock_response.iter_content.return_value = [b"content"]
             mock_get.return_value = mock_response
@@ -149,7 +156,7 @@ class TestDownloadOne:
         dest_dir.mkdir()
         url = "http://example.com/test.txt"
 
-        with patch("ltr.download.requests.get") as mock_get:
+        with patch.object(download_module.requests, "get") as mock_get:
             mock_get.side_effect = requests.exceptions.ConnectionError(
                 "Connection failed"
             )
@@ -171,7 +178,7 @@ class TestDownload:
             "http://example.com/file3.txt",
         ]
 
-        with patch("ltr.download.download_one") as mock_download_one:
+        with patch.object(download_module, "download_one") as mock_download_one:
             download(uris=urls, dest=str(dest_dir))
 
             # Should call download_one for each URL
@@ -187,7 +194,7 @@ class TestDownload:
         dest_dir.mkdir()
         urls = ["http://example.com/file1.txt"]
 
-        with patch("ltr.download.download_one") as mock_download_one:
+        with patch.object(download_module, "download_one") as mock_download_one:
             download(uris=urls, dest=str(dest_dir), force=True)
             mock_download_one.assert_called_once_with(
                 uri=urls[0], dest=str(dest_dir), force=True
@@ -199,7 +206,7 @@ class TestDownload:
         dest_dir.mkdir()
         urls = ("http://example.com/file1.txt", "http://example.com/file2.txt")
 
-        with patch("ltr.download.download_one") as mock_download_one:
+        with patch.object(download_module, "download_one") as mock_download_one:
             download(uris=urls, dest=str(dest_dir))
             assert mock_download_one.call_count == 2
 
@@ -208,7 +215,7 @@ class TestDownload:
         dest_dir = tmp_path / "dest"
         dest_dir.mkdir()
 
-        with patch("ltr.download.download_one") as mock_download_one:
+        with patch.object(download_module, "download_one") as mock_download_one:
             download(uris=[], dest=str(dest_dir))
             mock_download_one.assert_not_called()
 
@@ -218,7 +225,7 @@ class TestDownload:
         dest_dir.mkdir()
         urls = ["http://example.com/file1.txt", "http://example.com/file2.txt"]
 
-        with patch("ltr.download.download_one") as mock_download_one:
+        with patch.object(download_module, "download_one") as mock_download_one:
             mock_download_one.side_effect = [
                 None,  # First download succeeds
                 ValueError("Download failed"),  # Second download fails
@@ -232,7 +239,7 @@ class TestDownload:
         dest_dir = tmp_path / "new_download_dir"
         urls = ["http://example.com/file.txt"]
 
-        with patch("ltr.download.download_one") as mock_download_one:
+        with patch.object(download_module, "download_one") as mock_download_one:
             download(uris=urls, dest=str(dest_dir))
             # download_one should be called, which will create the directory
             mock_download_one.assert_called_once()
@@ -247,7 +254,7 @@ class TestDownloadErrorHandling:
         dest_dir.mkdir()
         url = "http://example.com/test.txt"
 
-        with patch("ltr.download.requests.get") as mock_get:
+        with patch.object(download_module.requests, "get") as mock_get:
             mock_get.side_effect = requests.exceptions.Timeout("Request timed out")
 
             with pytest.raises(requests.exceptions.Timeout):
@@ -258,7 +265,7 @@ class TestDownloadErrorHandling:
         dest_dir = tmp_path / "dest"
         dest_dir.mkdir()
 
-        with patch("ltr.download.requests.get") as mock_get:
+        with patch.object(download_module.requests, "get") as mock_get:
             mock_response = Mock()
             mock_response.raise_for_status.side_effect = requests.exceptions.HTTPError(
                 "404 Not Found", response=mock_response
@@ -278,7 +285,7 @@ class TestDownloadErrorHandling:
         url = "http://example.com/test.txt"
 
         with (
-            patch("ltr.download.requests.get") as mock_get,
+            patch.object(download_module.requests, "get") as mock_get,
             patch("builtins.open", side_effect=OSError("Permission denied")),
         ):
             mock_response = Mock()

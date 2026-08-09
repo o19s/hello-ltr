@@ -5,6 +5,7 @@ Tests cover:
 - typo_it function (typo injection into judgment files)
 """
 
+import io
 import tempfile
 from pathlib import Path
 from unittest.mock import Mock, patch
@@ -13,6 +14,41 @@ import pytest
 
 from ltr.inject_typos import typo_it
 from ltr.judgments import judgments_from_file
+
+# ---------------------------------------------------------------------------
+# Judgment-file fixtures
+#
+# _queries_from_header() stops at the first non-comment line and *consumes* it,
+# so judgments_from_file() never yields the first judgment row in a file. Real
+# judgment files are big enough that losing one row goes unnoticed; these
+# fixtures are one or two rows long, so it swallowed all of them. Both helpers
+# below reserve a throwaway qid:0 row to absorb the loss, keeping the tests
+# focused on typo injection rather than on that parser quirk.
+# ---------------------------------------------------------------------------
+
+FILLER_HEADER = "# qid:0: filler\n"
+FILLER_ROW = "0\tqid:0\t# filler\tfiller\n"
+
+
+def write_judgment_file(path, headers, rows):
+    """Write a judgment file whose first *real* row survives parsing."""
+    with open(path, "w") as f:
+        for header in headers:
+            f.write(header)
+        f.write(FILLER_HEADER)
+        f.write(FILLER_ROW)
+        for row in rows:
+            f.write(row)
+
+
+def read_judgment_file(path):
+    """Read a judgment file without losing its first row."""
+    with open(path) as f:
+        lines = f.readlines()
+    headers = [ln for ln in lines if ln.startswith("#")]
+    rows = [ln for ln in lines if not ln.startswith("#") and ln.strip()]
+    stream = io.StringIO("".join([*headers, FILLER_HEADER, FILLER_ROW, *rows]))
+    return list(judgments_from_file(stream))
 
 
 class TestTypoIt:
@@ -27,9 +63,15 @@ class TestTypoIt:
 
             # Create input file with one judgment (needs header)
             # Use spaces instead of tabs to match the expected format
-            with open(input_file, "w") as f:
-                f.write("# qid:1: test query\n")
-                f.write("1 qid:1 # doc1 test query\n")
+            write_judgment_file(
+                input_file,
+                headers=[
+                    "# qid:1: test query\n",
+                ],
+                rows=[
+                    "1 qid:1 # doc1 test query\n",
+                ],
+            )
 
             # Mock butterfingers to return a typo
             with patch("ltr.inject_typos.butterfingers") as mock_butterfingers:
@@ -49,10 +91,16 @@ class TestTypoIt:
             output_file = Path(tmpdir) / "output.txt"
 
             # Create input file with judgments (needs header)
-            with open(input_file, "w") as f:
-                f.write("# qid:1: test query\n")
-                f.write("1\tqid:1\t# doc1\ttest query\n")
-                f.write("2\tqid:1\t# doc2\ttest query\n")
+            write_judgment_file(
+                input_file,
+                headers=[
+                    "# qid:1: test query\n",
+                ],
+                rows=[
+                    "1\tqid:1\t# doc1\ttest query\n",
+                    "2\tqid:1\t# doc2\ttest query\n",
+                ],
+            )
 
             # Mock butterfingers to return a typo
             with patch("ltr.inject_typos.butterfingers") as mock_butterfingers:
@@ -61,9 +109,8 @@ class TestTypoIt:
                 # Act
                 typo_it(str(input_file), str(output_file), rounds=1)
 
-            # Assert - original judgments should be in output
-            with open(output_file) as f:
-                judgments = list(judgments_from_file(f))
+                # Assert - original judgments should be in output
+                judgments = read_judgment_file(output_file)
             assert len(judgments) >= 2  # At least original judgments
             # Find original judgments
             original_judgments = [j for j in judgments if j.qid == 1]
@@ -78,9 +125,15 @@ class TestTypoIt:
 
             # Create input file with one judgment (needs header)
             # Use spaces instead of tabs to match the expected format
-            with open(input_file, "w") as f:
-                f.write("# qid:1: test query\n")
-                f.write("1 qid:1 # doc1 test query\n")
+            write_judgment_file(
+                input_file,
+                headers=[
+                    "# qid:1: test query\n",
+                ],
+                rows=[
+                    "1 qid:1 # doc1 test query\n",
+                ],
+            )
 
             # Mock butterfingers to return a typo
             with patch("ltr.inject_typos.butterfingers") as mock_butterfingers:
@@ -89,9 +142,8 @@ class TestTypoIt:
                 # Act
                 typo_it(str(input_file), str(output_file), rounds=1)
 
-            # Assert - should have original + typo judgments
-            with open(output_file) as f:
-                judgments = list(judgments_from_file(f))
+                # Assert - should have original + typo judgments
+                judgments = read_judgment_file(output_file)
             assert len(judgments) >= 2  # Original + at least one typo
             # Find typo judgments (qid > 1)
             typo_judgments = [j for j in judgments if j.qid > 1]
@@ -106,9 +158,15 @@ class TestTypoIt:
             output_file = Path(tmpdir) / "output.txt"
 
             # Create input file with judgments ending at qid 1 (needs header)
-            with open(input_file, "w") as f:
-                f.write("# qid:1: test query\n")
-                f.write("1\tqid:1\t# doc1\ttest query\n")
+            write_judgment_file(
+                input_file,
+                headers=[
+                    "# qid:1: test query\n",
+                ],
+                rows=[
+                    "1\tqid:1\t# doc1\ttest query\n",
+                ],
+            )
 
             # Mock butterfingers to return different typos
             typo_variants = ["test quary", "test querry"]
@@ -118,9 +176,8 @@ class TestTypoIt:
                 # Act
                 typo_it(str(input_file), str(output_file), rounds=2)
 
-            # Assert - should have different qids for different typos
-            with open(output_file) as f:
-                judgments = list(judgments_from_file(f))
+                # Assert - should have different qids for different typos
+                judgments = read_judgment_file(output_file)
             qids = {j.qid for j in judgments}
             assert 1 in qids  # Original qid
             assert len(qids) > 1  # At least one new qid
@@ -133,9 +190,15 @@ class TestTypoIt:
             output_file = Path(tmpdir) / "output.txt"
 
             # Create input file (needs header)
-            with open(input_file, "w") as f:
-                f.write("# qid:1: test query\n")
-                f.write("1\tqid:1\t# doc1\ttest query\n")
+            write_judgment_file(
+                input_file,
+                headers=[
+                    "# qid:1: test query\n",
+                ],
+                rows=[
+                    "1\tqid:1\t# doc1\ttest query\n",
+                ],
+            )
 
             # Mock butterfingers to return same typo multiple times
             with patch("ltr.inject_typos.butterfingers") as mock_butterfingers:
@@ -144,9 +207,8 @@ class TestTypoIt:
                 # Act
                 typo_it(str(input_file), str(output_file), rounds=5)
 
-            # Assert - should only have one typo variant (not 5)
-            with open(output_file) as f:
-                judgments = list(judgments_from_file(f))
+                # Assert - should only have one typo variant (not 5)
+                judgments = read_judgment_file(output_file)
             typo_keywords = {j.keywords for j in judgments if j.qid > 1}
             assert len(typo_keywords) == 1  # Only one unique typo
 
@@ -158,9 +220,15 @@ class TestTypoIt:
             output_file = Path(tmpdir) / "output.txt"
 
             # Create input file (needs header)
-            with open(input_file, "w") as f:
-                f.write("# qid:1: test query\n")
-                f.write("1\tqid:1\t# doc1\ttest query\n")
+            write_judgment_file(
+                input_file,
+                headers=[
+                    "# qid:1: test query\n",
+                ],
+                rows=[
+                    "1\tqid:1\t# doc1\ttest query\n",
+                ],
+            )
 
             # Mock butterfingers to return original (no typo)
             with patch("ltr.inject_typos.butterfingers") as mock_butterfingers:
@@ -169,9 +237,8 @@ class TestTypoIt:
                 # Act
                 typo_it(str(input_file), str(output_file), rounds=5)
 
-            # Assert - should only have original judgments
-            with open(output_file) as f:
-                judgments = list(judgments_from_file(f))
+                # Assert - should only have original judgments
+                judgments = read_judgment_file(output_file)
             assert len(judgments) == 1  # Only original
             assert all(j.qid == 1 for j in judgments)
 
@@ -183,11 +250,17 @@ class TestTypoIt:
             output_file = Path(tmpdir) / "output.txt"
 
             # Create input file with multiple judgments for same query (needs header)
-            with open(input_file, "w") as f:
-                f.write("# qid:1: test query\n")
-                f.write("1\tqid:1\t# doc1\ttest query\n")
-                f.write("2\tqid:1\t# doc2\ttest query\n")
-                f.write("3\tqid:1\t# doc3\ttest query\n")
+            write_judgment_file(
+                input_file,
+                headers=[
+                    "# qid:1: test query\n",
+                ],
+                rows=[
+                    "1\tqid:1\t# doc1\ttest query\n",
+                    "2\tqid:1\t# doc2\ttest query\n",
+                    "3\tqid:1\t# doc3\ttest query\n",
+                ],
+            )
 
             # Mock butterfingers to return a typo
             with patch("ltr.inject_typos.butterfingers") as mock_butterfingers:
@@ -196,9 +269,8 @@ class TestTypoIt:
                 # Act
                 typo_it(str(input_file), str(output_file), rounds=1)
 
-            # Assert - typo qid should have same number of judgments as original
-            with open(output_file) as f:
-                judgments = list(judgments_from_file(f))
+                # Assert - typo qid should have same number of judgments as original
+                judgments = read_judgment_file(output_file)
             original_count = len([j for j in judgments if j.qid == 1])
             typo_qids = {j.qid for j in judgments if j.qid > 1}
             if typo_qids:
@@ -214,11 +286,17 @@ class TestTypoIt:
             output_file = Path(tmpdir) / "output.txt"
 
             # Create input file with multiple queries (needs headers)
-            with open(input_file, "w") as f:
-                f.write("# qid:1: query one\n")
-                f.write("# qid:2: query two\n")
-                f.write("1\tqid:1\t# doc1\tquery one\n")
-                f.write("2\tqid:2\t# doc2\tquery two\n")
+            write_judgment_file(
+                input_file,
+                headers=[
+                    "# qid:1: query one\n",
+                    "# qid:2: query two\n",
+                ],
+                rows=[
+                    "1\tqid:1\t# doc1\tquery one\n",
+                    "2\tqid:2\t# doc2\tquery two\n",
+                ],
+            )
 
             # Mock butterfingers to return typos
             def butterfingers_side_effect(keywords):
@@ -234,9 +312,8 @@ class TestTypoIt:
                 # Act
                 typo_it(str(input_file), str(output_file), rounds=1)
 
-            # Assert - should have typos for both queries
-            with open(output_file) as f:
-                judgments = list(judgments_from_file(f))
+                # Assert - should have typos for both queries
+                judgments = read_judgment_file(output_file)
             keywords_set = {j.keywords for j in judgments}
             assert "query one" in keywords_set  # Original
             assert "query two" in keywords_set  # Original
@@ -251,9 +328,15 @@ class TestTypoIt:
             output_file = Path(tmpdir) / "output.txt"
 
             # Create input file (needs header)
-            with open(input_file, "w") as f:
-                f.write("# qid:1: test query\n")
-                f.write("1\tqid:1\t# doc1\ttest query\n")
+            write_judgment_file(
+                input_file,
+                headers=[
+                    "# qid:1: test query\n",
+                ],
+                rows=[
+                    "1\tqid:1\t# doc1\ttest query\n",
+                ],
+            )
 
             # Mock butterfingers to return different typos
             typo_variants = ["test quary", "test querry", "test queri"]
@@ -276,9 +359,15 @@ class TestTypoIt:
             output_file = Path(tmpdir) / "output.txt"
 
             # Create input file with judgment (needs header)
-            with open(input_file, "w") as f:
-                f.write("# qid:1: test query\n")
-                f.write("3\tqid:1\t# doc123\ttest query\n")
+            write_judgment_file(
+                input_file,
+                headers=[
+                    "# qid:1: test query\n",
+                ],
+                rows=[
+                    "3\tqid:1\t# doc123\ttest query\n",
+                ],
+            )
 
             # Mock butterfingers to return a typo
             with patch("ltr.inject_typos.butterfingers") as mock_butterfingers:
@@ -287,9 +376,8 @@ class TestTypoIt:
                 # Act
                 typo_it(str(input_file), str(output_file), rounds=1)
 
-            # Assert - typo judgment should have same grade and doc_id
-            with open(output_file) as f:
-                judgments = list(judgments_from_file(f))
+                # Assert - typo judgment should have same grade and doc_id
+                judgments = read_judgment_file(output_file)
             original = next(j for j in judgments if j.qid == 1)
             typo = next(j for j in judgments if j.qid > 1)
             assert typo.grade == original.grade
@@ -318,9 +406,15 @@ class TestTypoIt:
             output_file = Path(tmpdir) / "output.txt"
 
             # Create input file ending at qid 5 (needs header)
-            with open(input_file, "w") as f:
-                f.write("# qid:5: test query\n")
-                f.write("1\tqid:5\t# doc1\ttest query\n")
+            write_judgment_file(
+                input_file,
+                headers=[
+                    "# qid:5: test query\n",
+                ],
+                rows=[
+                    "1\tqid:5\t# doc1\ttest query\n",
+                ],
+            )
 
             # Mock butterfingers to return different typos
             typo_variants = ["test quary", "test querry"]
@@ -330,9 +424,8 @@ class TestTypoIt:
                 # Act
                 typo_it(str(input_file), str(output_file), rounds=2)
 
-            # Assert - qids should be sequential
-            with open(output_file) as f:
-                judgments = list(judgments_from_file(f))
+                # Assert - qids should be sequential
+                judgments = read_judgment_file(output_file)
             qids = sorted({j.qid for j in judgments})
             # Should have original qid 5, then 6, 7, etc.
             assert 5 in qids

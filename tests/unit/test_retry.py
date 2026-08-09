@@ -51,12 +51,22 @@ class TestRetryOnConnectionError:
             retry_on_connection_error(func, max_retries=3, initial_delay=0.01)
 
     def test_non_retryable_error(self):
-        """Test that function does not retry on non-retryable errors."""
+        """Test that a non-connection error is re-raised unchanged, not wrapped."""
         # Arrange
         func = Mock(side_effect=ValueError("Invalid input"))
         # Act & Assert
-        with pytest.raises(RuntimeError, match="Operation failed after"):
+        with pytest.raises(ValueError, match="Invalid input"):
             retry_on_connection_error(func, max_retries=3, initial_delay=0.01)
+
+    def test_non_retryable_error_is_not_retried(self):
+        """Test that function does not retry on non-retryable errors."""
+        # Arrange
+        func = Mock(side_effect=ValueError("Invalid input"))
+        # Act
+        with pytest.raises(ValueError):
+            retry_on_connection_error(func, max_retries=3, initial_delay=0.01)
+        # Assert
+        assert func.call_count == 1
 
     def test_custom_connection_error_checker(self):
         """Test that custom connection error checker is used."""

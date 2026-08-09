@@ -8,6 +8,7 @@ import os
 from unittest.mock import MagicMock, patch
 
 import nbformat
+from nbconvert.preprocessors import ExecutePreprocessor
 
 from tests.notebooks.runner import (
     PatchedExecutePreprocessor,
@@ -63,7 +64,14 @@ class TestDebugMode:
         mock_nb = nbformat.v4.new_notebook()
         mock_nb.cells = [nbformat.v4.new_code_cell("print('test')")]
 
-        preprocessor.preprocess(mock_nb, resources={}, km=mock_km)
+        # Stub the parent implementation. This test covers only the bookkeeping
+        # done by our override; letting the real ExecutePreprocessor.preprocess
+        # run would drive nbclient's event loop against a MagicMock kernel
+        # client, which never returns a matching reply and hangs forever.
+        with patch.object(
+            ExecutePreprocessor, "preprocess", return_value=(mock_nb, {})
+        ):
+            preprocessor.preprocess(mock_nb, resources={}, km=mock_km)
 
         assert preprocessor.kernel_manager is mock_km
 
@@ -126,10 +134,13 @@ class TestDebugModeIntegration:
             sys.stderr = captured_stderr = StringIO()
 
             try:
-                # Run notebook (will fail, but we want to see debug output)
-                # Use a short timeout to avoid hanging
+                # Run notebook (will fail, but we want to see debug output).
+                # fail_fast must be False: it sets allow_errors=False, which makes
+                # nbclient raise CellExecutionError from the parent preprocess_cell
+                # before the debug-capture block below it ever runs. With fail_fast
+                # off, the error lands in the cell outputs and gets reported.
                 _, errors, _ = run_notebook(
-                    str(notebook_path), timeout=30, fail_fast=True
+                    str(notebook_path), timeout=30, fail_fast=False
                 )
 
                 # Check that we got an error
@@ -164,8 +175,9 @@ class TestDebugModeIntegration:
             # Ensure debug mode is disabled
             monkeypatch.delenv("NOTEBOOK_DEBUG_MODE", raising=False)
 
-            # Run notebook
-            run_notebook(str(notebook_path), timeout=30, fail_fast=True)
+            # Run notebook (fail_fast=False so the error is collected rather than
+            # raised out of nbclient before the debug branch is reached)
+            run_notebook(str(notebook_path), timeout=30, fail_fast=False)
 
             # Verify inspect_notebook_variables was not called
             mock_inspect.assert_not_called()
@@ -189,8 +201,9 @@ class TestDebugModeIntegration:
             # Enable debug mode
             monkeypatch.setenv("NOTEBOOK_DEBUG_MODE", "true")
 
-            # Run notebook
-            run_notebook(str(notebook_path), timeout=30, fail_fast=True)
+            # Run notebook (fail_fast=False so the error is collected rather than
+            # raised out of nbclient before the debug branch is reached)
+            run_notebook(str(notebook_path), timeout=30, fail_fast=False)
 
             # Verify inspect_notebook_variables was called
             # Note: It might be called multiple times if there are multiple errors
@@ -216,6 +229,11 @@ class TestPatchedExecutePreprocessor:
         mock_nb = nbformat.v4.new_notebook()
         mock_nb.cells = [nbformat.v4.new_code_cell("print('test')")]
 
-        preprocessor.preprocess(mock_nb, resources={}, km=mock_km)
+        # See test_kernel_manager_stored_when_debug_mode_enabled: the parent
+        # implementation is stubbed so this stays a unit test and cannot hang.
+        with patch.object(
+            ExecutePreprocessor, "preprocess", return_value=(mock_nb, {})
+        ):
+            preprocessor.preprocess(mock_nb, resources={}, km=mock_km)
 
         assert preprocessor.kernel_manager is mock_km

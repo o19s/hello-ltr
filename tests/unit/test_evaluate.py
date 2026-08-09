@@ -7,12 +7,19 @@ Tests cover:
 - Docker command execution
 """
 
+import importlib
 import json
 from unittest.mock import mock_open, patch
 
 import pytest
 
 from ltr.evaluate import evaluate, rre_table
+
+# ltr/__init__.py does `from .evaluate import evaluate, rre_table`, which rebinds the
+# attribute `ltr.evaluate` to the function and shadows the submodule of the same
+# name, so string patch targets naming that submodule cannot be resolved by
+# mock.patch. Grab the real module object and patch attributes on it instead.
+evaluate_module = importlib.import_module("ltr.evaluate")
 
 
 class TestEvaluate:
@@ -22,8 +29,8 @@ class TestEvaluate:
         """Test evaluate with valid 'elastic' mode."""
         # Arrange
         with (
-            patch("ltr.evaluate.quiet_run") as mock_quiet,
-            patch("ltr.evaluate.log_run") as mock_log,
+            patch.object(evaluate_module, "quiet_run") as mock_quiet,
+            patch.object(evaluate_module, "log_run") as mock_log,
         ):
             # Act
             evaluate("elastic")
@@ -35,8 +42,8 @@ class TestEvaluate:
         """Test evaluate with valid 'solr' mode."""
         # Arrange
         with (
-            patch("ltr.evaluate.quiet_run") as mock_quiet,
-            patch("ltr.evaluate.log_run") as mock_log,
+            patch.object(evaluate_module, "quiet_run") as mock_quiet,
+            patch.object(evaluate_module, "log_run") as mock_log,
         ):
             # Act
             evaluate("solr")
@@ -48,8 +55,8 @@ class TestEvaluate:
         """Test evaluate with valid 'opensearch' mode."""
         # Arrange
         with (
-            patch("ltr.evaluate.quiet_run") as mock_quiet,
-            patch("ltr.evaluate.log_run") as mock_log,
+            patch.object(evaluate_module, "quiet_run") as mock_quiet,
+            patch.object(evaluate_module, "log_run") as mock_log,
         ):
             # Act
             evaluate("opensearch")
@@ -67,8 +74,8 @@ class TestEvaluate:
         """Test evaluate builds Docker image with correct path."""
         # Arrange
         with (
-            patch("ltr.evaluate.quiet_run") as mock_quiet,
-            patch("ltr.evaluate.log_run"),
+            patch.object(evaluate_module, "quiet_run") as mock_quiet,
+            patch.object(evaluate_module, "log_run"),
         ):
             # Act
             evaluate("elastic")
@@ -80,7 +87,10 @@ class TestEvaluate:
     def test_evaluate_copies_reports(self):
         """Test evaluate copies evaluation reports."""
         # Arrange
-        with patch("ltr.evaluate.quiet_run"), patch("ltr.evaluate.log_run") as mock_log:
+        with (
+            patch.object(evaluate_module, "quiet_run"),
+            patch.object(evaluate_module, "log_run") as mock_log,
+        ):
             # Act
             evaluate("elastic")
             # Assert
@@ -98,8 +108,8 @@ class TestEvaluate:
 class TestRreTable:
     """Test rre_table function."""
 
-    @patch("ltr.evaluate.iplot")
-    @patch("ltr.evaluate.init_notebook_mode")
+    @patch.object(evaluate_module, "iplot")
+    @patch.object(evaluate_module, "init_notebook_mode")
     @patch(
         "builtins.open",
         new_callable=mock_open,
@@ -139,8 +149,8 @@ class TestRreTable:
         mock_file.assert_called_once_with("data/rre-evaluation.json")
         mock_iplot.assert_called_once()
 
-    @patch("ltr.evaluate.iplot")
-    @patch("ltr.evaluate.init_notebook_mode")
+    @patch.object(evaluate_module, "iplot")
+    @patch.object(evaluate_module, "init_notebook_mode")
     @patch(
         "builtins.open",
         new_callable=mock_open,
