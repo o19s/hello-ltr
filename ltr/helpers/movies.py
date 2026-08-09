@@ -13,6 +13,7 @@ from typing import Any
 
 from tqdm import tqdm
 
+from ltr.compat import accepts_legacy_kwargs
 from ltr.types import JSONDict, NestedJSONDict
 
 
@@ -73,6 +74,7 @@ def load_movies(json_path: str) -> NestedJSONDict:
         return json.load(f)
 
 
+@accepts_legacy_kwargs(movies="movies_path")
 def get_movie(tmdb_id: str | int, movies_path: str = "data/tmdb.json") -> JSONDict:
     """Get a single movie by TMDB ID.
 
@@ -101,6 +103,7 @@ def noop(src_movie: JSONDict, base_doc: JSONDict) -> JSONDict:
     return base_doc
 
 
+@accepts_legacy_kwargs(movies="movies_path")
 def indexable_movies(
     enrich: Callable[[JSONDict, JSONDict], JSONDict] = noop,
     movies_path: str = "data/tmdb.json",

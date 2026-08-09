@@ -18,6 +18,7 @@ import requests
 
 from ltr import download
 from ltr.client.base_client import BaseClient
+from ltr.compat import accepts_legacy_kwargs
 from ltr.exceptions import ModelError
 from ltr.helpers.ranklib_result import RanklibResult, parse_training_log
 from ltr.judgments import Judgment
@@ -541,6 +542,9 @@ def train_model(
     return parsed_result
 
 
+@accepts_legacy_kwargs(
+    modelName="model_name", modelFile="model_file", featureSet="feature_set"
+)
 def save_model(
     client: BaseClient,
     model_name: str,
@@ -651,6 +655,7 @@ def _validate_training_prerequisites(
         )
 
 
+@accepts_legacy_kwargs(modelName="model_name", featureSet="feature_set")
 def train(
     client: BaseClient,
     training_set: list[Judgment],
@@ -756,6 +761,7 @@ def train(
     return ranklib_result
 
 
+@accepts_legacy_kwargs(featureSet="feature_set", featureCost="feature_cost")
 def feature_search(
     client: BaseClient,
     training_set: list[Judgment],

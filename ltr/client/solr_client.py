@@ -13,6 +13,7 @@ from collections.abc import Callable, Iterable, Iterator
 
 import requests
 
+from ltr.compat import accepts_legacy_kwargs
 from ltr.exceptions import LTRIndexError, ModelError, QueryError
 from ltr.helpers.convert import convert
 from ltr.helpers.handle_resp import resp_msg
@@ -501,6 +502,7 @@ class SolrClient(BaseClient):
 
         return resp_json["response"]["docs"]
 
+    @accepts_legacy_kwargs(solr_model="model_payload")
     def submit_model(
         self,
         featureset: str,

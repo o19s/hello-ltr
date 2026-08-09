@@ -13,6 +13,7 @@ from collections.abc import Iterator
 from contextlib import AbstractContextManager, contextmanager
 from typing import Any, Literal, TextIO, cast, overload
 
+from ltr.compat import accepts_legacy_kwargs
 from ltr.logger import get_logger
 from ltr.types import QueryKeywordMap
 from ltr.validation import ValidationError
@@ -446,6 +447,7 @@ def judgments_from_file(f: JudgmentFile) -> Iterator[Judgment]:
     yield from _judgment_rows(f, qid_to_keywords)
 
 
+@accepts_legacy_kwargs(judgmentsList="judgments_list")
 def judgments_to_file(
     f: JudgmentFile, judgments_list: list[Judgment] | Iterator[Judgment]
 ) -> None:

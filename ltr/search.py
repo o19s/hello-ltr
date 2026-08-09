@@ -8,6 +8,7 @@ import json
 import re
 
 from ltr.client.base_client import BaseClient
+from ltr.compat import accepts_legacy_kwargs
 from ltr.exceptions import QueryError
 from ltr.logger import get_logger
 from ltr.types import JSONDict
@@ -105,6 +106,7 @@ tmdb_fields: JSONDict = {
 }
 
 
+@accepts_legacy_kwargs(modelName="model_name")
 def search(
     client: BaseClient,
     keywords: str,
