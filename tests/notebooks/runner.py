@@ -364,6 +364,22 @@ class NotebookDependencyValidator:
 
         return dependencies
 
+    def _record_operation(self, operation: str, target: str) -> None:
+        """Record a completed operation so dependent cells see it as satisfied.
+
+        Args:
+            operation: Type of operation (create_index, rebuild, create_featureset)
+            target: Target of the operation (index name, or "index:feature_set")
+        """
+        if operation in ("create_index", "rebuild"):
+            self.completed_operations["indices"].add(target)
+        elif operation == "create_featureset":
+            self.completed_operations["feature_sets"].add(target)
+            # A feature set implies its index exists, so record that too -- the
+            # index-creating cell may not have matched any detection pattern.
+            if ":" in target:
+                self.completed_operations["indices"].add(target.split(":", 1)[0])
+
     def validate_operation_succeeded(
         self, operation: str, target: str, cell_index: int
     ) -> tuple[bool, Optional[str]]:
@@ -378,7 +394,12 @@ class NotebookDependencyValidator:
             Tuple of (success: bool, error_message: str | None)
         """
         if not self.client_instance:
-            # Can't validate without client instance
+            # Can't confirm against a live engine, so trust that the cell did what
+            # its source says and record the operation anyway. Skipping the record
+            # here while check_prerequisites() still enforces it would fail every
+            # dependent cell in the notebook -- passing the operation but failing
+            # its dependents is never the useful combination.
+            self._record_operation(operation, target)
             return True, None
 
         try:
@@ -573,12 +594,17 @@ class PatchedExecutePreprocessor(ExecutePreprocessor):
 
         # Initialize dependency validator if enabled
         if self.enable_dependency_validation:
-            # Try to get notebook path from resources if available
+            # Try to get notebook path from resources if available.
+            # run_notebook() passes it as a top-level "notebook_path" key while
+            # "metadata" carries only "path", so check both rather than using
+            # if/elif: "metadata" is always present, which would otherwise make
+            # the top-level lookup unreachable and leave the path None.
             notebook_path = None
-            if resources and "metadata" in resources:
-                notebook_path = resources["metadata"].get("notebook_path")
-            elif resources and "notebook_path" in resources:
-                notebook_path = resources["notebook_path"]
+            if resources:
+                metadata = resources.get("metadata") or {}
+                notebook_path = metadata.get("notebook_path") or resources.get(
+                    "notebook_path"
+                )
             self.dependency_validator = NotebookDependencyValidator(
                 notebook_path=notebook_path
             )

@@ -237,3 +237,93 @@ class TestPatchedExecutePreprocessor:
             preprocessor.preprocess(mock_nb, resources={}, km=mock_km)
 
         assert preprocessor.kernel_manager is mock_km
+
+
+class TestDependencyValidatorWiring:
+    """Tests that the dependency validator is wired up with a usable notebook path.
+
+    Regression coverage for the false positive where every OpenSearch notebook
+    failed with "requires index 'tmdb' but it has not been created yet" even
+    though the index had been created and populated. run_notebook() passes the
+    notebook path as a top-level "notebook_path" resources key, but preprocess()
+    read it from resources["metadata"] first using if/elif. Since "metadata" is
+    always present, the top-level branch was unreachable and the path stayed
+    None, so no client was built, no operation was ever recorded, and every
+    dependent cell tripped the prerequisite check.
+    """
+
+    def _preprocess_with(self, resources):
+        preprocessor = PatchedExecutePreprocessor(enable_dependency_validation=True)
+        nb = nbformat.v4.new_notebook()
+        nb.cells = [nbformat.v4.new_code_cell("print('test')")]
+        with patch.object(ExecutePreprocessor, "preprocess", return_value=(nb, {})):
+            preprocessor.preprocess(nb, resources=resources)
+        return preprocessor
+
+    def test_notebook_path_read_from_top_level_key(self):
+        """The path run_notebook() actually passes must reach the validator."""
+        path = "./notebooks/opensearch/tmdb/term-stat-query.ipynb"
+        preprocessor = self._preprocess_with(
+            {"metadata": {"path": "./notebooks/opensearch/tmdb"}, "notebook_path": path}
+        )
+        assert preprocessor.dependency_validator.notebook_path == path
+
+    def test_notebook_path_read_from_metadata(self):
+        """The metadata form keeps working for callers that use it."""
+        path = "./notebooks/solr/tmdb/svmrank.ipynb"
+        preprocessor = self._preprocess_with({"metadata": {"notebook_path": path}})
+        assert preprocessor.dependency_validator.notebook_path == path
+
+    def test_missing_path_is_tolerated(self):
+        """No path anywhere should not raise; validation just degrades."""
+        preprocessor = self._preprocess_with({"metadata": {"path": "."}})
+        assert preprocessor.dependency_validator.notebook_path is None
+
+
+class TestDependencyValidatorWithoutClient:
+    """Tests the no-client path records operations instead of silently dropping them.
+
+    Passing an operation while failing everything that depends on it is never
+    the useful combination, so when the operation cannot be confirmed against a
+    live engine we trust the cell source and record it anyway.
+    """
+
+    def _validator(self):
+        from tests.notebooks.runner import NotebookDependencyValidator
+
+        validator = NotebookDependencyValidator(notebook_path=None)
+        assert validator.client_instance is None
+        return validator
+
+    def test_rebuild_recorded_without_client(self):
+        validator = self._validator()
+        assert validator.validate_operation_succeeded("rebuild", "tmdb", 0) == (
+            True,
+            None,
+        )
+        met, err = validator.check_prerequisites(
+            [{"dependency": "index", "target": "tmdb"}], 1
+        )
+        assert met, err
+
+    def test_create_index_recorded_without_client(self):
+        validator = self._validator()
+        validator.validate_operation_succeeded("create_index", "blog", 0)
+        assert "blog" in validator.completed_operations["indices"]
+
+    def test_featureset_records_its_index_too(self):
+        """A feature set implies its index exists."""
+        validator = self._validator()
+        validator.validate_operation_succeeded("create_featureset", "tmdb:tsq", 0)
+        assert "tmdb:tsq" in validator.completed_operations["feature_sets"]
+        assert "tmdb" in validator.completed_operations["indices"]
+
+    def test_unmet_dependency_still_reported(self):
+        """The check must still catch a genuinely missing index."""
+        validator = self._validator()
+        met, err = validator.check_prerequisites(
+            [{"dependency": "index", "target": "never_created"}], 1
+        )
+        assert not met
+        assert err is not None
+        assert "never_created" in err
