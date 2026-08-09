@@ -16,9 +16,9 @@ outputs:
 runs:
   using: 'composite'
   steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
+    # NOTE: Callers must run actions/checkout *before* this action. A local
+    # action path (./.github/actions/...) cannot be resolved until the repo is
+    # on disk, so the checkout cannot live inside this composite.
     - name: Record start time
       id: start_time
       shell: bash

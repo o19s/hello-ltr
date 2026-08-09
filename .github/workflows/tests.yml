@@ -32,6 +32,9 @@ jobs:
           - 2376:2376
     
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
       - name: Set up Python environment
         id: setup
         uses: ./.github/actions/setup-python

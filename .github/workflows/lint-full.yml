@@ -20,6 +20,9 @@ jobs:
       PYTHON_VERSION: "3.9"
 
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
       - name: Set up Python environment
         id: setup
         uses: ./.github/actions/setup-python
@@ -28,7 +31,7 @@ jobs:
 
       - name: Run Ruff linting on Python files
         run: |
-          uv run ruff check ltr/ rre/ utils/ tests/ *.py
+          uv run ruff check ltr/ rre/ utils/ tests/ scripts/
         continue-on-error: false
 
       - name: Run Ruff linting on notebooks
@@ -38,7 +41,7 @@ jobs:
 
       - name: Check Ruff formatting on Python files
         run: |
-          uv run ruff format --check ltr/ rre/ utils/ tests/ *.py
+          uv run ruff format --check ltr/ rre/ utils/ tests/ scripts/
         continue-on-error: false
 
       - name: Check Ruff formatting on notebooks
