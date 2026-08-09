@@ -27,6 +27,41 @@ from ltr.validation import ValidationError
 
 logger = get_logger(__name__)
 
+# Environment variable used to override the RankLib training timeout, in seconds.
+RANKLIB_TIMEOUT_ENV_VAR = "LTR_RANKLIB_TIMEOUT"
+
+# Default ceiling for a single RankLib training run, in seconds. Generous on
+# purpose: it exists to catch a genuinely stuck process, not to bound how long
+# a legitimate model may take to train.
+DEFAULT_RANKLIB_TIMEOUT_SECONDS = 1800
+
+
+def _ranklib_timeout_seconds() -> int:
+    """Resolve the RankLib training timeout in seconds.
+
+    Returns:
+        int: Value of the LTR_RANKLIB_TIMEOUT environment variable if it is a
+        positive integer, otherwise DEFAULT_RANKLIB_TIMEOUT_SECONDS.
+    """
+    raw = os.environ.get(RANKLIB_TIMEOUT_ENV_VAR)
+    if raw is None:
+        return DEFAULT_RANKLIB_TIMEOUT_SECONDS
+    try:
+        seconds = int(raw)
+    except ValueError:
+        logger.warning(
+            f"Ignoring non-integer {RANKLIB_TIMEOUT_ENV_VAR}={raw!r}, "
+            f"using {DEFAULT_RANKLIB_TIMEOUT_SECONDS}s"
+        )
+        return DEFAULT_RANKLIB_TIMEOUT_SECONDS
+    if seconds <= 0:
+        logger.warning(
+            f"Ignoring non-positive {RANKLIB_TIMEOUT_ENV_VAR}={raw!r}, "
+            f"using {DEFAULT_RANKLIB_TIMEOUT_SECONDS}s"
+        )
+        return DEFAULT_RANKLIB_TIMEOUT_SECONDS
+    return seconds
+
 
 def check_for_rankymcrankface() -> str:
     """Ensure RankyMcRankFace.jar is available in the system temp directory.
@@ -192,9 +227,10 @@ def train_model(
         (e.g., when called from test wrappers), but will use their default values
         in such cases. In normal use, these should be positive integers.
 
-        Training operations have a default timeout of 300 seconds (5 minutes) to
-        prevent hanging indefinitely if RankLib becomes unresponsive. If training
-        times out, a ModelError will be raised with suggestions for resolution.
+        Training operations time out after DEFAULT_RANKLIB_TIMEOUT_SECONDS to
+        prevent hanging indefinitely if RankLib becomes unresponsive. Set the
+        LTR_RANKLIB_TIMEOUT environment variable (in seconds) to change it. If
+        training times out, a ModelError is raised with suggestions.
     """
 
     # Validate training set before proceeding
@@ -303,9 +339,11 @@ def train_model(
 
     logger.info(f"Running RankLib command: {' '.join(cmd)}")
 
-    # Default timeout: 5 minutes (300 seconds) for training operations
-    # This prevents hanging indefinitely if RankLib gets stuck
-    timeout_seconds = 300
+    # Guard against RankLib hanging indefinitely, but keep the ceiling well
+    # clear of legitimate training runs: the heavier notebooks (netfix movies,
+    # lambda-mart-in-python) routinely train for several minutes on a warm
+    # machine and far longer on a loaded one. Override with LTR_RANKLIB_TIMEOUT.
+    timeout_seconds = _ranklib_timeout_seconds()
 
     try:
         process_result = subprocess.run(
@@ -326,7 +364,8 @@ def train_model(
             f"  - Reducing training set size\n"
             f"  - Using fewer trees or features\n"
             f"  - Checking system resources\n"
-            f"  - Increasing timeout if needed for very large datasets",
+            f"  - Raising the timeout with the {RANKLIB_TIMEOUT_ENV_VAR} "
+            f"environment variable (seconds) for very large datasets",
             operation="train",
         ) from e
     except FileNotFoundError as e:

@@ -17,10 +17,50 @@ import requests
 from ltr.exceptions import ModelError
 from ltr.judgments import Judgment
 from ltr.ranklib import (
+    DEFAULT_RANKLIB_TIMEOUT_SECONDS,
+    RANKLIB_TIMEOUT_ENV_VAR,
+    _ranklib_timeout_seconds,
     check_for_rankymcrankface,
     train_model,
     write_training_set,
 )
+
+
+class TestRanklibTimeoutResolution:
+    """Test how the RankLib training timeout is resolved."""
+
+    def test_default_when_unset(self, monkeypatch):
+        """Test that the generous default applies when the env var is unset."""
+        # Arrange
+        monkeypatch.delenv(RANKLIB_TIMEOUT_ENV_VAR, raising=False)
+        # Act / Assert
+        assert _ranklib_timeout_seconds() == DEFAULT_RANKLIB_TIMEOUT_SECONDS
+
+    def test_default_is_generous_enough_for_shipped_notebooks(self):
+        """Test that the default leaves room for the heavier notebooks."""
+        # The 300s ceiling this replaces was tripped by netfix movies (Solr).
+        assert DEFAULT_RANKLIB_TIMEOUT_SECONDS >= 900
+
+    def test_env_var_override(self, monkeypatch):
+        """Test that a positive integer in the env var is honoured."""
+        # Arrange
+        monkeypatch.setenv(RANKLIB_TIMEOUT_ENV_VAR, "60")
+        # Act / Assert
+        assert _ranklib_timeout_seconds() == 60
+
+    def test_non_integer_env_var_falls_back(self, monkeypatch):
+        """Test that a non-integer env var falls back to the default."""
+        # Arrange
+        monkeypatch.setenv(RANKLIB_TIMEOUT_ENV_VAR, "not-a-number")
+        # Act / Assert
+        assert _ranklib_timeout_seconds() == DEFAULT_RANKLIB_TIMEOUT_SECONDS
+
+    def test_non_positive_env_var_falls_back(self, monkeypatch):
+        """Test that a non-positive env var falls back to the default."""
+        # Arrange
+        monkeypatch.setenv(RANKLIB_TIMEOUT_ENV_VAR, "0")
+        # Act / Assert
+        assert _ranklib_timeout_seconds() == DEFAULT_RANKLIB_TIMEOUT_SECONDS
 
 
 class TestCheckForRankyMcRankFaceErrorHandling:

@@ -16,6 +16,7 @@ import pytest
 
 from ltr.judgments import Judgment
 from ltr.ranklib import (
+    DEFAULT_RANKLIB_TIMEOUT_SECONDS,
     check_for_rankymcrankface,
     feature_search,
     save_model,
@@ -135,7 +136,7 @@ class TestTrainModel:
         # Verify timeout parameter is passed
         call_kwargs = mock_subprocess.call_args[1]
         assert "timeout" in call_kwargs
-        assert call_kwargs["timeout"] == 300
+        assert call_kwargs["timeout"] == DEFAULT_RANKLIB_TIMEOUT_SECONDS
 
     @patch("ltr.ranklib.parse_training_log")
     @patch("subprocess.run")
@@ -195,7 +196,7 @@ class TestTrainModel:
         # Verify timeout parameter is passed
         call_kwargs = mock_subprocess.call_args[1]
         assert "timeout" in call_kwargs
-        assert call_kwargs["timeout"] == 300
+        assert call_kwargs["timeout"] == DEFAULT_RANKLIB_TIMEOUT_SECONDS
 
     @patch("ltr.ranklib.parse_training_log")
     @patch("subprocess.run")
@@ -238,7 +239,7 @@ class TestTrainModel:
         # Verify timeout parameter is passed
         call_kwargs = mock_subprocess.call_args[1]
         assert "timeout" in call_kwargs
-        assert call_kwargs["timeout"] == 300
+        assert call_kwargs["timeout"] == DEFAULT_RANKLIB_TIMEOUT_SECONDS
 
     @patch("ltr.ranklib.parse_training_log")
     @patch("subprocess.run")
