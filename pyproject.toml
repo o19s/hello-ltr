@@ -1,0 +1,240 @@
+[project]
+name = "hello-ltr"
+version = "0.1.0"
+description = "Learning to Rank tutorial and examples"
+requires-python = ">=3.9"
+dependencies = [
+    "setuptools>=65.0.0",
+    "appnope>=0.1.4",  # Updated from 0.1.2 - safe patch update
+    "attrs>=24.0.0",  # Updated from 21.4.0 - check compatibility
+    "backcall==0.2.0",
+    "bleach>=6.0.0",  # Updated from 4.1.0 - major version bump, check compatibility
+    "certifi>=2025.11.12",
+    "chardet>=5.0.0",  # Updated from 4.0.0 - major version bump, check compatibility
+    "cycler>=0.12.1",  # Updated from 0.11.0 - safe minor update
+    "Cython",
+    "decorator==4.3.2",
+    "defusedxml==0.5.0",
+    "elasticsearch==7.16.2",
+    "entrypoints>=0.4",  # Updated from 0.3 - safe minor update
+    "graphviz>=0.21",  # Updated from 0.19.1 - safe minor update
+    "idna>=3.4",  # Updated from 3.3 - patch version update
+    "ipykernel>=6.25.0",
+    "ipython>=8.12.0",
+    "ipython-genutils==0.2.0",
+    "ipywidgets>=8.0.0",
+    "jedi>=0.19.0",
+    "Jinja2>=3.1.6",  # Updated from 3.0.3 - safe minor update
+    "joblib>=1.5.3",  # Updated from 1.1.1 - safe minor update
+    "jsonschema>=4.25.1",  # Updated from >=4.17.0 - safe minor update
+    "jupyter",
+    "jupyter-client>=8.0.0,<8.7.0",  # Keep <8.7.0 for Python 3.9 compatibility (8.7.0 requires Python >=3.10)
+    "jupyter-console>=6.6.0",
+    "jupyter-core>=5.0.0",
+    "kiwisolver>=1.3.2",
+    "Mako>=1.3.10",  # Updated from 1.1.6 - safe minor update
+    "MarkupSafe==2.0.1",  # Keep 2.0.1 for Jinja2 3.x compatibility
+    "matplotlib>=3.7.2",
+    "mistune",
+    "mizani==0.9.2",
+    "nbconvert>=7.0.0",
+    "nbformat>=5.9.0",
+    "nbstripout>=0.6.0",
+    "notebook>=7.5.1",  # Updated from >=7.0.0 - safe minor update
+    "numpy>=1.24.0,<2.0.0",
+    "opensearch-py==2.2.0",
+    "pandas>=2.0.3",
+    "pandocfilters>=1.5.1",  # Updated from 1.5.0 - safe patch update
+    "parso>=0.8.5",  # Updated from 0.8.3 - safe patch update
+    "pexpect>=4.9.0",  # Updated from 4.8.0 - safe minor update
+    "pickleshare==0.7.5",
+    "plotly==5.5.0",
+    "plotnine==0.12.2",
+    "prometheus-client>=0.23.1",  # Updated from 0.13.1 - safe minor update
+    "prompt-toolkit>=3.0.41,<3.1.0",
+    "ptyprocess==0.7.0",
+    "Pygments>=2.19.2",  # Updated from 2.11.2 - safe minor update
+    "pyparsing>=3.3.0",  # Updated from 3.0.7 - safe minor update
+    "pyrsistent>=0.20.0",  # Updated from 0.18.1 - safe minor update
+    "python-dateutil>=2.9.0",  # Updated from 2.8.2 - safe patch update
+    "pytz>=2024.1",  # Updated from 2021.3 - timezone data updates
+    "pyzmq==25.1.1",
+    "qtconsole>=5.7.0",  # Updated from 5.2.2 - safe minor update
+    "requests>=2.31.0",
+    "scikit-learn>=1.3.2",
+    "scipy>=1.11.0",
+    "Send2Trash>=1.8.3",  # Updated from 1.8.0 - safe patch update
+    "six>=1.17.0",  # Updated from 1.16.0 - safe patch update
+    "terminado==0.13.1",
+    "testpath==0.5.0",
+    "threadpoolctl==3.1.0",
+    "tornado>=6.4.1",  # Updated from 6.2 - automatically updated to 6.5.4 for compatibility
+    "tqdm==4.62.3",
+    "traitlets==5.9.0",
+    "urllib3==1.26.18",  # Latest 1.x with security fixes; 2.x may break elasticsearch 7.16.2 compatibility
+    "wcwidth==0.2.5",
+    "webencodings==0.5.1",
+    "xgboost==1.7.6",
+    # Testing dependencies
+    "pytest>=8.0.0",
+    "pytest-xdist>=3.5.0",
+    "pytest-timeout>=2.2.0",
+    "pytest-html>=4.1.0",
+    "pytest-cov>=4.0.0",
+    "pytest-rerunfailures>=14.0",
+    # Code quality
+    "ruff>=0.14.9",
+    "pre-commit>=3.0.0",
+    "pyright>=1.1.0",
+    # Type stubs for third-party libraries
+    "types-requests>=2.31.0",
+    "types-urllib3>=1.26.0",
+]
+
+[tool.setuptools]
+packages = ["ltr", "rre"]
+
+[build-system]
+requires = ["setuptools>=65.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.coverage.run]
+# Packages to measure coverage for
+source = ["ltr", "rre"]
+# Files/directories to exclude from coverage
+omit = [
+    "*/tests/*",
+    "*/test_*.py",
+    "*/__pycache__/*",
+    "*/site-packages/*",
+    "*/notebooks/*",
+    "*/conftest.py",
+    "*/runner.py",
+]
+
+[tool.coverage.report]
+# Coverage thresholds (can be adjusted as coverage improves)
+precision = 2
+show_missing = true
+skip_covered = false
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+    "@abstractmethod",
+]
+
+[tool.ruff]
+# Ruff configuration for linting and formatting
+# See https://docs.astral.sh/ruff/configuration/
+
+# Target Python version
+target-version = "py39"
+
+# Line length (matches formatter)
+# Reduced from 100 to preserve multi-line formatting for readability
+line-length = 88
+
+# Exclude directories
+exclude = [
+    ".git",
+    "__pycache__",
+    ".venv",
+    "venv",
+    "build",
+    "dist",
+    "*.egg-info",
+    "htmlcov",
+    ".pytest_cache",
+    "stubs",  # Type stub files may not follow PEP 8 naming (must match third-party APIs)
+]
+
+[tool.ruff.lint]
+# Enable linting rules
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "N",   # pep8-naming
+    "UP",  # pyupgrade
+    "B",   # flake8-bugbear
+    "C4",  # flake8-comprehensions
+    "SIM", # flake8-simplify
+]
+
+# Ignore specific rules
+ignore = [
+    "E501",  # Line too long (handled by formatter)
+    "B008",  # Do not perform function calls in argument defaults
+    "B904",  # Allow `raise` without specifying exception in `except` blocks
+]
+
+# Allow autofix for all enabled rules
+fixable = ["ALL"]
+unfixable = []
+
+# Allow unused variables when underscore-prefixed
+dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
+
+# Per-file ignores for type stubs (must match third-party API naming)
+[tool.ruff.lint.per-file-ignores]
+"stubs/**/*.pyi" = ["N801"]
+
+[tool.ruff.format]
+# Ruff formatter configuration
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
+
+[tool.ruff.lint.isort]
+# Import sorting configuration
+known-first-party = ["ltr", "rre"]
+split-on-trailing-comma = true
+
+[tool.pyright]
+# Pyright type checking configuration
+include = ["ltr", "rre", "utils", "tests", "stubs", "notebooks"]
+exclude = [
+    "**/__pycache__",
+    "**/node_modules",
+    "**/.venv",
+    "**/venv",
+    "**/build",
+    "**/dist",
+    "**/*.egg-info",
+    "**/htmlcov",
+    "**/.pytest_cache",
+    "**/*.ipynb"
+]
+# Stub path for custom type stubs
+stubPath = "stubs"
+reportMissingImports = true
+reportMissingTypeStubs = "warning"
+reportUnusedImport = "warning"
+reportUnusedClass = "warning"
+reportUnusedFunction = "warning"
+reportUnusedVariable = "warning"
+reportDuplicateImport = true
+reportOptionalSubscript = false
+reportOptionalMemberAccess = false
+reportOptionalCall = false
+reportOptionalIterable = false
+reportOptionalContextManager = false
+reportOptionalOperand = false
+reportGeneralTypeIssues = true
+reportPrivateImportUsage = "warning"
+reportConstantRedefinition = true
+reportIncompatibleMethodOverride = true
+reportIncompatibleVariableOverride = true
+reportArgumentType = true
+reportCallIssue = true
+reportAttributeAccessIssue = true
+pythonVersion = "3.9"
+typeCheckingMode = "standard"
+useLibraryCodeForTypes = true
+

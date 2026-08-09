@@ -4,13 +4,17 @@ services:
     expose:
       - "5601"
     ports:
-     - "5601:5601"
+     # Use environment variable instead of hard-coded port to allow multiple instances
+     # to run simultaneously without port conflicts, and to support different environments
+     - "${KIBANA_PORT:-5601}:5601"
     environment:
       SERVER_HOST: "0.0.0.0"
   elasticsearch:
     build: ./.docker/es-docker/.
     ports:
-     - "9200:9200"
+     # Use environment variable instead of hard-coded port to allow multiple instances
+     # to run simultaneously without port conflicts, and to support different environments
+     - "${ELASTICSEARCH_PORT:-9200}:9200"
     expose:
       - "9200"
     environment:

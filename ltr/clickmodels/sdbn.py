@@ -1,45 +1,84 @@
-from collections import Counter, defaultdict
-from ltr.clickmodels.session import build
+"""S-DBN (Simplified Dynamic Bayesian Network) click model.
 
-class Model():
-    def __init__(self):
+This module implements the Simplified Dynamic Bayesian Network, a simplified
+version of the Dynamic Bayesian Network that achieves similar accuracy but
+can be solved directly without iterative Expectation Maximization.
+"""
+
+from __future__ import annotations
+
+from collections import Counter, defaultdict
+from collections.abc import Iterator
+
+from ltr.clickmodels.session import Doc, Session, build
+from ltr.types import QueryDocPair
+
+
+class Model:
+    """S-DBN model storing satisfaction and attractiveness values.
+
+    Attributes:
+        satisfacts: Dictionary mapping (query, doc_id) tuples to satisfaction values.
+        attracts: Dictionary mapping (query, doc_id) tuples to attractiveness values.
+    """
+
+    def __init__(self) -> None:
+        """Initialize an S-DBN model with default values.
+
+        Initializes satisfaction and attractiveness values to 0.1 for all
+        query-document pairs.
+        """
         # Satisfaction per query-doc
-        self.satisfacts = defaultdict(lambda: 0.1)
+        self.satisfacts: defaultdict[QueryDocPair, float] = defaultdict(lambda: 0.1)
 
         # Attractiveness per query-doc
-        self.attracts = defaultdict(lambda : 0.1)
-
-reverse_enumerate = lambda l: zip(range(len(l)-1, -1, -1), reversed(l))
+        self.attracts: defaultdict[QueryDocPair, float] = defaultdict(lambda: 0.1)
 
 
-def sdbn(sessions):
-    """ Simplified Dynamic Bayesian Network is a simpler
-        version of the much more complex Dynamic Bayesian Network
-        that the authors say comes close to the accuracy of DBN
+def reverse_enumerate(lst: list[Doc]) -> Iterator[tuple[int, Doc]]:
+    """Enumerate a list in reverse order.
 
-        Most importantly, it can be solved directly and simply without
-        an EM learning process
+    Args:
+        lst: List to enumerate.
 
-        Features of sdbn:
-        - Attractiveness is any click out of sessions where that document
-          appears before the last click of the session
-        - Satisfaction occurs when a doc is the last document clicked
-          out of all sessions where that document is clicked
+    Yields:
+        tuple: (index, value) tuples where index counts down from len(lst)-1 to 0.
+    """
+    return zip(range(len(lst) - 1, -1, -1), reversed(lst))
 
-        """
+
+def sdbn(sessions: list[Session]) -> Model:
+    """Train an Simplified Dynamic Bayesian Network click model from search sessions.
+
+    The Simplified Dynamic Bayesian Network (S-DBN) can be solved directly without
+    an EM learning process, making it computationally efficient while
+    maintaining accuracy close to the full DBN model.
+
+    Key features:
+    - Attractiveness: Any click in sessions where the document appears before
+      the last click of the session
+    - Satisfaction: Occurs when a document is the last document clicked in a session
+
+    Args:
+        sessions: List of search session objects containing queries and
+            clicked documents.
+
+    Returns:
+        Model: Trained S-DBN model with satisfaction and attractiveness values.
+    """
     model = Model()
-    NO_CLICK = -1
-    counts = Counter()
-    clicks = Counter()
-    last_clicks = Counter()
+    no_click = -1
+    counts: Counter[QueryDocPair] = Counter()
+    clicks: Counter[QueryDocPair] = Counter()
+    last_clicks: Counter[QueryDocPair] = Counter()
     for session in sessions:
-        last_click = NO_CLICK
+        last_click = no_click
         for rank, doc in reverse_enumerate(session.docs):
-            if last_click == NO_CLICK and doc.click:
+            if last_click == no_click and doc.click:
                 last_click = rank
 
-            if last_click != NO_CLICK:
-                query_doc = (session.query, doc.doc_id)
+            if last_click != no_click:
+                query_doc: QueryDocPair = (session.query, doc.doc_id)
                 counts[query_doc] += 1
 
                 if doc.click:
@@ -61,20 +100,22 @@ def sdbn(sessions):
 
 
 if __name__ == "__main__":
-    sessions = build([
-      ('A', ((1, True), (2, False), (3, True), (0, False))),
-      ('B', ((5, False), (2, True), (3, True), (0, False))),
-      ('A', ((1, False), (2, False), (3, True), (0, False))),
-      ('B', ((1, False), (2, False), (3, False), (9, True))),
-      ('A', ((9, False), (2, False), (1, True), (0, True))),
-      ('B', ((6, True), (2, False), (3, True), (1, False))),
-      ('A', ((7, False), (4, True), (1, False), (3, False))),
-      ('B', ((8, True), (2, False), (3, True), (1, False))),
-      ('A', ((1, False), (4, True), (2, False), (3, False))),
-      ('B', ((7, True), (4, False), (5, True), (1, True))),
-    ])
+    sessions = build(
+        [
+            ("A", [(1, True), (2, False), (3, True), (0, False)]),
+            ("B", [(5, False), (2, True), (3, True), (0, False)]),
+            ("A", [(1, False), (2, False), (3, True), (0, False)]),
+            ("B", [(1, False), (2, False), (3, False), (9, True)]),
+            ("A", [(9, False), (2, False), (1, True), (0, True)]),
+            ("B", [(6, True), (2, False), (3, True), (1, False)]),
+            ("A", [(7, False), (4, True), (1, False), (3, False)]),
+            ("B", [(8, True), (2, False), (3, True), (1, False)]),
+            ("A", [(1, False), (4, True), (2, False), (3, False)]),
+            ("B", [(7, True), (4, False), (5, True), (1, True)]),
+        ]
+    )
     model = sdbn(sessions)
-    print(model.attracts[('A', 1)])
-    print(model.satisfacts[('A', 1)])
-    print(model.attracts[('B', 1)])
-    print(model.satisfacts[('B', 1)])
+    print(model.attracts[("A", 1)])
+    print(model.satisfacts[("A", 1)])
+    print(model.attracts[("B", 1)])
+    print(model.satisfacts[("B", 1)])

@@ -1,0 +1,9 @@
+- Did you introduce any bugs or errrors?
+- What about bad practices?
+- Was any functionality Lsot?
+- Do we need to DRY things up?
+- Are there any critical path tests we need to create or update?
+- Have you added appropriate docstrings and typing?
+- Did you learn any important lessons during working with this code? If so, update the docs accordingly or create a new doc if an appropriate doc does not exist.
+- Have you updated any documents that cover this functionality and require changes?
+- Run lint and formatting

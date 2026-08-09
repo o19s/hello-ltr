@@ -1,0 +1,9 @@
+- Always use the venv when running python commands.
+- Always use uv.
+- DO NOT uses pyenv.
+- Always use pyproject.toml, not requirements.txt.
+- Instead of creating separate documents recording fixes, update the original code issue docs.
+- After making any significant change to types, run pyright.
+- Whenever providing hard-coded dates (e.g. when a report was updated) check the current date. You usually get it wrong, often by years.
+- When running tests, make sure the output is streamed and not just buffered or hidden.
+- Always lint a file after editing it.

@@ -1,0 +1,49 @@
+version: 2
+updates:
+  # Python dependencies managed by uv
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+    open-pull-requests-limit: 10
+    reviewers:
+      - "dave"
+    labels:
+      - "dependencies"
+      - "python"
+    commit-message:
+      prefix: "deps"
+      include: "scope"
+    # Group updates for related packages
+    groups:
+      test-dependencies:
+        patterns:
+          - "pytest*"
+          - "pytest-*"
+      code-quality:
+        patterns:
+          - "ruff"
+          - "pre-commit"
+          - "pyright"
+    # Ignore major version updates for critical dependencies
+    ignore:
+      # Ignore major version updates that require significant changes
+      - dependency-name: "elasticsearch"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "opensearch-py"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "numpy"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "pandas"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "scikit-learn"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "xgboost"
+        update-types: ["version-update:semver-major"]
+      # Ignore all updates for pinned versions (exact versions)
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+        version: "==*"
+

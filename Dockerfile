@@ -22,7 +22,8 @@ RUN chown -R ltr.ltr hello-ltr
 WORKDIR /home/ltr/hello-ltr
 
 RUN /usr/local/bin/python -m pip install --upgrade pip
-RUN pip install -r requirements.txt
+RUN pip install uv
 USER ltr
+RUN uv sync
 
-CMD jupyter notebook --ip=0.0.0.0 --no-browser --NotebookApp.token=''
+CMD uv run jupyter notebook --ip=0.0.0.0 --no-browser --NotebookApp.token=''

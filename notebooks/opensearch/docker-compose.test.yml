@@ -1,0 +1,25 @@
+services:
+  opensearch-node1:
+    ports:
+      - "${OPENSEARCH_PORT:-19201}:9201"
+      - "${OPENSEARCH_PA_PORT:-19600}:9600"
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4G
+        reservations:
+          cpus: '1.0'
+          memory: 2G
+  opensearch-dashboards:
+    ports:
+      - "${OPENSEARCH_DASHBOARDS_PORT:-15602}:5602"
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+

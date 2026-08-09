@@ -1,6 +1,8 @@
 #data/
 venv/
 venv2/
+.venv/
+**/.venv/
 .git/
 .cache/
 .trash/

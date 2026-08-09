@@ -2,12 +2,12 @@ If you have issues getting jupyter or the JDK running on the host machine, you c
 
 ## Requirements
 
-- Docker with docker-compose
+- Docker with docker compose
 - Ports 8888/8983/9200/9201 must be available on your host machine
 
 ## Setup
 
-Run `docker-compose up -d` 
+Run `docker compose up -d` 
 
 The above command will build all images necessary for the project and run the following services:
 
@@ -18,5 +18,5 @@ The above command will build all images necessary for the project and run the fo
 
 ## Cleanup
 
-- To shut things down and return later run `docker-compose stop`
-- To get rid of everything run `docker-compose down`
+- To shut things down and return later run `docker compose stop`
+- To get rid of everything run `docker compose down`

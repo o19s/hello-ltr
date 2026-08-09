@@ -1,5 +1,7 @@
 # Hello LTR :)
 
+**Last Updated:** December 31, 2025
+
 The overall goal of this project is to demonstrate all the steps required to work with LTR in Elasticsearch, Solr, or OpenSearch. There are two modes of running this project. You can run and edit notebooks in a docker container or you can do local development on the notebooks and connect to the search engine(s) running in Docker.
 
 ## No fuss setup: You just want to play with LTR
@@ -24,7 +26,7 @@ This will run jupyter and all search engines in Docker containers. Check that ea
 - Jupyter: [localhost:8888](localhost:8888)
 
 ## You want to build your own LTR notebooks
-git 
+
 Follow these steps if you want to do more serious work with the notebooks. For example, if you want to build a demo with your work's data or something you want to preserve later.
 
 ### Run your search engine with Docker
@@ -62,17 +64,24 @@ docker compose up
 
 #### Setup Python requirements
 
-- Ensure Python 3.8 or later is installed on your system
-- Create a virtual environment: `python3 -m venv venv`
-- Start the virtual environment: `source venv/bin/activate`
-- Check install tooling is up to date `python -m pip install -U pip wheel setuptools`
-- Install the requirements `pip install -r requirements.txt`
+- Install `uv` if not already installed: `curl -LsSf https://astral.sh/uv/install.sh | sh`
+- Sync the project and dependencies (this will create a virtual environment and install Python if needed): `uv sync`
 
 __Note:__ The above commands should be run from the root folder of the project.
 
+#### Setup Pre-commit Hooks (Recommended)
+
+After setting up Python, install pre-commit hooks to ensure code quality:
+
+```bash
+./setup-git-hooks.sh
+```
+
+This will automatically run linting and formatting checks before commits. See the [Pre-commit Hooks](#pre-commit-hooks) section below for details on how to skip hooks when needed.
+
 #### Start Jupyter notebook and confirm operation
 
-- Run `jupyter notebook`
+- Run `uv run jupyter notebook` (or activate the venv with `source .venv/bin/activate` and then run `jupyter notebook`)
 - Browse to notebooks/{search\_engine}/{collection} 
 - Open the appropriate notebook for your search engine, run each cell, and ensure you get a graph at the last cell:
   - "hello-ltr (Solr).ipynb"
@@ -81,35 +90,220 @@ __Note:__ The above commands should be run from the root folder of the project.
 
 ## Tests
 
-### Automatically run everything...
+The project includes a comprehensive test suite for validating notebook execution and core functionality. For detailed testing documentation, see [`tests/README.md`](tests/README.md).
 
-NB: It may be necessary to increase the number of open files on MacOS to a
-higher value than the default 256 for the tests to complete successfully. Use:
+### Quick Start
 
-$ ulimit -n 4096
+To run the full test suite:
 
-to increase the value to a sensible amount.
-
-To run a full suite of tests, such as to verify a PR, you can simply run
-
+```bash
 ./tests/test.sh
+```
 
-Optionally with containers rebuilt
+This automatically syncs dependencies, starts Docker containers, runs all tests, and cleans up containers.
 
-./tests/test.sh --rebuild-containers
+For more testing options, examples, and troubleshooting, see the [Test Suite Documentation](tests/README.md).
 
-Failing tests will have their output in `tests/last_run.ipynb`
+## Development Setup
 
-You can test one or more engines by specifying a comma delimited list:
-./tests/test.sh --engines=solr,opensearch,elasticsearch
+### Pre-commit Hooks
 
-### While developing...
+This project uses pre-commit hooks to ensure code quality. The hooks automatically:
+- Run `ruff` for linting and formatting Python code and notebooks
+- Check that notebook outputs are stripped (using `nbstripout`)
+- Optionally lint commit messages (using `commitizen`)
 
-For more informal development:
+#### Initial Setup
 
-- Startup the Solr, OS, and ES Docker containers
-- Do your development
-- Run the command as needed:
-`python tests/run_most_nbs.py`
-- Tests fail if notebooks return any errors
-  - The failing notebook will be stored at `tests/last_run.ipynb`
+1. Install pre-commit (if not already installed):
+   ```bash
+   uv pip install pre-commit
+   ```
+
+2. Install the git hooks:
+   ```bash
+   ./setup-git-hooks.sh
+   ```
+
+   This will:
+   - Install the pre-commit hooks
+   - Set up a commit-msg hook that enables skipping hooks via commit message
+
+#### Using Pre-commit Hooks
+
+Hooks run automatically on `git commit`. To skip hooks, you have several options:
+
+1. **Skip via commit message** (recommended - set up git alias):
+   ```bash
+   # One-time setup: create git alias
+   git config alias.commit '!./git-commit-wrapper.sh'
+   
+   # Then use normally:
+   git commit -m "Your message [skip lint]"
+   ```
+   Or use the wrapper script directly:
+   ```bash
+   ./git-commit-wrapper.sh -m "Your message [skip lint]"
+   ```
+   This skips ruff linting/formatting and notebook checks.
+
+2. **Skip specific hooks using SKIP environment variable**:
+   ```bash
+   SKIP=ruff,notebooks git commit
+   ```
+
+3. **Skip all hooks**:
+   ```bash
+   git commit --no-verify
+   ```
+
+#### Manual Hook Execution
+
+You can manually run hooks on all files:
+```bash
+pre-commit run --all-files
+```
+
+Or run a specific hook:
+```bash
+pre-commit run ruff --all-files
+pre-commit run notebook-output-check --all-files
+```
+
+### Code Standards
+
+This project follows PEP 8 naming conventions. For detailed guidelines and examples, see [`NAMING_CONVENTIONS.md`](NAMING_CONVENTIONS.md).
+
+Key points:
+- Functions and variables: `snake_case`
+- Classes: `PascalCase`
+- Constants: `UPPER_SNAKE_CASE`
+- Naming violations are automatically checked by ruff in CI/CD
+
+All intentional violations and their justifications are documented in the [Naming Conventions Guide](NAMING_CONVENTIONS.md#intentional-violations).
+
+### Error Handling
+
+This project uses standardized error handling patterns. For detailed guidelines and examples, see [ADR-025: Error Handling Strategy](adr/025-error-handling-strategy.md).
+
+**Quick Reference:**
+
+1. **Critical operations** → Re-raise with context
+   ```python
+   try:
+       resp = self.opensearch.search(index=index, body=query)
+   except OpenSearchConnectionError as e:
+       raise RuntimeError(f"Query failed for index {index}: {e}") from e
+   ```
+
+2. **Cleanup operations** → Log and continue
+   ```python
+   try:
+       cleanup_containers()
+   except Exception as e:
+       logger.warning(f"Cleanup failed (non-critical): {e}", exc_info=True)
+       # Continue - cleanup failure shouldn't fail the test
+   ```
+
+3. **Retry loops** → Use `retry_on_connection_error` utility
+   ```python
+   from ltr.helpers.retry import retry_on_connection_error, is_opensearch_connection_error
+   
+   result = retry_on_connection_error(
+       lambda: operation(),
+       max_retries=5,
+       initial_delay=0.5,
+       is_connection_error=is_opensearch_connection_error,
+   )
+   ```
+
+4. **Optional features** → Silently pass
+   ```python
+   try:
+       import fcntl
+       HAS_FCNTL = True
+   except ImportError:
+       HAS_FCNTL = False
+   ```
+
+**Decision Tree:** See [ADR-025: Error Handling Strategy](adr/025-error-handling-strategy.md#notes) for guidance on choosing the right pattern.
+
+### Quality Check Script
+
+The project includes a quality check script for validating code and notebooks:
+
+**Script:** `tests/check_quality.sh`
+
+**Features:**
+- Comprehensive quality checks for code and notebooks
+- Can run all checks or filter by type
+- Supports auto-fixing issues
+
+**Options:**
+- `--fix`: Auto-fix issues where possible
+- `--notebooks-only`: Only check notebooks
+- `--code-only`: Only check Python code
+
+**Checks Performed:**
+1. Ruff linting (Python code and notebooks)
+2. Ruff formatting (Python code and notebooks)
+3. Notebook output stripping verification (`nbstripout --check`)
+
+**Usage Examples:**
+```bash
+# Check everything
+./tests/check_quality.sh
+
+# Check and auto-fix
+./tests/check_quality.sh --fix
+
+# Check only notebooks
+./tests/check_quality.sh --notebooks-only
+
+# Check only Python code
+./tests/check_quality.sh --code-only
+```
+
+**Exit Codes:**
+- `0`: All checks passed
+- `1`: One or more checks failed
+
+### Daily Development Workflow
+
+**Typical workflow:**
+```bash
+# Pre-commit hooks run automatically on git commit
+git commit -m "feat: add new feature"
+
+# Skip hooks when needed
+git commit -m "wip: work in progress [skip lint]"
+SKIP=ruff git commit -m "quick fix"
+git commit --no-verify -m "emergency fix"
+
+# Run quality checks manually
+./tests/check_quality.sh
+./tests/check_quality.sh --fix
+```
+
+### CI/CD
+
+The project uses GitHub Actions for continuous integration. For detailed CI/CD documentation, see [`.github/README.md`](.github/README.md).
+
+**What's automated:**
+- ✅ Naming convention enforcement (PEP 8)
+- ✅ Unit/integration test execution
+- ✅ Code coverage reporting
+- ✅ Dependency update automation (Dependabot)
+
+## Documentation
+
+For comprehensive documentation, see:
+
+- **[Architecture Documentation](ARCHITECTURE.md)** - System architecture, design patterns, and component overview
+- **[Architecture Decision Records](adr/README.md)** - Historical record of key architectural decisions
+- **[Advanced Usage Patterns](ADVANCED_USAGE.md)** - Advanced usage patterns and direct client access
+- **[CI/CD Documentation](.github/README.md)** - GitHub Actions workflows and Dependabot configuration
+- **[Type Aliases Guide](TYPE_ALIASES_GUIDE.md)** - Type system documentation and usage
+- **[Test Suite Documentation](tests/README.md)** - Testing infrastructure and usage
+- **[Naming Conventions](NAMING_CONVENTIONS.md)** - Code style guidelines
+- **[Error Handling Strategy](adr/025-error-handling-strategy.md)** - Error handling patterns and best practices (see also [README Error Handling section](#error-handling))

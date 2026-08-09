@@ -1,0 +1,13 @@
+services:
+  solr:
+    ports:
+      - "${SOLR_PORT:-18983}:8983"
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4G
+        reservations:
+          cpus: '1.0'
+          memory: 2G
+

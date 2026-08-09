@@ -1,71 +1,152 @@
+"""Feature logging for building training sets.
+
+This module provides functionality for logging LTR features from search
+engines and building training sets from judgments.
+"""
+
+from __future__ import annotations
+
 import re
+from collections.abc import Iterable
+
+from ltr.client.base_client import BaseClient
+from ltr.judgments import Judgment
+from ltr.logger import get_logger
+
+logger = get_logger(__name__)
+
 
 class FeatureLogger:
-    """ Logs LTR Features, one query at a time
+    """Logs LTR features from search engine queries, building up a training set.
 
-        ...Building up a training set...
+    This class facilitates the collection of feature vectors from a search engine
+    for documents associated with query-judgment pairs. Features are fetched in
+    batches and attached to judgment objects.
+
+    Attributes:
+        client: Search client instance.
+        index: Name of the search index.
+        feature_set: Name of the feature set to use.
+        drop_missing: If True, discard judgments for missing documents (default: True).
+        logged: List of judgments that have been successfully logged with features.
     """
 
-    def __init__(self, client, index, feature_set, drop_missing=True):
-        self.client=client
-        self.index=index
-        self.feature_set=feature_set
-        self.drop_missing=drop_missing
-        self.logged=[]
+    def __init__(
+        self,
+        client: BaseClient,
+        index: str,
+        feature_set: str,
+        drop_missing: bool = True,
+    ) -> None:
+        """Initialize a FeatureLogger.
 
-    def clear(self):
-        self.logged=[]
-
-    def log_for_qid(self, qid, judgments, keywords):
-        """ Log a set of judgments associated with a single qid
-            judgments will be modified, a training set also returned, discarding
-            any judgments we could not log features for (because the doc was missing)
+        Args:
+            client: Search client instance.
+            index: Name of the search index.
+            feature_set: Name of the feature set to use.
+            drop_missing: If True, discard judgments for missing documents (default: True).
         """
-        featuresPerDoc = {}
-        judgments = [j for j in judgments]
-        docIds = [judgment.docId for judgment in judgments]
+        self.client: BaseClient = client
+        self.index: str = index
+        self.feature_set: str = feature_set
+        self.drop_missing: bool = drop_missing
+        self.logged: list[Judgment] = []
 
-        # Check for dups of documents
-        for docId in docIds:
-            indices = [i for i, x in enumerate(docIds) if x == docId]
+    def clear(self) -> None:
+        """Clear all logged judgments.
+
+        Resets the logged list to empty, allowing reuse of the logger
+        for a new training set.
+        """
+        self.logged = []
+
+    def log_for_qid(
+        self,
+        qid: int,
+        judgments: Iterable[Judgment],
+        keywords: str,
+    ) -> tuple[list[Judgment], list[Judgment]]:
+        """Log features for a set of judgments associated with a query ID.
+
+        Fetches LTR features from the search engine for all documents in the
+        judgments iterable and attaches them to the judgment objects. Documents
+        are fetched in batches of 500.
+
+        Args:
+            qid: Query ID associated with these judgments.
+            judgments: Iterable of Judgment objects to log features for.
+            keywords: Search keywords used for the query (sanitized automatically).
+
+        Returns:
+            tuple: A tuple containing:
+                - training_set: List of judgments with successfully logged features.
+                - discarded: List of judgments that were discarded (if drop_missing=True)
+                  or empty list (if drop_missing=False).
+
+        Note:
+            The judgments are converted to a list internally and modified in-place
+            with features attached. Keywords are sanitized to remove special characters
+            for Solr compatibility. Missing documents are handled according to the
+            drop_missing setting.
+
+        Warning:
+            If drop_missing=True and all judgments for a query are discarded (no features
+            logged), a warning is logged. This typically indicates that documents referenced
+            in the judgments don't exist in the search index.
+        """
+        features_per_doc = {}
+        judgments = list(judgments)
+        doc_ids = [judgment.docId for judgment in judgments]
+
+        # Check for dupes of documents
+        for doc_id in doc_ids:
+            indices = [i for i, x in enumerate(doc_ids) if x == doc_id]
             if len(indices) > 1:
-                # print("Duplicate Doc in qid:%s %s" % (qid, docId))
+                # print("Duplicate Doc in qid:%s %s" % (qid, doc_id))
                 pass
 
         # For every batch of N docs to generate judgments for
-        BATCH_SIZE = 500
-        numLeft = len(docIds)
-        for i in range(0, 1 + (len(docIds) // BATCH_SIZE)):
-
-            numFetch = min(BATCH_SIZE, numLeft)
-            start = i*BATCH_SIZE
-            if start >= len(docIds):
+        batch_size = 500
+        num_left = len(doc_ids)
+        for i in range(0, 1 + (len(doc_ids) // batch_size)):
+            num_fetch = min(batch_size, num_left)
+            start = i * batch_size
+            if start >= len(doc_ids):
                 break
-            ids = docIds[start:start+numFetch]
+            ids = doc_ids[start : start + num_fetch]
 
             # Sanitize (Solr has a strict syntax that can easily be tripped up)
             # This removes anything but alphanumeric and spaces
-            keywords = re.sub('([^\s\w]|_)+', '', keywords)
+            keywords = re.sub(r"([^\s\w]|_)+", "", keywords)
+
+            # Generate fuzzy keywords (append ~ to each word)
+            # Handle empty keywords case
+            if keywords.strip():
+                fuzzy_keywords = " ".join([x + "~" for x in keywords.split(" ") if x])
+            else:
+                fuzzy_keywords = ""
 
             params = {
                 "keywords": keywords,
-                "fuzzy_keywords": ' '.join([x + '~' for x in keywords.split(' ')]),
-                "keywordsList": [keywords] # Needed by TSQ for the time being
+                "fuzzy_keywords": fuzzy_keywords,
+                "keywordsList": [keywords],  # Needed by TSQ for the time being
             }
 
             res = self.client.log_query(self.index, self.feature_set, ids, params)
 
             # Add feature back to each judgment
             for doc in res:
-                docId = str(doc['id'])
-                features = doc['ltr_features']
-                featuresPerDoc[docId] = features
-            numLeft -= BATCH_SIZE
+                doc_id = str(doc["id"])
+                features = doc["ltr_features"]
+                features_per_doc[doc_id] = features
+            num_left -= batch_size
 
         # Append features from search engine back to ranklib judgment list
         for judgment in judgments:
             try:
-                features = featuresPerDoc[judgment.docId] # If KeyError, then we have a judgment but no movie in index
+                features = features_per_doc[
+                    judgment.docId
+                ]  # If KeyError, then we have a judgment but no movie in index
                 judgment.features = features
             except KeyError:
                 pass
@@ -82,6 +163,19 @@ class FeatureLogger:
                     discarded.append(judgment)
             else:
                 training_set.append(judgment)
-        # print("Discarded %s Keep %s" % (len(discarded), len(training_set)))
+
+        # Warn if all judgments were discarded (common issue: documents don't exist in index)
+        if self.drop_missing and len(discarded) > 0 and len(training_set) == 0:
+            logger.warning(
+                f"All {len(discarded)} judgments for qid {qid} were discarded because features could not be logged. "
+                f"This usually means the documents referenced in the judgments don't exist in index '{self.index}'. "
+                f"Ensure the index is properly set up and contains the documents referenced in your judgments."
+            )
+        elif self.drop_missing and len(discarded) > len(training_set):
+            logger.warning(
+                f"For qid {qid}: {len(discarded)} judgments discarded, {len(training_set)} kept. "
+                f"Some documents may not exist in index '{self.index}'."
+            )
+
         self.logged.extend(training_set)
         return training_set, discarded

@@ -1,0 +1,117 @@
+name: Tests
+
+on:
+  push:
+    branches: [ main, master, develop ]
+  pull_request:
+    branches: [ main, master, develop ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    
+    env:
+      PYTHON_VERSION: "3.9"
+    
+    services:
+      # Docker service for running containers in tests
+      docker:
+        image: docker:24-dind
+        options: >-
+          --privileged
+          --network-alias docker
+        env:
+          DOCKER_TLS_CERTDIR: /certs
+        ports:
+          - 2376:2376
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python environment
+        id: setup
+        uses: ./.github/actions/setup-python
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Verify Docker is available
+        run: |
+          docker info
+          docker compose version || docker-compose --version
+
+      - name: Run unit tests with coverage
+        run: |
+          uv run pytest tests/unit/ \
+            --cov=ltr \
+            --cov=rre \
+            --cov-report=xml \
+            --cov-report=html \
+            --cov-report=term \
+            --junitxml=junit-unit.xml \
+            -v
+
+      - name: Run integration tests with coverage
+        run: |
+          uv run pytest tests/integration/ \
+            --cov=ltr \
+            --cov=rre \
+            --cov-append \
+            --cov-report=xml \
+            --cov-report=html \
+            --cov-report=term \
+            --junitxml=junit-integration.xml \
+            -v
+
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./coverage.xml
+          flags: unittests
+          name: codecov-umbrella
+          fail_ci_if_error: false
+
+      - name: Upload coverage HTML report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-report
+          path: htmlcov/
+          retention-days: 30
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results
+          path: |
+            junit-unit.xml
+            junit-integration.xml
+          retention-days: 30
+
+      - name: Calculate build time
+        uses: ./.github/actions/calculate-build-time
+        with:
+          start_time: ${{ steps.setup.outputs.start_time }}
+
+      - name: Publish coverage summary
+        if: always()
+        run: |
+          echo "## Coverage Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ -f coverage.xml ]; then
+            echo "Coverage report generated successfully." >> $GITHUB_STEP_SUMMARY
+            echo "View detailed HTML report in the artifacts." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⚠️ Coverage report not generated." >> $GITHUB_STEP_SUMMARY
+          fi
+

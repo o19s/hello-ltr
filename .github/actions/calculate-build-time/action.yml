@@ -1,0 +1,24 @@
+name: 'Calculate Build Time'
+description: 'Calculates and reports build duration from start time'
+inputs:
+  start_time:
+    description: 'Start time timestamp from setup-python action'
+    required: true
+runs:
+  using: 'composite'
+  steps:
+    - name: Calculate build time
+      id: build_time
+      if: always()
+      shell: bash
+      run: |
+        end_time=$(date +%s)
+        start_time="${{ inputs.start_time }}"
+        duration=$((end_time - start_time))
+        minutes=$((duration / 60))
+        seconds=$((duration % 60))
+        echo "duration_seconds=$duration" >> $GITHUB_OUTPUT
+        echo "duration_formatted=${minutes}m ${seconds}s" >> $GITHUB_OUTPUT
+        echo "## Build Time" >> $GITHUB_STEP_SUMMARY
+        echo "Total build time: ${minutes}m ${seconds}s ($duration seconds)" >> $GITHUB_STEP_SUMMARY
+
