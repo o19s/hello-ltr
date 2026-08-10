@@ -287,7 +287,7 @@ class TestElasticClientRetryLogic:
     def test_query_non_retryable_error(self, mock_elasticsearch_class):
         """Test query does not retry on non-retryable errors (e.g., 400 Bad Request)."""
         # Arrange
-        from elastic_transport import ApiResponseMeta
+        from elastic_transport import ApiResponseMeta, HttpHeaders, NodeConfig
         from elasticsearch.exceptions import RequestError
 
         mock_client = Mock()
@@ -296,7 +296,11 @@ class TestElasticClientRetryLogic:
         # 8.x carries an ApiResponseMeta rather than a plain dict; passing a dict
         # blows up in the exception's own __str__ rather than in the code under test.
         meta = ApiResponseMeta(
-            status=400, http_version="1.1", headers={}, duration=0.0, node=None
+            status=400,
+            http_version="1.1",
+            headers=HttpHeaders(),
+            duration=0.0,
+            node=NodeConfig(scheme="http", host="localhost", port=9200),
         )
         mock_client.search.side_effect = RequestError(
             "Bad Request", meta, {"error": {"reason": "Invalid query"}}

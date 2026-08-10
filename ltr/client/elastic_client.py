@@ -161,7 +161,9 @@ class ElasticClient(ElasticBaseClient, BaseClient):
         index = validate_index_name(index)
         # The 7.x `ignore=` parameter was removed in 8.x; `options(ignore_status=...)`
         # is its replacement and keeps "deleting a missing index is not an error".
-        resp = self.es.options(ignore_status=[400, 404]).indices.delete(index=index).body
+        resp = (
+            self.es.options(ignore_status=[400, 404]).indices.delete(index=index).body
+        )
         resp_msg(
             msg=f"Deleted index {index}",
             resp=ElasticResp(resp),
