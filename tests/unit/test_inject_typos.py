@@ -18,36 +18,29 @@ from ltr.judgments import judgments_from_file
 # ---------------------------------------------------------------------------
 # Judgment-file fixtures
 #
-# _queries_from_header() stops at the first non-comment line and *consumes* it,
-# so judgments_from_file() never yields the first judgment row in a file. Real
-# judgment files are big enough that losing one row goes unnoticed; these
-# fixtures are one or two rows long, so it swallowed all of them. Both helpers
-# below reserve a throwaway qid:0 row to absorb the loss, keeping the tests
-# focused on typo injection rather than on that parser quirk.
+# These used to reserve a throwaway qid:0 row because _queries_from_header()
+# consumed the first non-comment line without passing it on, so short fixtures
+# lost every judgment they contained. That was issue #106; the parser now hands
+# the line back and no filler is needed.
 # ---------------------------------------------------------------------------
-
-FILLER_HEADER = "# qid:0: filler\n"
-FILLER_ROW = "0\tqid:0\t# filler\tfiller\n"
 
 
 def write_judgment_file(path, headers, rows):
-    """Write a judgment file whose first *real* row survives parsing."""
+    """Write a judgment file with the given header comments and judgment rows."""
     with open(path, "w") as f:
         for header in headers:
             f.write(header)
-        f.write(FILLER_HEADER)
-        f.write(FILLER_ROW)
         for row in rows:
             f.write(row)
 
 
 def read_judgment_file(path):
-    """Read a judgment file without losing its first row."""
+    """Read every judgment from a judgment file."""
     with open(path) as f:
         lines = f.readlines()
     headers = [ln for ln in lines if ln.startswith("#")]
     rows = [ln for ln in lines if not ln.startswith("#") and ln.strip()]
-    stream = io.StringIO("".join([*headers, FILLER_HEADER, FILLER_ROW, *rows]))
+    stream = io.StringIO("".join([*headers, *rows]))
     return list(judgments_from_file(stream))
 
 
