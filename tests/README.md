@@ -996,6 +996,28 @@ until an outer timeout kills it, with nothing useful in the output.
 If you lower `NOTEBOOK_MAX_QUERIES` below 2, the harness drops `kcv` entirely and
 trains without cross-validation, which is the only safe option at that size.
 
+**Judgments are trimmed by grade, not by position.** Judgment files are written
+most-relevant-first, so taking the first N judgments of a query often yields N
+judgments that all share a grade. Pairwise learners build training pairs by
+comparing judgments that share a qid but differ in grade, so a single-grade
+sample produces *zero* pairs — an empty training set rather than a small one. In
+`title_judgments_binary.txt`, 37 of 65 queries have this shape, including both
+queries the harness keeps by default. `diverse_judgment_sample()` picks
+round-robin across the grades present instead, so a sample of size 2 spans two
+grades whenever the query has two.
+
+**Hardcoded query IDs are rewritten.** Notebooks single out a query to inspect
+with `if qid == 40:` inside a `groupby` over the training set. Any qid outside
+the `NOTEBOOK_MAX_QUERIES` window is never reached, so the guarded body never
+runs and the variable it defines fails several cells later with a `NameError`
+that names the variable rather than the cause. The harness rewrites such guards
+to match the first group. Guards with an inline body (`if qid == 40: work()`) or
+a non-literal comparison are left alone.
+
+The theme in all three: a test-mode shortcut must produce *valid* input, not
+merely *small* input. Shortcuts that produce invalid input fail in ways that
+blame the notebook.
+
 ### Service Ports
 - `SOLR_PORT`: Test port for Solr (default: 18983)
 - `ELASTICSEARCH_PORT`: Test port for Elasticsearch (default: 19200)

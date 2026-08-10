@@ -12,6 +12,8 @@ from nbconvert.preprocessors import ExecutePreprocessor
 
 from tests.notebooks.runner import (
     PatchedExecutePreprocessor,
+    _patch_notebook_cells_for_testing,
+    diverse_judgment_sample,
     inspect_notebook_variables,
     run_notebook,
     safe_kcv_folds,
@@ -368,3 +370,232 @@ class TestSafeKcvFolds:
                     continue
                 assert folds >= 2, (requested, queries, folds)
                 assert folds <= queries, (requested, queries, folds)
+
+
+class _FakeJudgment:
+    """Minimal stand-in for ltr.judgments.Judgment - only .grade is read."""
+
+    def __init__(self, grade, doc_id):
+        self.grade = grade
+        self.doc_id = doc_id
+
+    def __repr__(self):
+        return f"J(grade={self.grade}, doc={self.doc_id})"
+
+
+def _judgments(grades):
+    """Build judgments with the given grades, in file order."""
+    return [_FakeJudgment(grade, f"doc{i}") for i, grade in enumerate(grades)]
+
+
+class TestDiverseJudgmentSample:
+    """Tests the grade-aware judgment trim.
+
+    Regression coverage for the empty training sets in svmrank and
+    ai-powered-search-ch-10. The harness trimmed each query to its first N
+    judgments, which is grade-blind. Judgment files are written
+    most-relevant-first, so the head of a query is often all one grade, and a
+    pairwise learner given one grade produces zero training pairs - an empty
+    training set rather than a small one. In title_judgments_binary.txt, which
+    both notebooks use, 37 of 65 queries had this problem, including the two
+    the harness actually keeps.
+    """
+
+    def test_picks_two_grades_from_relevant_first_file(self):
+        """The reported case: leading judgments all share a grade."""
+        judgments = _judgments([1, 1, 1, 0, 0, 0])
+
+        sample = diverse_judgment_sample(judgments, 2)
+
+        assert len(sample) == 2
+        assert {j.grade for j in sample} == {1, 0}, (
+            "A pairwise learner needs two grades to form a single pair"
+        )
+
+    def test_old_positional_behaviour_would_have_failed(self):
+        """Pin the contrast: the previous slice yields one grade on this input."""
+        judgments = _judgments([1, 1, 1, 0, 0, 0])
+
+        assert {j.grade for j in judgments[:2]} == {1}
+        assert len({j.grade for j in diverse_judgment_sample(judgments, 2)}) == 2
+
+    def test_preserves_file_order(self):
+        """Selection reorders nothing; RankLib and the notebooks read in order."""
+        judgments = _judgments([1, 1, 1, 0, 0, 0])
+
+        sample = diverse_judgment_sample(judgments, 3)
+
+        assert [j.doc_id for j in sample] == sorted(j.doc_id for j in sample), (
+            "Sample must stay in the order the judgments appeared in the file"
+        )
+
+    def test_spreads_across_more_than_two_grades(self):
+        """A graded file should contribute as many grades as the budget allows."""
+        judgments = _judgments([4, 4, 3, 3, 2, 2, 1, 1, 0, 0])
+
+        sample = diverse_judgment_sample(judgments, 4)
+
+        assert len(sample) == 4
+        assert len({j.grade for j in sample}) == 4
+
+    def test_already_diverse_head_is_unchanged(self):
+        """Where positional trimming already worked, keep the same judgments."""
+        judgments = _judgments([4, 3, 2, 1])
+
+        sample = diverse_judgment_sample(judgments, 2)
+
+        assert [j.doc_id for j in sample] == ["doc0", "doc1"]
+
+    def test_single_grade_query_returns_requested_count(self):
+        """A query with one grade cannot be saved; it must still be trimmed."""
+        judgments = _judgments([1, 1, 1, 1])
+
+        sample = diverse_judgment_sample(judgments, 2)
+
+        assert len(sample) == 2
+        assert {j.grade for j in sample} == {1}
+
+    def test_short_query_returned_untouched(self):
+        """Nothing to trim: return the same list, not a copy or a reordering."""
+        judgments = _judgments([1, 0])
+
+        assert diverse_judgment_sample(judgments, 2) is judgments
+        assert diverse_judgment_sample(judgments, 5) is judgments
+
+    def test_empty_query(self):
+        """Degenerate input must not raise."""
+        assert diverse_judgment_sample([], 2) == []
+
+    def test_max_count_zero(self):
+        """A zero budget yields nothing rather than looping."""
+        assert diverse_judgment_sample(_judgments([1, 0, 1]), 0) == []
+
+    def test_never_exceeds_budget_or_invents_judgments(self):
+        """Across many shapes, the sample stays a valid subset of the input."""
+        shapes = [
+            [1, 1, 1, 0],
+            [0, 0, 0, 0, 1],
+            [4, 3, 2, 1, 0],
+            [2, 2, 2, 2, 2, 2],
+            [1, 0, 1, 0, 1, 0],
+        ]
+        for grades in shapes:
+            judgments = _judgments(grades)
+            for budget in range(1, len(grades) + 2):
+                sample = diverse_judgment_sample(judgments, budget)
+                assert len(sample) <= max(budget, 0), (grades, budget)
+                assert len(sample) == len({id(j) for j in sample}), (
+                    f"Duplicate judgment in sample for {grades} at budget {budget}"
+                )
+                assert all(j in judgments for j in sample), (grades, budget)
+
+    def test_prefers_grade_spread_over_grade_frequency(self):
+        """A grade with one judgment must not be crowded out by a common one."""
+        judgments = _judgments([1, 1, 1, 1, 1, 1, 1, 0])
+
+        sample = diverse_judgment_sample(judgments, 2)
+
+        assert {j.grade for j in sample} == {1, 0}
+
+
+class TestHardcodedQidPatch:
+    """Tests the rewrite of hardcoded query-ID guards.
+
+    Regression coverage for "netfix movies(Solr)". Notebooks single out a query
+    to inspect with `if qid == 40:` inside a groupby over the training set, but
+    the harness keeps only the first NOTEBOOK_MAX_QUERIES queries. A qid outside
+    that window is never reached, the guarded body never runs, and the variable
+    it defines fails several cells later with a NameError naming the variable
+    rather than the cause.
+    """
+
+    def _patch(self, source):
+        """Run a single code cell through the notebook patcher."""
+        nb = nbformat.v4.new_notebook(cells=[nbformat.v4.new_code_cell(source=source)])
+        _patch_notebook_cells_for_testing(nb)
+        return nb.cells[0]["source"]
+
+    def test_rewrites_out_of_range_qid(self):
+        """The reported case: qid 40 with a 2-query budget."""
+        source = (
+            "for qid, g in groupby(training_set, key=lambda j: j.qid):\n"
+            "    if qid == 40:  # Star Wars\n"
+            "        model = eval_model(g)\n"
+            "        break\n"
+        )
+
+        patched = self._patch(source)
+
+        assert "if True:" in patched
+        assert "qid == 40" not in patched.replace("was 'qid == 40'", "")
+        assert "model = eval_model(g)" in patched, "The body must be preserved"
+
+    def test_records_the_original_qid(self):
+        """The rewrite must stay legible in a saved notebook."""
+        patched = self._patch("    if qid == 40:  # Star Wars\n        pass\n")
+
+        assert "[TEST MODE]" in patched
+        assert "was 'qid == 40'" in patched
+
+    def test_preserves_indentation(self):
+        """A wrong indent would be a SyntaxError, not a test failure."""
+        patched = self._patch("        if qid == 7:\n            pass\n")
+
+        assert patched.startswith("        if True:")
+
+    def test_preserves_trailing_comment(self):
+        """The notebook's own annotation is worth keeping."""
+        patched = self._patch("    if qid == 40:  # Star Wars\n        pass\n")
+
+        assert "# Star Wars" in patched
+
+    def test_leaves_inline_body_alone(self):
+        """`if qid == 40: work()` would have its body commented out."""
+        source = "if qid == 40: model = f()\n"
+
+        assert self._patch(source) == source
+
+    def test_leaves_non_literal_comparison_alone(self):
+        """Only literal qids are known to be outside the budget."""
+        source = "if qid == target_qid:\n    pass\n"
+
+        assert self._patch(source) == source
+
+    def test_leaves_unrelated_conditions_alone(self):
+        """The patch must not touch conditions that merely mention a qid."""
+        source = "if qid > 40:\n    pass\n"
+
+        assert self._patch(source) == source
+
+    def test_patched_source_stays_valid_python(self):
+        """Compile the result rather than trusting the string."""
+        source = (
+            "for qid, g in groupby(training_set, key=lambda j: j.qid):\n"
+            "    if qid == 40:  # Star Wars\n"
+            "        model = eval_model(g)\n"
+            "        break\n"
+        )
+
+        compile(self._patch(source), "<patched>", "exec")
+
+    def test_in_range_qid_still_matches_first_group(self):
+        """qid 1 already worked; rewriting it must not change what runs.
+
+        The Elasticsearch and OpenSearch netfix notebooks use qid 1, which is
+        the first group either way, so the rewrite is a no-op in effect.
+        """
+        source = (
+            "for qid, g in groupby(training_set, key=lambda j: j.qid):\n"
+            "    if qid == 1:  # Rambo\n"
+            "        model = eval_model(g)\n"
+            "        break\n"
+        )
+        namespace = {
+            "training_set": None,
+            "groupby": lambda seq, key: [(1, "first"), (2, "second")],
+            "eval_model": lambda g: f"model-for-{g}",
+        }
+
+        exec(compile(self._patch(source), "<patched>", "exec"), namespace)
+
+        assert namespace["model"] == "model-for-first"
