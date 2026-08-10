@@ -635,3 +635,123 @@ class JudgmentsTestCase(unittest.TestCase):
         qid2_judgments = judgments_by_qid[2]
         for j in qid2_judgments:
             self.assertEqual(j.grade, 1, "docId 9876 should have grade 1")
+
+
+class HeaderBoundaryTestCase(unittest.TestCase):
+    """Tests for the header/body boundary (issue #106).
+
+    Detecting the end of the header block requires reading one line past it.
+    That line used to be discarded, so any file without a blank separator line
+    silently lost its first judgment - no warning, no error, just one fewer row
+    than the file contained.
+    """
+
+    def _read(self, judgment_list):
+        """Parse a judgment-list string and return the Judgment objects."""
+        from io import StringIO
+
+        from ltr.judgments import judgments_from_file
+
+        return list(judgments_from_file(StringIO(judgment_list)))
+
+    def test_no_blank_line_after_header_keeps_first_judgment(self):
+        """The reported repro: a single judgment with no separator line."""
+        # Arrange
+        judgment_list = "# qid:1: test query\n1 qid:1 # doc1 test query\n"
+
+        # Act
+        judgments = self._read(judgment_list)
+
+        # Assert
+        self.assertEqual(len(judgments), 1, "The only judgment must survive parsing")
+        self.assertEqual(judgments[0].docId, "doc1")
+        self.assertEqual(judgments[0].qid, 1)
+        self.assertEqual(judgments[0].grade, 1)
+
+    def test_blank_line_after_header_still_parses(self):
+        """The shipped convention must be unaffected by the fix."""
+        # Arrange
+        judgment_list = clean_jl("""
+                      # qid:1: rambo*1
+                      # qid:2: rocky ii*1
+
+                      4	qid:1	 # 1234	rambo
+                      3	qid:1	 # 5670	rambo
+                      1	qid:2	 # 9876	rocky ii""")
+
+        # Act
+        judgments = self._read(judgment_list)
+
+        # Assert
+        self.assertEqual(len(judgments), 3)
+        self.assertEqual([j.docId for j in judgments], ["1234", "5670", "9876"])
+
+    def test_with_and_without_separator_agree(self):
+        """The separator line must make no difference to the parsed result."""
+        # Arrange
+        rows = "4\tqid:1\t # 1234\trambo\n3\tqid:1\t # 5670\trambo\n"
+        header = "# qid:1: rambo*1\n"
+
+        # Act
+        without_separator = self._read(header + rows)
+        with_separator = self._read(header + "\n" + rows)
+
+        # Assert
+        self.assertEqual(
+            [(j.qid, j.docId, j.grade) for j in without_separator],
+            [(j.qid, j.docId, j.grade) for j in with_separator],
+            "The blank separator line must be optional, not load-bearing",
+        )
+
+    def test_header_only_file_yields_nothing(self):
+        """A file with no body must parse to an empty list, not raise."""
+        # Arrange / Act
+        judgments = self._read("# qid:1: rambo*1\n")
+
+        # Assert
+        self.assertEqual(judgments, [])
+
+    def test_empty_file_yields_nothing(self):
+        """An empty file must parse to an empty list, not raise."""
+        # Arrange / Act / Assert
+        self.assertEqual(self._read(""), [])
+
+    def test_body_only_file_raises_on_unknown_qid(self):
+        """A row now reaches the parser even with no header, and has no keywords.
+
+        Previously the lone row was swallowed as the header terminator and the
+        caller got a silent empty list. Surfacing a KeyError is the better of
+        the two - it names a real problem with the file.
+        """
+        # Arrange / Act / Assert
+        with self.assertRaises(KeyError):
+            self._read("4\tqid:1\t # 1234\trambo\n")
+
+    def test_features_survive_missing_separator(self):
+        """A feature-bearing first row must keep its features, not just its ids."""
+        # Arrange
+        judgment_list = "# qid:1: rambo*1\n4\tqid:1\t1:9.5\t2:3.0\t # 1234\trambo\n"
+
+        # Act
+        judgments = self._read(judgment_list)
+
+        # Assert
+        self.assertEqual(len(judgments), 1)
+        self.assertEqual(judgments[0].features, [9.5, 3.0])
+
+    def test_reader_also_keeps_first_judgment(self):
+        """JudgmentsReader shares the parsing path and must behave identically."""
+        # Arrange
+        from io import StringIO
+
+        from ltr.judgments import judgments_reader
+
+        judgment_list = "# qid:1: test query\n1 qid:1 # doc1 test query\n"
+
+        # Act
+        with judgments_reader(StringIO(judgment_list)) as reader:
+            judgments = list(reader)
+
+        # Assert
+        self.assertEqual(len(judgments), 1, "JudgmentsReader must not drop the row")
+        self.assertEqual(judgments[0].docId, "doc1")

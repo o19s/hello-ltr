@@ -11,6 +11,7 @@ import re
 from collections import defaultdict
 from collections.abc import Iterator
 from contextlib import AbstractContextManager, contextmanager
+from itertools import chain
 from typing import Any, Literal, TextIO, cast, overload
 
 from ltr.compat import accepts_legacy_kwargs
@@ -88,8 +89,9 @@ class JudgmentsReader:
             f: File descriptor or file-like object to read judgments from.
         """
         self.f = f
-        self.kw_with_weight: QueryKeywordMap = _queries_from_header(f)
-        self.judgments: Iterator[Judgment] = _judgment_rows(f, self.kw_with_weight)
+        self.kw_with_weight: QueryKeywordMap
+        self.kw_with_weight, body = _read_header(f)
+        self.judgments: Iterator[Judgment] = _judgment_rows(body, self.kw_with_weight)
 
     def keywords(self, qid: int) -> str:
         """Get the search keywords for a query ID.
@@ -323,17 +325,32 @@ def _queries_to_header(qid_to_kw_dict: QueryKeywordMap) -> str:
     return r_val
 
 
-def _queries_from_header(lines: JudgmentFile) -> QueryKeywordMap:
+def _queries_from_header(lines: JudgmentFile) -> tuple[QueryKeywordMap, str | None]:
     """Parses out mapping between, query id and user keywords
     from header comments, ie:
     # qid:523: First Blood
-    returns dict mapping all query ids to search keywords"""
+
+    Reading the header requires reading one line *past* it to discover where it
+    ends, and that line is consumed from the iterator in the process. It is
+    returned alongside the mapping so the caller can hand it to the body parser;
+    dropping it silently loses the first judgment in any file that does not
+    happen to separate its header from its body with a blank line. See issue #106.
+
+    Args:
+        lines: File-like object positioned at the start of a judgment file.
+
+    Returns:
+        tuple: (mapping of query IDs to (keywords, weight), first body line).
+               The second element is None if the file contained only headers.
+    """
     # Regex can be debugged here:
     # http://www.regexpal.com/?fam=96564
     regex = re.compile(r"#\sqid:(\d+?):\s+?(.*)")
     r_val = {}
+    first_body_line = None
     for line in lines:
-        if line[0] != "#":
+        if not line.startswith("#"):
+            first_body_line = line
             break
         m = re.match(regex, line)
         try:
@@ -348,7 +365,26 @@ def _queries_from_header(lines: JudgmentFile) -> QueryKeywordMap:
             logger.error(f"Error parsing query header: {e}")
     logger.info(f"Recognizing {len(r_val)} queries")
 
-    return r_val
+    return r_val, first_body_line
+
+
+def _read_header(f: JudgmentFile) -> tuple[QueryKeywordMap, Iterator[str]]:
+    """Read the header block and return it with an iterator over the body.
+
+    Reading the header consumes the first body line (that is how the end of the
+    header is detected), so the returned iterator chains that line back on. Use
+    this rather than calling _queries_from_header() directly - handing the raw
+    file object to the body parser drops a judgment. See issue #106.
+
+    Args:
+        f: File-like object positioned at the start of a judgment file.
+
+    Returns:
+        tuple: (mapping of query IDs to (keywords, weight), body line iterator).
+    """
+    qid_to_keywords, first_body_line = _queries_from_header(f)
+    body: Iterator[str] = f if first_body_line is None else chain([first_body_line], f)
+    return qid_to_keywords, body
 
 
 def _judgments_from_body(
@@ -408,12 +444,13 @@ def _judgments_from_body(
 
 
 def _judgment_rows(
-    f: JudgmentFile, qid_to_keywords: QueryKeywordMap
+    f: Iterator[str], qid_to_keywords: QueryKeywordMap
 ) -> Iterator[Judgment]:
     """Parse judgment rows from file body and yield Judgment objects.
 
     Args:
-        f: File-like object to read from.
+        f: Iterator over the body lines of a judgment file, as returned by
+           _read_header().
         qid_to_keywords: Dictionary mapping query IDs to (keywords, weight) tuples.
 
     Yields:
@@ -443,8 +480,8 @@ def judgments_from_file(f: JudgmentFile) -> Iterator[Judgment]:
     """Read judgments from a SVMRank File
     f is a file object
     """
-    qid_to_keywords = _queries_from_header(f)
-    yield from _judgment_rows(f, qid_to_keywords)
+    qid_to_keywords, body = _read_header(f)
+    yield from _judgment_rows(body, qid_to_keywords)
 
 
 @accepts_legacy_kwargs(judgmentsList="judgments_list")
