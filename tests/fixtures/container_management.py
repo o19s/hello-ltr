@@ -113,7 +113,7 @@ def manage_docker_compose(
 
     Args:
         engine: Engine name ("solr", "elasticsearch", "opensearch")
-        action: Action to perform ("up", "down", "ps")
+        action: Action to perform ("up", "down", "ps", "build")
         project_name: Docker Compose project name (for isolation)
                      MUST start with "test-{test_type}-" for test containers
                      (e.g., "test-unit-solr-gw0", "test-integration-opensearch-gw0", "test-notebooks-elasticsearch-gw0")
@@ -181,6 +181,16 @@ def manage_docker_compose(
 
     if action == "up":
         cmd.append("-d")  # Run in detached mode
+        # CRITICAL: --build forces Docker Compose to re-evaluate the `build:`
+        # directives before starting. Without it, an already-built image for this
+        # project is reused and a changed base image in
+        # notebooks/*/.docker/*/Dockerfile is silently ignored - so an engine
+        # version bump can pass the whole suite without ever being exercised.
+        # This repo pins engine versions in Dockerfiles rather than in compose
+        # `image:` directives, so this is the primary way versions change.
+        # The flag is close to free when nothing changed: Docker layer-caches
+        # the build. See issue #110.
+        cmd.append("--build")
 
     if action == "down":
         cmd.append("-v")  # Remove volumes
@@ -196,6 +206,102 @@ def manage_docker_compose(
     )
 
     return result
+
+
+def _docker_inspect(target: str, fmt: str) -> str | None:
+    """
+    Run `docker inspect` against a container or image and return the formatted value.
+
+    Args:
+        target: Container name/ID or image reference to inspect
+        fmt: Go template passed to `--format`
+
+    Returns:
+        str | None: The trimmed output, or None if the target does not exist or
+                    docker could not be reached
+    """
+    try:
+        result = subprocess.run(
+            ["docker", "inspect", "--format", fmt, target],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except (subprocess.SubprocessError, OSError):
+        return None
+
+    if result.returncode != 0:
+        return None
+
+    value = result.stdout.strip()
+    return value or None
+
+
+def find_stale_containers(project_name: str) -> list[str]:
+    """
+    Find running containers whose image is no longer the current build.
+
+    Adding `--build` to `docker compose up` only helps when containers are being
+    created. A previous run can leave healthy containers behind, and the fixture
+    reuses those without calling `up` at all - so a Dockerfile change would still
+    go unnoticed. This detects that case so the caller can tear them down.
+
+    The comparison is made against the image Docker Compose builds for each
+    service, which it tags `<project>-<service>`. Services declared with `image:`
+    rather than `build:` have no such tag; they cannot go stale from a Dockerfile
+    edit, so they are skipped.
+
+    This must be called *after* a build, otherwise the tagged image is itself
+    stale and every container looks current.
+
+    Args:
+        project_name: Docker Compose project name to inspect
+
+    Returns:
+        list[str]: Names of running containers running an out-of-date image.
+                   Empty if everything is current, or if Docker could not be
+                   queried (fail open - staleness detection must never be the
+                   reason a test run cannot start).
+    """
+    try:
+        result = subprocess.run(
+            [
+                "docker",
+                "ps",
+                "--filter",
+                f"label=com.docker.compose.project={project_name}",
+                "--format",
+                "{{.Names}}",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except (subprocess.SubprocessError, OSError):
+        return []
+
+    if result.returncode != 0:
+        return []
+
+    stale = []
+    for name in (line.strip() for line in result.stdout.splitlines()):
+        if not name:
+            continue
+
+        running_image = _docker_inspect(name, "{{.Image}}")
+        service = _docker_inspect(
+            name, '{{index .Config.Labels "com.docker.compose.service"}}'
+        )
+        if not running_image or not service:
+            continue
+
+        # Compose tags images it builds as <project>-<service>. A missing tag
+        # means the service uses a pre-built `image:`, which cannot go stale here.
+        current_image = _docker_inspect(f"{project_name}-{service}", "{{.Id}}")
+        if current_image and current_image != running_image:
+            stale.append(name)
+
+    return stale
 
 
 def get_container_cleanup_registry() -> set[

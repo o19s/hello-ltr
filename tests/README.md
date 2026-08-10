@@ -455,6 +455,28 @@ tests/
 - Set `USE_WORKER_CONTAINERS=false` to use externally managed containers
 - Useful if you want to manage containers manually or reuse existing ones
 
+**Image Freshness:**
+
+Engine versions in this repo are pinned in `notebooks/*/.docker/*/Dockerfile` (and
+`notebooks/solr/Dockerfile`) rather than in compose `image:` directives, so a version
+bump is a Dockerfile change. The fixture takes two steps to guarantee that a test run
+actually exercises the version the Dockerfile names:
+
+1. Images are built before every run, and `docker compose up` passes `--build`. Without
+   this, an already-built image is reused and the `build:` directive is a no-op.
+2. If containers from a previous run are still up, their image ID is compared against
+   the freshly built one. A mismatch tears them down and recreates them, logging
+   `containers are running a superseded image ... recreating`.
+
+Both are needed. `--build` alone only covers the path where containers are created;
+a leftover healthy container is reused without `up` ever being called.
+
+This matters because the failure is silent in the dangerous direction — the suite goes
+green, and green reads as "the new version works". It happened during the OpenSearch
+3.1.0 upgrade: the suite passed while the node was still running 2.5.0. See issue #110.
+
+Both checks are cheap when nothing changed, since Docker layer-caches the build.
+
 ### Key Components
 
 **1. Test Parametrization ([test_notebooks.py](test_notebooks.py))**
