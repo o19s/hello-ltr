@@ -605,7 +605,7 @@ def dump_model(model_name: str, features: FeatureList) -> None:
         features: List of feature dictionaries, where the 0th item corresponds
             to RankLib feature 1. Each feature must have a 'name' parameter.
     """
-    with open(f"data/{model_name}_model.txt") as f:
+    with open(f"data/{model_name}_model.txt", encoding="utf-8") as f:
         ensemble_xml = f.read()
         model = MARTModel(ensemble_xml, features)
         for tree in model.trees:
@@ -633,7 +633,7 @@ def eval_model(
         MARTModel: Model object with evaluation statistics populated.
     """
     judgment_list = list(judgments)
-    with open(f"data/{model_name}_model.txt") as f:
+    with open(f"data/{model_name}_model.txt", encoding="utf-8") as f:
         ensemble_xml = f.read()
         model = MARTModel(ensemble_xml, features)
         model.eval(judgment_list)

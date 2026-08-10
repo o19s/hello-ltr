@@ -205,7 +205,7 @@ def main():
                 logs_dir
                 / f"current_error_{notebook_path.replace('/', '_').replace(' ', '_')}.json"
             )
-            with open(result_file, "w") as f:
+            with open(result_file, "w", encoding="utf-8") as f:
                 json.dump(result, f, indent=2)
             print(f"\nError details saved to: {result_file}")
 

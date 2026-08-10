@@ -70,7 +70,7 @@ def load_movies(json_path: str) -> NestedJSONDict:
     Note:
         Results are cached after first load for efficient repeated access.
     """
-    with open(json_path) as f:
+    with open(json_path, encoding="utf-8") as f:
         return json.load(f)
 
 

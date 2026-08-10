@@ -147,7 +147,7 @@ def write_training_set(training_set: list[Judgment]) -> str:
     train_path = os.path.join(tempdir, "training.txt")
 
     try:
-        with open(train_path, "w") as out_f:
+        with open(train_path, "w", encoding="utf-8") as out_f:
             judgments_to_file(out_f, training_set)
     except OSError as e:
         raise ModelError(
@@ -315,7 +315,7 @@ def train_model(
     if features is not None:
         features_file = os.path.join(tempfile.gettempdir(), "features.txt")
         try:
-            with open(features_file, "w") as f:
+            with open(features_file, "w", encoding="utf-8") as f:
                 f.write("\n".join([str(feature) for feature in features]))
         except OSError as e:
             raise ModelError(
@@ -615,7 +615,7 @@ def save_model(
             model_name=model_name,
         )
 
-    with open(model_file) as src:
+    with open(model_file, encoding="utf-8") as src:
         definition = src.read().strip()
 
     if not definition:

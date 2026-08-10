@@ -131,7 +131,7 @@ def synthesize(
             )
         )
 
-    with open(classic_training_set_out, "w") as out:
+    with open(classic_training_set_out, "w", encoding="utf-8") as out:
         judgments_to_file(out, judgments)
 
     # A current film fan
@@ -162,5 +162,5 @@ def synthesize(
             )
         )
 
-    with open(latest_training_set_out, "w") as out:
+    with open(latest_training_set_out, "w", encoding="utf-8") as out:
         judgments_to_file(out, judgments)

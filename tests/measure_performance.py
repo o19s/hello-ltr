@@ -135,7 +135,7 @@ def run_pytest_with_timing(
         cache_file = cache_dir / "test_execution_times"
         if cache_file.exists():
             try:
-                with open(cache_file) as f:
+                with open(cache_file, encoding="utf-8") as f:
                     cache_data = json.load(f)
                     if isinstance(cache_data, dict):
                         test_times = cache_data
@@ -316,7 +316,7 @@ def generate_report(
             },
             "summary": {"total_tests": total_tests, "total_time": total_time},
         }
-        with open(output_file, "w") as f:
+        with open(output_file, "w", encoding="utf-8") as f:
             json.dump(json_data, f, indent=2)
         report_lines.append(f"\nJSON report saved to: {output_file}")
 

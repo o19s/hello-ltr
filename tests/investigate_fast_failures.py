@@ -40,7 +40,9 @@ def run_pytest_with_detailed_output(
     project_root = Path(__file__).parent.parent
 
     # Create temporary files for reports
-    with tempfile.NamedTemporaryFile(suffix=".xml", delete=False, mode="w") as f:
+    with tempfile.NamedTemporaryFile(
+        encoding="utf-8", suffix=".xml", delete=False, mode="w"
+    ) as f:
         xml_report_path = f.name
 
     # Build pytest command
@@ -190,7 +192,7 @@ def check_pytest_cache() -> dict[str, float]:
     cached_times = {}
     if cache_file.exists():
         try:
-            with open(cache_file) as f:
+            with open(cache_file, encoding="utf-8") as f:
                 data = json.load(f)
                 if isinstance(data, dict):
                     cached_times = data

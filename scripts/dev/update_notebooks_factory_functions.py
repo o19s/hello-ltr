@@ -24,7 +24,7 @@ def update_notebook(notebook_path: Path) -> bool:
     Returns:
         bool: True if notebook was updated, False otherwise
     """
-    with open(notebook_path) as f:
+    with open(notebook_path, encoding="utf-8") as f:
         nb = json.load(f)
 
     updated = False
@@ -171,7 +171,7 @@ def update_notebook(notebook_path: Path) -> bool:
             updated = True
 
     if updated:
-        with open(notebook_path, "w") as f:
+        with open(notebook_path, "w", encoding="utf-8") as f:
             json.dump(nb, f, indent=1, ensure_ascii=False)
         return True
 

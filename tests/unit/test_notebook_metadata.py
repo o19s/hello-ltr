@@ -34,7 +34,7 @@ def test_notebooks_are_discovered():
 def test_notebook_uses_installed_kernel(notebook):
     """Test that every notebook references the kernel this project installs."""
     # Arrange
-    with open(notebook) as f:
+    with open(notebook, encoding="utf-8") as f:
         doc = json.load(f)
     # Act
     kernel_name = doc.get("metadata", {}).get("kernelspec", {}).get("name")

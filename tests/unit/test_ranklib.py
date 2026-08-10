@@ -70,7 +70,7 @@ class TestWriteTrainingSet:
         # Assert
         assert result == "/tmp/training.txt"
         mock_judgments_to_file.assert_called_once()
-        mock_file.assert_called_once_with("/tmp/training.txt", "w")
+        mock_file.assert_called_once_with("/tmp/training.txt", "w", encoding="utf-8")
 
 
 class TestTrainModel:
@@ -287,7 +287,7 @@ class TestSaveModel:
         save_model(mock_client, "model1", "/tmp/model.txt", "index1", "featureset1")
         # Assert
         mock_exists.assert_called_once_with("/tmp/model.txt")
-        mock_file.assert_called_once_with("/tmp/model.txt")
+        mock_file.assert_called_once_with("/tmp/model.txt", encoding="utf-8")
         mock_client.submit_ranklib_model.assert_called_once_with(
             "featureset1", "index1", "model1", "model definition"
         )

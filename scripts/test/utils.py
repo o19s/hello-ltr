@@ -587,7 +587,7 @@ def save_test_results(
 
     output_data["results"] = results
 
-    with open(output_file, "w") as f:
+    with open(output_file, "w", encoding="utf-8") as f:
         json.dump(output_data, f, indent=2, ensure_ascii=False)
 
     return output_file

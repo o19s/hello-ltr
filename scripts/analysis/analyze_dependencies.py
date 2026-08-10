@@ -169,7 +169,7 @@ for pkg_name, _req_line in dependencies.items():
 # Check Dockerfile for graphviz
 dockerfile_path = project_root / "Dockerfile"
 if dockerfile_path.exists():
-    with open(dockerfile_path) as f:
+    with open(dockerfile_path, encoding="utf-8") as f:
         if "graphviz" in f.read().lower():
             used_packages["graphviz"].append("Dockerfile")
 

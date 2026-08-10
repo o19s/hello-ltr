@@ -1221,7 +1221,7 @@ def run_notebook(notebook_path, timeout=None, save_nb_path=None, fail_fast=None)
     log(f"Loading notebook: {notebook_path}")
     start_time = time.time()
 
-    with open(notebook_path) as f:
+    with open(notebook_path, encoding="utf-8") as f:
         nb = nbformat.read(f, as_version=4)
 
     # Patch notebook cells to handle known test environment issues
@@ -1783,7 +1783,7 @@ def run_notebook(notebook_path, timeout=None, save_nb_path=None, fail_fast=None)
     log(f"✓ Completed execution of {nb_name} (took {execution_time:.1f}s)")
 
     if save_nb_path:
-        with open(save_nb_path, mode="w") as f:
+        with open(save_nb_path, encoding="utf-8", mode="w") as f:
             nbformat.write(nb, f)
 
     errors = []
