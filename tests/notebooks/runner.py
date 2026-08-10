@@ -34,6 +34,7 @@ Framework Evaluation Note:
     4. No additional dependencies required
 """
 
+import inspect
 import os
 import re
 from contextlib import suppress
@@ -84,6 +85,62 @@ def safe_kcv_folds(requested_folds: int, max_queries: int) -> Optional[int]:
     if max_queries < 2:
         return None
     return max(2, min(requested_folds, max_queries))
+
+
+def diverse_judgment_sample(judgments_list, max_count):
+    """Trim a query's judgments to max_count while preserving grade diversity.
+
+    Taking the first max_count judgments is grade-blind, and judgment files are
+    usually written most-relevant-first, so the head of a query is often all one
+    grade. Pairwise learners build their training pairs by comparing judgments
+    that share a qid but differ in grade, so a single-grade sample yields zero
+    pairs - an empty training set rather than a small one.
+
+    That is not hypothetical. In title_judgments_binary.txt, which
+    svmrank.ipynb and ai-powered-search-ch-10.ipynb both use, the first two
+    judgments of qid 1 and qid 2 are both grade 1, and 37 of its 65 queries
+    have the same problem. With the harness keeping 2 queries of 2 judgments
+    each, every judgment reaching the pairwise transform had grade 1.
+
+    This picks round-robin across the grades present, so a sample of size 2
+    spans two grades whenever the query has two, and returns them in their
+    original file order.
+
+    This function is injected verbatim into notebooks under test via
+    inspect.getsource(), so it must stay self-contained: no imports from this
+    module, no closures, no annotations that need typing imported.
+
+    Args:
+        judgments_list: Judgments for a single query, in file order
+        max_count: Maximum number of judgments to keep
+
+    Returns:
+        list: At most max_count judgments, spanning as many distinct grades as
+        the query and the budget allow.
+    """
+    if len(judgments_list) <= max_count:
+        return judgments_list
+
+    by_grade = {}
+    for position, judgment in enumerate(judgments_list):
+        by_grade.setdefault(judgment.grade, []).append(position)
+
+    # Round-robin across grades so the budget is spread over them rather than
+    # spent on whichever grade happens to come first in the file.
+    chosen = []
+    grades = list(by_grade)
+    while len(chosen) < max_count:
+        progressed = False
+        for grade in grades:
+            if by_grade[grade]:
+                chosen.append(by_grade[grade].pop(0))
+                progressed = True
+                if len(chosen) == max_count:
+                    break
+        if not progressed:
+            break
+
+    return [judgments_list[position] for position in sorted(chosen)]
 
 
 def inspect_notebook_variables(kernel_manager) -> dict[str, Any]:
@@ -1032,6 +1089,45 @@ def _patch_notebook_cells_for_testing(nb):
             if len(new_lines) > len(lines):
                 cell["source"] = "\n".join(new_lines)
 
+        # Patch 4: Neutralize hardcoded query IDs used to single out one query
+        #
+        # Notebooks pick a query to inspect by writing `if qid == 40:` inside a
+        # groupby over the training set. The harness keeps only the first
+        # NOTEBOOK_MAX_QUERIES queries, so any qid outside that window is never
+        # reached, the guarded body never runs, and the variable it was supposed
+        # to define blows up several cells later as a NameError that names the
+        # variable rather than the cause.
+        #
+        # "netfix movies(Solr)" selects qid 40 and failed exactly this way. Its
+        # Elasticsearch and OpenSearch counterparts select qid 1, which survives
+        # the budget - which is why only the Solr notebook failed.
+        #
+        # Matching the first group preserves the intent: inspect one query.
+        if re.search(r"^\s*if qid == \d+\s*:", source, re.MULTILINE):
+
+            def _match_first_query(match):
+                """Rewrite `if qid == N:` to match the first group instead."""
+                indent, qid, trailer = match.groups()
+                # Only safe when nothing but a comment follows the colon;
+                # `if qid == 40: do_work()` would have its body commented out.
+                if trailer.strip() and not trailer.strip().startswith("#"):
+                    return match.group(0)
+                note = (
+                    f"# [TEST MODE] was 'qid == {qid}' - the query budget keeps "
+                    "only the first few queries, so that qid is never reached"
+                )
+                return f"{indent}if True:  {note}{trailer}"
+
+            patched_source = re.sub(
+                r"^(\s*)if qid == (\d+)\s*:(.*)$",
+                _match_first_query,
+                source,
+                flags=re.MULTILINE,
+            )
+            if patched_source != source:
+                source = patched_source
+                cell["source"] = source
+
 
 def run_notebook(notebook_path, timeout=None, save_nb_path=None, fail_fast=None):
     """
@@ -1580,6 +1676,10 @@ def run_notebook(notebook_path, timeout=None, save_nb_path=None, fail_fast=None)
         training_set_patch = "# Limit training set size for faster testing\n"
         training_set_patch += "from itertools import groupby\n"
         training_set_patch += "\n"
+        # Injected from this module's own source so there is one definition to
+        # maintain rather than a copy embedded in a string.
+        training_set_patch += inspect.getsource(diverse_judgment_sample)
+        training_set_patch += "\n"
         training_set_patch += (
             "# Wrap FeatureLogger to limit queries and judgments per query\n"
         )
@@ -1619,13 +1719,18 @@ def run_notebook(notebook_path, timeout=None, save_nb_path=None, fail_fast=None)
         training_set_patch += "            print(f'[TEST MODE] Skipping query {qid} - this logger already processed {ltr.log._test_max_queries} queries for faster testing')\n"
         training_set_patch += "            return [], list(judgments)  # Return empty training set, all judgments discarded\n"
         training_set_patch += "        self._test_query_count += 1\n"
-        training_set_patch += "        # Limit judgments per query\n"
+        training_set_patch += (
+            "        # Limit judgments per query, keeping grades varied\n"
+        )
         training_set_patch += "        judgments_list = list(judgments)\n"
         training_set_patch += (
             "        if len(judgments_list) > ltr.log._test_max_judgments_per_query:\n"
         )
         training_set_patch += "            print(f'[TEST MODE] Limiting query {qid} to {ltr.log._test_max_judgments_per_query} judgments (from {len(judgments_list)}) for faster testing')\n"
-        training_set_patch += "            judgments_list = judgments_list[:ltr.log._test_max_judgments_per_query]\n"
+        # Grade-blind truncation produced an EMPTY training set for pairwise
+        # learners, not merely a small one - see diverse_judgment_sample().
+        training_set_patch += "            judgments_list = diverse_judgment_sample(judgments_list, ltr.log._test_max_judgments_per_query)\n"
+        training_set_patch += "            print(f'[TEST MODE] Kept grades {sorted(set(j.grade for j in judgments_list))} for query {qid}')\n"
         training_set_patch += (
             "        return super().log_for_qid(qid, judgments_list, keywords)\n"
         )
