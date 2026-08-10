@@ -15,7 +15,7 @@ dependencies = [
     "Cython",
     "decorator==4.3.2",
     "defusedxml==0.5.0",
-    "elasticsearch==7.16.2",
+    "elasticsearch==8.8.2",  # Must match the server in notebooks/elasticsearch/.docker/es-docker/Dockerfile
     "entrypoints>=0.4",  # Updated from 0.3 - safe minor update
     "graphviz>=0.21",  # Updated from 0.19.1 - safe minor update
     "idna>=3.4",  # Updated from 3.3 - patch version update
@@ -71,7 +71,7 @@ dependencies = [
     "tornado>=6.4.1",  # Updated from 6.2 - automatically updated to 6.5.4 for compatibility
     "tqdm==4.62.3",
     "traitlets==5.9.0",
-    "urllib3==1.26.18",  # Latest 1.x with security fixes; 2.x may break elasticsearch 7.16.2 compatibility
+    "urllib3==1.26.18",  # Latest 1.x with security fixes. elastic-transport supports 2.x, so this pin is no longer forced by the ES client; left at 1.x as a separate upgrade
     "wcwidth==0.2.5",
     "webencodings==0.5.1",
     "xgboost==1.7.6",
