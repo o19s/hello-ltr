@@ -6,7 +6,10 @@ with support for resuming downloads and force re-downloading.
 
 from __future__ import annotations
 
+import os
+import tempfile
 from collections.abc import Iterable
+from contextlib import suppress
 from os import path
 
 import requests
@@ -30,13 +33,21 @@ def download_one(uri: str, dest: str = "data/", force: bool = False) -> None:
 
     Raises:
         ValueError: If dest exists but is not a directory.
+        requests.HTTPError: If the server returns an error status. The
+            destination file is left untouched.
 
     Note:
-        Downloads are streamed in 1KB chunks. If the file already exists
-        and force=False, the download is skipped.
-    """
-    import os
+        Downloads are streamed in 1KB chunks into a temporary file in dest and
+        renamed into place only once the transfer completes, so an interrupted
+        download leaves nothing behind. If the file already exists and is
+        non-empty and force=False, the download is skipped.
 
+        A zero-byte file counts as absent. Downloads used to be written
+        straight to the destination, so a failed transfer left an empty file
+        that the existence check then treated as a valid cache entry forever -
+        one bad network moment became a permanent failure that surfaced much
+        later as an empty training set. See issue #119.
+    """
     if not os.path.exists(dest):
         os.makedirs(dest)
 
@@ -46,17 +57,35 @@ def download_one(uri: str, dest: str = "data/", force: bool = False) -> None:
     filename = uri[uri.rfind("/") + 1 :]
     filepath = os.path.join(dest, filename)
     if path.exists(filepath):
-        if not force:
+        if os.path.getsize(filepath) == 0:
+            # Almost certainly the residue of a failed download from before
+            # this function wrote atomically. Re-fetch rather than trust it.
+            logger.info(f"{filepath} exists but is empty, downloading again")
+        elif not force:
             logger.info(f"{filepath} already exists")
             return
-        logger.info("File exists but force=True, downloading anyway")
+        else:
+            logger.info("File exists but force=True, downloading anyway")
 
-    with open(filepath, "wb") as out:
-        logger.info(f"GET {uri}")
-        resp = requests.get(uri, stream=True)
-        for chunk in resp.iter_content(chunk_size=1024):
-            if chunk:
-                out.write(chunk)
+    # Write to a temporary file in the destination directory so the rename is
+    # atomic (same filesystem) and a partial transfer never occupies filepath.
+    handle, partial_path = tempfile.mkstemp(
+        dir=dest, prefix=f".{filename}.", suffix=".part"
+    )
+    try:
+        with os.fdopen(handle, "wb") as out:
+            logger.info(f"GET {uri}")
+            resp = requests.get(uri, stream=True)
+            # Without this an error page is written out as if it were the file.
+            resp.raise_for_status()
+            for chunk in resp.iter_content(chunk_size=1024):
+                if chunk:
+                    out.write(chunk)
+        os.replace(partial_path, filepath)
+    except BaseException:
+        with suppress(OSError):
+            os.remove(partial_path)
+        raise
 
 
 def download(

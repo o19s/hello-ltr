@@ -261,22 +261,25 @@ class TestDownloadErrorHandling:
                 download_one(uri=url, dest=str(dest_dir))
 
     def test_download_one_handles_http_error(self, tmp_path):
-        """Test that download_one handles HTTP errors."""
+        """An error status must propagate, not be written out as the file."""
         dest_dir = tmp_path / "dest"
         dest_dir.mkdir()
+        url = "http://example.com/test.txt"
 
         with patch.object(download_module.requests, "get") as mock_get:
             mock_response = Mock()
             mock_response.raise_for_status.side_effect = requests.exceptions.HTTPError(
                 "404 Not Found", response=mock_response
             )
+            mock_response.iter_content.return_value = [b"<html>Not Found</html>"]
             mock_get.return_value = mock_response
 
-            # Note: The current implementation doesn't call raise_for_status,
-            # but we test that HTTP errors would propagate if they did
             with pytest.raises(requests.exceptions.HTTPError):
-                # Simulate what would happen if raise_for_status was called
-                mock_response.raise_for_status()
+                download_one(uri=url, dest=str(dest_dir))
+
+        assert not (dest_dir / "test.txt").exists(), (
+            "An error page must not be cached as the requested file"
+        )
 
     def test_download_one_handles_file_write_error(self, tmp_path):
         """Test that download_one handles file write errors."""
@@ -286,7 +289,9 @@ class TestDownloadErrorHandling:
 
         with (
             patch.object(download_module.requests, "get") as mock_get,
-            patch("builtins.open", side_effect=OSError("Permission denied")),
+            patch.object(
+                download_module.os, "fdopen", side_effect=OSError("Permission denied")
+            ),
         ):
             mock_response = Mock()
             mock_response.iter_content.return_value = [b"content"]
@@ -294,3 +299,116 @@ class TestDownloadErrorHandling:
 
             with pytest.raises(OSError, match="Permission denied"):
                 download_one(uri=url, dest=str(dest_dir))
+
+
+class TestDownloadCachePoisoning:
+    """Tests that a failed download cannot become a permanent cache entry.
+
+    Regression coverage for issue #119. Downloads used to be written straight
+    to the destination path, so an interrupted transfer left a zero-byte file
+    that the existence check then treated as valid. One bad network moment
+    became a permanent failure, and it surfaced far downstream - an empty
+    judgment file yields no features, so the notebook fails several cells later
+    with something like "'LinearSVC' object has no attribute 'coef_'", naming
+    nothing to do with the download.
+    """
+
+    def test_failed_download_leaves_no_file(self, tmp_path):
+        """A connection failure must not create the destination file."""
+        dest_dir = tmp_path / "dest"
+        dest_dir.mkdir()
+
+        with patch.object(download_module.requests, "get") as mock_get:
+            mock_get.side_effect = requests.exceptions.ConnectionError("DNS failure")
+
+            with pytest.raises(requests.exceptions.ConnectionError):
+                download_one(uri="http://example.com/data.txt", dest=str(dest_dir))
+
+        assert not (dest_dir / "data.txt").exists()
+
+    def test_failed_download_leaves_no_partial_file(self, tmp_path):
+        """The temporary file must be cleaned up too, not just the target."""
+        dest_dir = tmp_path / "dest"
+        dest_dir.mkdir()
+
+        with patch.object(download_module.requests, "get") as mock_get:
+            mock_response = Mock()
+            mock_response.iter_content.side_effect = (
+                requests.exceptions.ChunkedEncodingError("connection broken mid-stream")
+            )
+            mock_get.return_value = mock_response
+
+            with pytest.raises(requests.exceptions.ChunkedEncodingError):
+                download_one(uri="http://example.com/data.txt", dest=str(dest_dir))
+
+        assert list(dest_dir.iterdir()) == [], (
+            "A failed transfer must leave the destination directory untouched"
+        )
+
+    def test_empty_cached_file_is_redownloaded(self, tmp_path):
+        """Repair caches already poisoned by the old behaviour."""
+        dest_dir = tmp_path / "dest"
+        dest_dir.mkdir()
+        poisoned = dest_dir / "data.txt"
+        poisoned.write_bytes(b"")
+
+        with patch.object(download_module.requests, "get") as mock_get:
+            mock_response = Mock()
+            mock_response.iter_content.return_value = [b"real content"]
+            mock_get.return_value = mock_response
+
+            download_one(uri="http://example.com/data.txt", dest=str(dest_dir))
+
+            mock_get.assert_called_once()
+
+        assert poisoned.read_bytes() == b"real content"
+
+    def test_nonempty_cached_file_is_still_skipped(self, tmp_path):
+        """The caching behaviour itself must survive: a good file is reused."""
+        dest_dir = tmp_path / "dest"
+        dest_dir.mkdir()
+        cached = dest_dir / "data.txt"
+        cached.write_bytes(b"already here")
+
+        with patch.object(download_module.requests, "get") as mock_get:
+            download_one(uri="http://example.com/data.txt", dest=str(dest_dir))
+
+            mock_get.assert_not_called()
+
+        assert cached.read_bytes() == b"already here"
+
+    def test_failed_forced_redownload_preserves_existing_file(self, tmp_path):
+        """force=True used to truncate the good file before fetching."""
+        dest_dir = tmp_path / "dest"
+        dest_dir.mkdir()
+        cached = dest_dir / "data.txt"
+        cached.write_bytes(b"good existing content")
+
+        with patch.object(download_module.requests, "get") as mock_get:
+            mock_get.side_effect = requests.exceptions.ConnectionError("DNS failure")
+
+            with pytest.raises(requests.exceptions.ConnectionError):
+                download_one(
+                    uri="http://example.com/data.txt", dest=str(dest_dir), force=True
+                )
+
+        assert cached.read_bytes() == b"good existing content", (
+            "A failed re-download must not destroy the copy already on disk"
+        )
+
+    def test_successful_download_writes_expected_bytes(self, tmp_path):
+        """The atomic rename must still deliver the whole file."""
+        dest_dir = tmp_path / "dest"
+        dest_dir.mkdir()
+
+        with patch.object(download_module.requests, "get") as mock_get:
+            mock_response = Mock()
+            mock_response.iter_content.return_value = [b"chunk1", b"chunk2", b"chunk3"]
+            mock_get.return_value = mock_response
+
+            download_one(uri="http://example.com/data.txt", dest=str(dest_dir))
+
+        assert (dest_dir / "data.txt").read_bytes() == b"chunk1chunk2chunk3"
+        assert list(dest_dir.iterdir()) == [dest_dir / "data.txt"], (
+            "No temporary files may be left behind on success"
+        )
