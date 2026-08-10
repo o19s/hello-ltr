@@ -46,7 +46,7 @@ def typo_it(judgment_in_file: str, judgment_out_file: str, rounds: int = 100) ->
         Duplicate typos are skipped. Each typo variant gets a new query ID.
         The original judgments are preserved, with new typo-based judgments appended.
     """
-    with open(judgment_in_file) as f:
+    with open(judgment_in_file, encoding="utf-8") as f:
         curr_judgments = list(judgments_from_file(f))
     if not curr_judgments:
         raise ValueError(f"No judgments found in {judgment_in_file}")
@@ -74,7 +74,7 @@ def typo_it(judgment_in_file: str, judgment_out_file: str, rounds: int = 100) ->
                     curr_judgments.append(typo_judg)
                 existing_typos.add(keywords_w_typo)
 
-    with open(judgment_out_file, "w") as f:
+    with open(judgment_out_file, "w", encoding="utf-8") as f:
         judgments_to_file(f, judgments_list=curr_judgments)
 
 

@@ -21,7 +21,7 @@ def format_search(keywords):
     """
     from jinja2 import Template
 
-    with open("rateSearch.json.jinja") as f:
+    with open("rateSearch.json.jinja", encoding="utf-8") as f:
         template = Template(f.read())
     json_str = template.render(keywords=keywords)
     return json.loads(json_str)
@@ -38,7 +38,7 @@ def format_fuzzy(keywords):
     """
     from jinja2 import Template
 
-    with open("rateFuzzySearch.json.jinja") as f:
+    with open("rateFuzzySearch.json.jinja", encoding="utf-8") as f:
         template = Template(f.read())
     json_str = template.render(keywords=keywords)
     return json.loads(json_str)
@@ -155,7 +155,7 @@ def load_judgments(judg_file):
     existing_kws = set()
     last_qid = 0
     try:
-        with open(judg_file) as f:
+        with open(judg_file, encoding="utf-8") as f:
             # Collect judgments and statistics in a single pass where possible
             judg_dict = {}
             for judgment in judgments_from_file(f):
@@ -341,7 +341,7 @@ def rate_results():
 
         fold_in_new_ratings(full_judgments, orig_query_judgments, new_query_judgments)
 
-    with open(judg_file, "w") as f:
+    with open(judg_file, "w", encoding="utf-8") as f:
         judgments_to_file(f, full_judgments)
 
 

@@ -27,7 +27,7 @@ from ltr.judgments import judgments_from_file
 
 def write_judgment_file(path, headers, rows):
     """Write a judgment file with the given header comments and judgment rows."""
-    with open(path, "w") as f:
+    with open(path, "w", encoding="utf-8") as f:
         for header in headers:
             f.write(header)
         for row in rows:
@@ -36,7 +36,7 @@ def write_judgment_file(path, headers, rows):
 
 def read_judgment_file(path):
     """Read every judgment from a judgment file."""
-    with open(path) as f:
+    with open(path, encoding="utf-8") as f:
         lines = f.readlines()
     headers = [ln for ln in lines if ln.startswith("#")]
     rows = [ln for ln in lines if not ln.startswith("#") and ln.strip()]

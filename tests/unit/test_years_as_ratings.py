@@ -158,7 +158,7 @@ class TestSynthesize:
             assert latest_path.exists()
 
             # Read and verify classic training set
-            with open(classic_path) as f:
+            with open(classic_path, encoding="utf-8") as f:
                 classic_judgments = list(judgments_from_file(f))
             assert len(classic_judgments) == 3
             # Classic: older = higher rating
@@ -169,7 +169,7 @@ class TestSynthesize:
             assert ratings["3"] == 2  # Mid-era movie gets medium rating
 
             # Read and verify latest training set
-            with open(latest_path) as f:
+            with open(latest_path, encoding="utf-8") as f:
                 latest_judgments = list(judgments_from_file(f))
             assert len(latest_judgments) == 3
             # Latest: newer = higher rating
@@ -201,7 +201,7 @@ class TestSynthesize:
             )
 
             # Assert - None features should be converted to 0.0
-            with open(classic_path) as f:
+            with open(classic_path, encoding="utf-8") as f:
                 classic_judgments = list(judgments_from_file(f))
             # All should have rating 0 (year 0 -> classic rating 0)
             # Note: synthesize filters out rating 0 if no_zero=True, but default is False
@@ -233,7 +233,7 @@ class TestSynthesize:
             )
 
             # Assert
-            with open(classic_path) as f:
+            with open(classic_path, encoding="utf-8") as f:
                 classic_judgments = list(judgments_from_file(f))
             ratings = {j.docId: j.grade for j in classic_judgments}
             assert ratings["1"] == 0  # 2020 -> classic rating 0
@@ -283,10 +283,10 @@ class TestSynthesize:
             )
 
             # Assert
-            with open(classic_path) as f:
+            with open(classic_path, encoding="utf-8") as f:
                 classic_judgments = list(judgments_from_file(f))
             assert all(j.qid == 1 for j in classic_judgments)
 
-            with open(latest_path) as f:
+            with open(latest_path, encoding="utf-8") as f:
                 latest_judgments = list(judgments_from_file(f))
             assert all(j.qid == 1 for j in latest_judgments)

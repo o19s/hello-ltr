@@ -124,7 +124,7 @@ class TestDebugModeIntegration:
         ]
 
         notebook_path = tmp_path / "test_notebook.ipynb"
-        with open(notebook_path, "w") as f:
+        with open(notebook_path, "w", encoding="utf-8") as f:
             nbformat.write(nb, f)
 
         # Run with debug mode enabled
@@ -170,7 +170,7 @@ class TestDebugModeIntegration:
         ]
 
         notebook_path = tmp_path / "test_notebook.ipynb"
-        with open(notebook_path, "w") as f:
+        with open(notebook_path, "w", encoding="utf-8") as f:
             nbformat.write(nb, f)
 
         # Mock inspect_notebook_variables to verify it's not called
@@ -194,7 +194,7 @@ class TestDebugModeIntegration:
         ]
 
         notebook_path = tmp_path / "test_notebook.ipynb"
-        with open(notebook_path, "w") as f:
+        with open(notebook_path, "w", encoding="utf-8") as f:
             nbformat.write(nb, f)
 
         # Mock inspect_notebook_variables to verify it's called

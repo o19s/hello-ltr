@@ -143,7 +143,7 @@ def synthesize(
                 )
                 judgments.append(judgment)
 
-    with open(judgments_out_file, "w") as f:
+    with open(judgments_out_file, "w", encoding="utf-8") as f:
         judgments_to_file(f, judgments_list=judgments)
 
     return judgments

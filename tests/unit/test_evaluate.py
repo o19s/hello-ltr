@@ -146,7 +146,7 @@ class TestRreTable:
         # Act
         rre_table()
         # Assert
-        mock_file.assert_called_once_with("data/rre-evaluation.json")
+        mock_file.assert_called_once_with("data/rre-evaluation.json", encoding="utf-8")
         mock_iplot.assert_called_once()
 
     @patch.object(evaluate_module, "iplot")

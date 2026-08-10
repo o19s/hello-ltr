@@ -22,11 +22,11 @@ def train_to_csv(client, feature_set, in_filename, out_filename):
     features = client.feature_set(name=feature_set, index="tmdb")[0]
     fieldnames = ["keywords", "qid", "grade"]
     fieldnames.extend([feature["name"] for feature in features])
-    with open(out_filename, "w") as csvfile:
+    with open(out_filename, "w", encoding="utf-8") as csvfile:
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
         writer.writeheader()
 
-        with open(in_filename) as f:
+        with open(in_filename, encoding="utf-8") as f:
             judgments = judgments_from_file(f)
             for judgment in judgments:
                 assert len(judgment.features) == len(fieldnames) - 3

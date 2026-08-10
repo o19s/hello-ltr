@@ -143,7 +143,13 @@ def judgments_open(
     either in a read or write mode"""
     if path is None:
         raise ValidationError("path cannot be None")
-    with open(path, mode) as f:
+    # Judgment files are UTF-8; keywords routinely contain non-ASCII characters.
+    # Without an explicit encoding Python falls back to the platform default,
+    # which is cp1252 on Windows - reads raise UnicodeDecodeError and writes
+    # silently mangle the text. Linters cannot catch this call because the mode
+    # is a variable, so it is spelled out here. See issue #67.
+    encoding = None if "b" in mode else "utf-8"
+    with open(path, mode, encoding=encoding) as f:
         f_textio: TextIO = cast(TextIO, f)
         if mode[0] == "r":
             yield JudgmentsReader(f_textio)

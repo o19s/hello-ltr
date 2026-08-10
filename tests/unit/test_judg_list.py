@@ -755,3 +755,78 @@ class HeaderBoundaryTestCase(unittest.TestCase):
         # Assert
         self.assertEqual(len(judgments), 1, "JudgmentsReader must not drop the row")
         self.assertEqual(judgments[0].docId, "doc1")
+
+
+class EncodingTestCase(unittest.TestCase):
+    """Tests that judgment file I/O does not depend on the platform encoding.
+
+    Regression coverage for issue #67. Without an explicit encoding, Python
+    uses the platform default - cp1252 on Windows - so reading a UTF-8
+    judgment file raises UnicodeDecodeError ("'charmap' codec can't decode
+    byte 0x9d") and writing one silently mangles non-ASCII keywords. Judgment
+    keywords are movie and article titles, so non-ASCII is routine rather than
+    exotic.
+    """
+
+    def test_judgments_open_requests_utf8_for_reads(self):
+        """The encoding must be explicit, not inherited from the platform."""
+        from unittest.mock import mock_open, patch
+
+        from ltr.judgments import judgments_open
+
+        opener = mock_open(read_data="# qid:1: rambo*1\n")
+        with patch("builtins.open", opener), judgments_open("judgments.txt") as _:
+            pass
+
+        self.assertEqual(opener.call_args.kwargs.get("encoding"), "utf-8")
+
+    def test_judgments_open_requests_utf8_for_writes(self):
+        """Writes mangle non-ASCII just as silently as reads fail loudly."""
+        from unittest.mock import mock_open, patch
+
+        from ltr.judgments import judgments_open
+
+        opener = mock_open()
+        with patch("builtins.open", opener), judgments_open("out.txt", "w") as _:
+            pass
+
+        self.assertEqual(opener.call_args.kwargs.get("encoding"), "utf-8")
+
+    def test_binary_mode_passes_no_encoding(self):
+        """open() raises ValueError if given an encoding in binary mode."""
+        from unittest.mock import mock_open, patch
+
+        from ltr.judgments import judgments_open
+
+        opener = mock_open(read_data="")
+        with patch("builtins.open", opener), judgments_open("judgments.txt", "rb") as _:
+            pass
+
+        self.assertIsNone(opener.call_args.kwargs.get("encoding"))
+
+    def test_non_ascii_keywords_round_trip(self):
+        """End to end: write and re-read judgments whose keywords are non-ASCII."""
+        import tempfile
+        from pathlib import Path
+
+        from ltr.judgments import Judgment, judgments_open
+
+        expected = [
+            Judgment(keywords="amélie", qid=1, grade=4, doc_id="1234"),
+            Judgment(keywords="amélie", qid=1, grade=2, doc_id="5670"),
+            Judgment(keywords="千と千尋の神隠し", qid=2, grade=3, doc_id="9876"),
+        ]
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = str(Path(tmpdir) / "judgments.txt")
+            with judgments_open(path, "w") as writer:
+                writer.write(judgments=expected)
+
+            with judgments_open(path) as reader:
+                actual = list(reader)
+
+        self.assertEqual(
+            [(j.qid, j.keywords, j.grade, j.docId) for j in actual],
+            [(j.qid, j.keywords, j.grade, j.docId) for j in expected],
+            "Non-ASCII keywords must survive a write/read round trip intact",
+        )

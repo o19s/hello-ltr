@@ -129,7 +129,7 @@ def rre_table() -> None:
     """
     init_notebook_mode(connected=True)
 
-    with open("data/rre-evaluation.json") as src:
+    with open("data/rre-evaluation.json", encoding="utf-8") as src:
         report: JSONDict = json.load(src)
         metrics: JSONDict = report["metrics"]
 

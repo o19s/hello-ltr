@@ -240,7 +240,7 @@ class OpenSearchClient(ElasticBaseClient, BaseClient):
         index = validate_index_name(index)
         cfg_json_path = self._resolve_config_path(index, self.configs_dir)
 
-        with open(cfg_json_path) as src:
+        with open(cfg_json_path, encoding="utf-8") as src:
             settings = json.load(src)
 
             def create_index() -> JSONDict:

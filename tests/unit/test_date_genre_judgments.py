@@ -148,7 +148,9 @@ class TestSynthesize:
             {"id": "2", "genres": ["Science Fiction"], "release_year": 2010},
         ]
         # Act
-        with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".txt") as f:
+        with tempfile.NamedTemporaryFile(
+            encoding="utf-8", mode="w", delete=False, suffix=".txt"
+        ) as f:
             temp_file = f.name
         try:
             judgments = synthesize(mock_client, judgments_out_file=temp_file)
@@ -174,7 +176,9 @@ class TestSynthesize:
             {"id": "2", "genres": ["Drama"], "release_year": 1950},
         ]
         # Act
-        with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".txt") as f:
+        with tempfile.NamedTemporaryFile(
+            encoding="utf-8", mode="w", delete=False, suffix=".txt"
+        ) as f:
             temp_file = f.name
         try:
             judgments = synthesize(mock_client, judgments_out_file=temp_file)
@@ -199,7 +203,9 @@ class TestSynthesize:
             {"id": "2", "genres": ["Comedy"], "release_year": 2010},
         ]
         # Act
-        with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".txt") as f:
+        with tempfile.NamedTemporaryFile(
+            encoding="utf-8", mode="w", delete=False, suffix=".txt"
+        ) as f:
             temp_file = f.name
         try:
             judgments = synthesize(mock_client, judgments_out_file=temp_file)
@@ -217,7 +223,9 @@ class TestSynthesize:
             {"id": "1", "genres": ["Science Fiction"], "release_year": 2020},
         ]
         # Act
-        with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".txt") as f:
+        with tempfile.NamedTemporaryFile(
+            encoding="utf-8", mode="w", delete=False, suffix=".txt"
+        ) as f:
             temp_file = f.name
         try:
             judgments = synthesize(
@@ -245,7 +253,9 @@ class TestSynthesize:
             {"id": "1", "genres": ["Science Fiction"], "release_year": 2020},
         ]
         # Act
-        with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".txt") as f:
+        with tempfile.NamedTemporaryFile(
+            encoding="utf-8", mode="w", delete=False, suffix=".txt"
+        ) as f:
             temp_file = f.name
         try:
             synthesize(mock_client, judgments_out_file=temp_file)
@@ -267,7 +277,9 @@ class TestSynthesize:
             {"id": "1", "genres": ["Science Fiction"], "release_year": 2020},
         ]
         # Act
-        with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".txt") as f:
+        with tempfile.NamedTemporaryFile(
+            encoding="utf-8", mode="w", delete=False, suffix=".txt"
+        ) as f:
             temp_file = f.name
         try:
             synthesize(mock_client, judgments_out_file=temp_file)
@@ -289,7 +301,9 @@ class TestSynthesize:
             {"id": "2", "genres": [], "release_year": 2020},  # Empty genres
         ]
         # Act
-        with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".txt") as f:
+        with tempfile.NamedTemporaryFile(
+            encoding="utf-8", mode="w", delete=False, suffix=".txt"
+        ) as f:
             temp_file = f.name
         try:
             judgments = synthesize(mock_client, judgments_out_file=temp_file)

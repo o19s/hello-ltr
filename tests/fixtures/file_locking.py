@@ -57,7 +57,7 @@ def _is_lock_stale(lock_path: Path, max_age_seconds: int = 300) -> bool:
 
         # Check if PID in lock file is still alive
         try:
-            with open(lock_path) as f:
+            with open(lock_path, encoding="utf-8") as f:
                 pid_line = f.readline().strip()
                 pid = int(pid_line)
                 # Signal 0 just checks if process exists (doesn't kill it)
@@ -116,7 +116,7 @@ def file_lock(lock_file_path: str | Path, timeout: int = 30):
             # Open file for writing (create if it doesn't exist)
             # Note: We intentionally don't use context manager here because we need
             # to keep the file open while holding the lock
-            lock_file = open(lock_path, "w")  # noqa: SIM115
+            lock_file = open(lock_path, "w", encoding="utf-8")  # noqa: SIM115
 
             # Platform-specific locking
             if HAS_FCNTL:

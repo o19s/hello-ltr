@@ -16,7 +16,7 @@ def load_report(filepath: Path) -> dict | None:
     """Load a performance report JSON file."""
     if not filepath.exists():
         return None
-    with open(filepath) as f:
+    with open(filepath, encoding="utf-8") as f:
         return json.load(f)
 
 

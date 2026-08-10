@@ -88,7 +88,7 @@ def save_results_incremental(
     # Use save_test_results but override the file path
     logs_dir = Path("tests/logs")
     logs_dir.mkdir(parents=True, exist_ok=True)
-    with open(output_file, "w") as f:
+    with open(output_file, "w", encoding="utf-8") as f:
         json.dump(
             {
                 "timestamp": start_timestamp,
