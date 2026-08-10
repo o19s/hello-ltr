@@ -24,6 +24,7 @@ import requests
 from ltr.logger import get_logger
 from tests.fixtures.container_management import (
     check_ports_available,
+    find_stale_containers,
     manage_docker_compose,
     register_container_for_cleanup,
     unregister_container_from_cleanup,
@@ -210,8 +211,28 @@ def _manage_container_fixture(
             Path(tempfile.gettempdir()) / f"test-{test_type}-{engine}-{worker_id}.lock"
         )
         with file_lock(lock_file_path, timeout=60):
-            # Check if containers for this project already exist
+            # CRITICAL: Build images before deciding whether existing containers
+            # can be reused. `up --build` only covers the path where containers
+            # are created; a previous run can leave healthy containers behind
+            # that we would otherwise reuse without ever consulting the
+            # Dockerfile. Building first gives find_stale_containers() a current
+            # image to compare against. Cheap when nothing changed - Docker
+            # layer-caches the build. See issue #110.
             ports_for_docker = {k: str(v) for k, v in ports.items()}
+            build_result = manage_docker_compose(
+                engine,
+                "build",
+                project_name=project_name,
+                ports=cast("dict[str, str | int] | None", ports_for_docker),
+            )
+            if build_result.returncode != 0:
+                raise RuntimeError(
+                    f"Failed to build {display_name} images:\n"
+                    f"STDOUT: {build_result.stdout}\n"
+                    f"STDERR: {build_result.stderr}"
+                )
+
+            # Check if containers for this project already exist
             # Type cast: str is compatible with str | int for this function
             check_result = manage_docker_compose(
                 engine,
@@ -237,6 +258,33 @@ def _manage_container_fixture(
                         f"Ports not available for worker {worker_id}: {', '.join(unavailable_ports)}. "
                         "This may indicate a port conflict or leftover containers from a previous run."
                     )
+
+            # Containers left over from a previous run may be running an image
+            # that the build above has just superseded. Reusing them would test
+            # the old engine version while reporting success - the exact failure
+            # mode of issue #110.
+            #
+            # This runs after the port-availability check on purpose: the ports
+            # are still held by the containers we are about to stop, and
+            # re-checking them immediately after `down` would race against
+            # Docker releasing them.
+            if containers_exist:
+                stale_containers = find_stale_containers(project_name)
+                if stale_containers:
+                    print(
+                        f"[Worker {worker_id}] {display_name} containers are running a "
+                        f"superseded image ({', '.join(stale_containers)}); recreating "
+                        "so the test run reflects the current Dockerfile",
+                        file=sys.stderr,
+                        flush=True,
+                    )
+                    manage_docker_compose(
+                        engine,
+                        "down",
+                        project_name=project_name,
+                        ports=cast("dict[str, str | int] | None", ports_for_docker),
+                    )
+                    containers_exist = False
 
             if containers_exist:
                 # Containers already exist for this test project - check if they're healthy
