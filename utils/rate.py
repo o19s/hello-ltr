@@ -1,6 +1,6 @@
 import json
 
-from elasticsearch import Elasticsearch, TransportError
+from elasticsearch import ApiError, Elasticsearch, TransportError
 
 from ltr.helpers.es_url_parse import parse_url
 from ltr.judgments import (
@@ -56,21 +56,33 @@ def get_potential_results(es_url, keywords, fuzzy):
         list: List of search result hits from Elasticsearch.
 
     Raises:
-        TransportError: If the Elasticsearch query fails.
+        ApiError: If Elasticsearch rejects the query.
+        TransportError: If the request never reaches Elasticsearch.
     """
     (es_url, index, _search_type) = parse_url(es_url)
     es = Elasticsearch(es_url)
 
     query = format_fuzzy(keywords) if fuzzy else format_search(keywords)
+    # The 8.x client takes query components as keywords rather than a `body`
+    # blob, and spells "from" as "from_" because `from` is a Python keyword.
+    search_kwargs = dict(query)
+    if "from" in search_kwargs:
+        search_kwargs["from_"] = search_kwargs.pop("from")
     try:
         print(f"Query {json.dumps(query)}")
-        results = es.search(index=index, body=query)
+        results = es.search(index=index, **search_kwargs)
         return results["hits"]["hits"]
+    # In 8.x ApiError is no longer a subclass of TransportError, so catching
+    # only the latter would let every query rejection through unreported.
+    except ApiError as e:
+        print(f"Query {json.dumps(query)}")
+        print(f"Query Error: {e.message} ")
+        print(f"More Info  : {e.body} ")
+        raise
     except TransportError as e:
         print(f"Query {json.dumps(query)}")
-        print(f"Query Error: {e.error} ")
-        print(f"More Info  : {e.info} ")
-        raise e
+        print(f"Transport Error: {e} ")
+        raise
 
 
 def grade_results(results, keywords, qid):

@@ -143,7 +143,7 @@ class ElasticClient(ElasticBaseClient, BaseClient):
             ValidationError: If the index name is invalid.
         """
         index = validate_index_name(index)
-        return self.es.indices.exists(index=index)
+        return bool(self.es.indices.exists(index=index))
 
     def delete_index(self, index: str) -> None:
         """Delete an Elasticsearch index.
@@ -159,7 +159,11 @@ class ElasticClient(ElasticBaseClient, BaseClient):
             if there are other client errors (400).
         """
         index = validate_index_name(index)
-        resp = self.es.indices.delete(index=index, ignore=[400, 404])
+        # The 7.x `ignore=` parameter was removed in 8.x; `options(ignore_status=...)`
+        # is its replacement and keeps "deleting a missing index is not an error".
+        resp = (
+            self.es.options(ignore_status=[400, 404]).indices.delete(index=index).body
+        )
         resp_msg(
             msg=f"Deleted index {index}",
             resp=ElasticResp(resp),
@@ -187,7 +191,10 @@ class ElasticClient(ElasticBaseClient, BaseClient):
 
         with open(cfg_json_path) as src:
             settings = json.load(src)
-            resp = self.es.indices.create(index=index, body=settings)
+            # 8.x takes the index definition as explicit keywords rather than a
+            # `body` blob. The config files hold exactly "settings" and "mappings",
+            # both of which are create() keywords.
+            resp = self.es.indices.create(index=index, **settings).body
             resp_msg(msg=f"Created index {index}", resp=ElasticResp(resp))
 
         # Verify index was actually created and is accessible
@@ -412,7 +419,7 @@ class ElasticClient(ElasticBaseClient, BaseClient):
             test_params = self._build_feature_set_verification_query(
                 name, test_query_params
             )
-            test_resp = self.es.search(index=index, body=test_params)
+            test_resp = self.es.search(index=index, **test_params).body
             # Check if query succeeded (no error in response)
             if "error" not in test_resp:
                 logger.debug(f"Verified feature set '{name}' is usable in queries")
@@ -511,7 +518,7 @@ class ElasticClient(ElasticBaseClient, BaseClient):
 
         # Retry logic for feature set timing issues using shared helper
         def execute_and_validate_query() -> JSONDict:
-            resp = self.es.search(index=index, body=query_body)
+            resp = self.es.search(index=index, **query_body).body
             # Validate response (will raise ValueError if invalid)
             self._validate_search_response(resp, operation="query")
             return resp
@@ -673,7 +680,7 @@ class ElasticClient(ElasticBaseClient, BaseClient):
 
         # Retry logic for model timing issues using shared helper
         def execute_and_validate_query() -> JSONDict:
-            resp = self.es.search(index=index, body=params)
+            resp = self.es.search(index=index, **params).body
             # Validate response (will raise ValueError if invalid)
             self._validate_search_response(resp, operation="model query")
             return resp
@@ -715,7 +722,7 @@ class ElasticClient(ElasticBaseClient, BaseClient):
         """
         index = validate_index_name(index)
         try:
-            resp = self.es.search(index=index, body=query)
+            resp = self.es.search(index=index, **query).body
         except Exception as e:
             # Wrap Elasticsearch client exceptions with context
             query_str = str(query)[:200]  # Truncate for security/logging

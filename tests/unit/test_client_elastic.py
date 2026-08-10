@@ -256,8 +256,10 @@ class TestElasticClientRetryLogic:
         mock_elasticsearch_class.return_value = mock_client
         client = create_elastic_client()
         # Mock response that indicates model not found (timing error)
-        # The retry logic checks for "Unknown model" in the error string
-        mock_response = {"error": "Unknown model test_model"}
+        # The retry logic checks for "Unknown model" in the error string.
+        # The 8.x client wraps responses, and the code reads .body to get the
+        # plain dict, so the mock has to carry the payload the same way.
+        mock_response = Mock(body={"error": "Unknown model test_model"})
         mock_client.search.return_value = mock_response
         # Act & Assert
         # The error is raised during validation before retry logic can convert it
@@ -285,13 +287,23 @@ class TestElasticClientRetryLogic:
     def test_query_non_retryable_error(self, mock_elasticsearch_class):
         """Test query does not retry on non-retryable errors (e.g., 400 Bad Request)."""
         # Arrange
+        from elastic_transport import ApiResponseMeta, HttpHeaders, NodeConfig
         from elasticsearch.exceptions import RequestError
 
         mock_client = Mock()
         mock_elasticsearch_class.return_value = mock_client
         client = create_elastic_client()
+        # 8.x carries an ApiResponseMeta rather than a plain dict; passing a dict
+        # blows up in the exception's own __str__ rather than in the code under test.
+        meta = ApiResponseMeta(
+            status=400,
+            http_version="1.1",
+            headers=HttpHeaders(),
+            duration=0.0,
+            node=NodeConfig(scheme="http", host="localhost", port=9200),
+        )
         mock_client.search.side_effect = RequestError(
-            "Bad Request", {"status": 400}, {"error": {"reason": "Invalid query"}}
+            "Bad Request", meta, {"error": {"reason": "Invalid query"}}
         )
         # Act & Assert
         from ltr.exceptions import QueryError
